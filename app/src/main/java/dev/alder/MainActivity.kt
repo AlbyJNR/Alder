@@ -450,7 +450,14 @@ class MainActivity : Screen() {
         super.onResume()
         // Idle dim stays off (ponytail, 2026-10-26); the cinema screensaver is Settings › Picture & sound › Screensaver (CAS 1.6).
         restIdle()
-        if (Updates.due(this)) background({ Updates.latest(applicationContext) }) { r ->
+        // A version downloaded overnight that Android wants a press for: one press, no download to wait on.
+        Updates.pending(this)?.let { waiting ->
+            if (Updates.offerOnce(this, waiting.version)) choose("CAS ${waiting.version} is ready", listOf("Later", "Install"),
+                "Downloaded already. Install it now? Your profiles and settings stay.") { if (it == 1) Updates.confirmPending(this) }
+            return
+        }
+        // Overnight updates install from the screensaver; with that off, Home asks once a day as before.
+        if (!Settings.autoUpdate(this) && Updates.due(this)) background({ Updates.latest(applicationContext) }) { r ->
             val release = r.getOrNull()?.takeIf { newerVersion(it.version, Updates.mine(this)) } ?: return@background
             if (Updates.offerOnce(this, release.version)) choose("CAS ${release.version} is ready", listOf("Later", "Install"),
                 "Install it now? It takes a minute, and your profiles and settings stay.") { if (it == 1) installUpdate(release) }
@@ -823,6 +830,8 @@ class MainActivity : Screen() {
 
     private fun enterCinema() {
         if (cinema.isEmpty() || mode == Mode.CINEMA) return
+        // The TV is idle: a new version, if there is one, installs now with nothing to press (Settings › About › Updates).
+        background({ Updates.quiet(applicationContext) }) { r -> android.util.Log.i("CAS", "overnight update: ${r.getOrNull()}") }
         beforeCinema = currentFocus
         cinemaAt = 0
         cinemaAwake = false
