@@ -117,6 +117,18 @@ class PlayerActivity : Screen() {
     private var offeringLower = false
     private val stalls = ArrayDeque<Long>()
     private var seekedAt = 0L
+    // Silent failover (Settings › Picture & sound › When a source keeps stalling): a source that stops three times in a
+    // minute, or sits buffering for LONG_STALL, gives way to a lighter file by itself. The count rides the intent through
+    // the sources page, which restarts the player, so one bad evening can't cascade past AUTO_SWITCHES.
+    private val autoSwitches get() = intent.getIntExtra("autoSwitches", 0)
+    private var pendingNote: String? = null // shown once the next picture is up ("Switched to a lighter source · 720p")
+    private lateinit var note: TextView
+    private val hideNote = Runnable { note.visibility = View.GONE }
+    private val longStall = Runnable {
+        if (isDestroyed || !started || !player.playWhenReady || player.playbackState != Player.STATE_BUFFERING) return@Runnable
+        if (System.currentTimeMillis() - seekedAt < 2_000) return@Runnable
+        weakSource("buffered for ${LONG_STALL / 1000} s")
+    }
     private val loadingTask = object : Runnable {
         override fun run() {
             if (loading.visibility != View.VISIBLE || player.playbackState != Player.STATE_BUFFERING) return
@@ -184,6 +196,12 @@ class PlayerActivity : Screen() {
             background = glass(10)
             visibility = View.GONE
         }
+        // A quiet word after an automatic switch; no buttons, gone by itself.
+        note = text("", SMALL, color = TEXT_2).onArt().apply {
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = glass(10)
+            visibility = View.GONE
+        }
         fetchSegments()
         options = FrameLayout(this).apply { visibility = View.GONE }
         screen = FrameLayout(this).apply {
@@ -195,7 +213,9 @@ class PlayerActivity : Screen() {
             addView(stallPanel, FrameLayout.LayoutParams(-1, -1))
             addView(upNextPanel, FrameLayout.LayoutParams(-1, -1))
             addView(skip, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(PAD), dp(PAD + 40)) })
+            addView(note, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { setMargins(dp(PAD), 0, 0, dp(PAD + 40)) })
         }
+        intent.getStringExtra("switchedNote")?.let { pendingNote = it; intent.removeExtra("switchedNote") }
         setContentView(screen)
         background({
             Stremio.addons(key).let { it.savedMeta(type, metaId) ?: it.meta(type, metaId) }
@@ -253,6 +273,7 @@ class PlayerActivity : Screen() {
                 retries = 0
                 hideLoading()
                 main.removeCallbacks(startTimeout)
+                pendingNote?.let { pendingNote = null; showNote(it) }
                 player.videoFormat?.frameRate?.let(::matchFrameRate)
                 // Next time: the same release for this video, and the same group (release and quality) for the next episode.
                 val s = sources[at]
@@ -272,7 +293,11 @@ class PlayerActivity : Screen() {
                 if (state == Player.STATE_BUFFERING) showLoading(if (started) "Loading" else startMessage ?: "Starting · ${sources[at].label}")
                 if (state == Player.STATE_READY && started) hideLoading()
                 // A seek buffers too; only stalls in plain playback count.
-                if (state == Player.STATE_BUFFERING && started && player.playWhenReady && System.currentTimeMillis() - seekedAt > 2_000) stalled()
+                main.removeCallbacks(longStall)
+                if (state == Player.STATE_BUFFERING && started && player.playWhenReady && System.currentTimeMillis() - seekedAt > 2_000) {
+                    stalled()
+                    main.postDelayed(longStall, LONG_STALL) // one stall that never ends counts as much as three short ones
+                }
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -467,6 +492,7 @@ class PlayerActivity : Screen() {
     /** This source failed: the next one from the same second or, with none left, the list to choose from. */
     private fun next(reason: String = "didn't start") {
         main.removeCallbacks(startTimeout)
+        main.removeCallbacks(longStall)
         val position = position()
         if (at + 1 < sources.size) {
             at++
@@ -570,9 +596,38 @@ class PlayerActivity : Screen() {
         val now = System.currentTimeMillis()
         stalls.addLast(now)
         while (stalls.first() < now - 60_000) stalls.removeFirst()
+        if (stalls.size == 3) weakSource("stopped 3 times in a minute") // the third only: the panel, once declined, stays away
+    }
+
+    /**
+     * The source can't keep up. Set to switch by itself, the player goes to a lighter file from the same second (the
+     * sources page picks it, as the panel's button does), or failing that to the next source in its list; set to ask,
+     * or after AUTO_SWITCHES, it shows the panel as before. Nothing while Up next or the panel is up.
+     */
+    private fun weakSource(reason: String) {
+        if (isDestroyed || offeringLower || upNextPanel.visibility == View.VISIBLE) return
         val height = sources[at].height
-        if (stalls.size != 3 || offeringLower || upNextPanel.visibility == View.VISIBLE || lowerSourceHeight(height) == null) return
-        showStall(height)
+        val lower = lowerSourceHeight(height)
+        val auto = Settings.stallSwitch(this) == "auto"
+        when {
+            auto && lower != null && autoSwitches < AUTO_SWITCHES -> {
+                android.util.Log.i("CAS", "Source $reason: switching from ${height}p to ${lower}p by itself (${autoSwitches + 1} of $AUTO_SWITCHES)")
+                lowerQuality(auto = true)
+            }
+            auto && lower == null && at + 1 < sources.size -> {
+                android.util.Log.i("CAS", "Source $reason at ${height}p, nothing lighter: the next source")
+                pendingNote = "Switched to another source"
+                next("kept stalling")
+            }
+            lower != null -> showStall(height)
+        }
+    }
+
+    private fun showNote(message: String) {
+        note.text = message
+        note.visibility = View.VISIBLE
+        main.removeCallbacks(hideNote)
+        main.postDelayed(hideNote, NOTE_SHOWN)
     }
 
     private fun showStall(height: Int) {
@@ -626,12 +681,14 @@ class PlayerActivity : Screen() {
         card.getChildAt(2).requestFocus()
     }
 
-    /** Continue at the same second with one quality step lower. */
-    private fun lowerQuality() {
+    /** Continue at the same second with one quality step lower; [auto] when the player decided, not the viewer. */
+    private fun lowerQuality(auto: Boolean = false) {
         val height = sources[at].height
         val lower = lowerSourceHeight(height) ?: return
+        main.removeCallbacks(longStall)
         startActivity(Intent(this, StreamsActivity::class.java).putExtras(intent).apply {
-            removeExtra("picked"); removeExtra("pick")
+            removeExtra("picked"); removeExtra("pick"); removeExtra("switchedNote")
+            if (auto) putExtra("autoSwitches", autoSwitches + 1).putExtra("switchedNote", "Switched to a lighter source · ${lower}p")
         }.putExtra("maxHeight", lower).putExtra("resumeAt", player.currentPosition))
         finish()
     }
@@ -640,6 +697,7 @@ class PlayerActivity : Screen() {
         if (type == "series" && !plausibleEpisode(player.duration)) return
         val next = nextVideo() ?: return
         if (offeringLower) dismissStall()
+        main.removeCallbacks(longStall)
         if (shown) hideControls(force = true)
         options.visibility = View.GONE
         hideLoading()
@@ -1354,6 +1412,8 @@ class PlayerActivity : Screen() {
     override fun onDestroy() {
         main.removeCallbacks(startTimeout)
         main.removeCallbacks(loadingTask)
+        main.removeCallbacks(longStall)
+        main.removeCallbacks(hideNote)
         if (::status.isInitialized) player.release()
         super.onDestroy()
     }
@@ -1370,6 +1430,9 @@ class PlayerActivity : Screen() {
         const val SUB_WAIT = 2_000L // ms the start waits for the addon's subtitles
         const val RETRIES = 2
         const val RETRY_WAIT = 1_500L
+        const val LONG_STALL = 20_000L // ms of buffering, mid-play, that counts as a source failing
+        const val AUTO_SWITCHES = 2 // lighter files the player goes to by itself before it asks
+        const val NOTE_SHOWN = 3_000L // ms the "Switched to…" word stays
     }
 }
 
