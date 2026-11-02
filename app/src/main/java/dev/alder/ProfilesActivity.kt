@@ -57,10 +57,13 @@ class ProfilesActivity : Screen() {
         val profiles = Profiles.all(this)
         // Home found this profile signed out: straight to its sign-in, the profile and its settings kept.
         val again = intent.getStringExtra("signIn")?.let { id -> profiles.firstOrNull { it.id == id } }
+        // Switching away from a child's profile takes the parent's PIN; Back from it returns to the child's Home.
+        val leaving = Profiles.active(this)?.takeIf { intent.getBooleanExtra("pick", false) && it.kids && it.pin != null }
         when {
             again != null -> showSignIn(again.name, again)
             profiles.isEmpty() -> showName()
             profiles.size == 1 && !intent.getBooleanExtra("pick", false) -> enter(profiles[0])
+            leaving != null -> askPin("Enter the PIN to leave ${leaving.name}", ::finish) { (it == leaving.pin).also { ok -> if (ok) showPicker() } }
             else -> showPicker()
         }
     }
@@ -89,8 +92,11 @@ class ProfilesActivity : Screen() {
         return super.dispatchKeyEvent(event)
     }
 
-    /** Opens a profile, asking for its PIN first when it has one; a signed-out one signs in again first. */
-    private fun enter(p: Profile) = withPin(p) { if (Profiles.signedOut(this, p.id)) showSignIn(p.name, p) else openHome(p) }
+    /** Opens a profile, asking for its PIN first when it has one (a child's PIN guards the way out, not in); a signed-out one signs in again first. */
+    private fun enter(p: Profile) {
+        val open = { if (Profiles.signedOut(this, p.id)) showSignIn(p.name, p) else openHome(p) }
+        if (p.kids) open() else withPin(p, open)
+    }
 
     private fun openHome(profile: Profile) {
         Profiles.setActive(this, profile.id)
@@ -176,7 +182,7 @@ class ProfilesActivity : Screen() {
                     choose("Manage profiles", profiles.map { it.name }) { i -> showMenu(profiles[i]) }
                 }
             }, FrameLayout.LayoutParams(-2, dp(30), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(50) })
-            addView(keyHint("Hold OK", "Rename · PIN · Colour · Remove"),
+            addView(keyHint("Hold OK", "Rename · PIN · Colour · Kids · Remove"),
                 FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(20) })
         }
         setWindowed(content, art)
@@ -203,11 +209,14 @@ class ProfilesActivity : Screen() {
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(TUNGSTEN) }
             visibility = View.INVISIBLE
         }
-        val name = text(if (add) "Add" else profile?.name.orEmpty().replaceFirstChar { it.titlecase() } + if (profile?.pin != null) "  🔒" else "",
+        val name = text(if (add) "Add" else profile?.name.orEmpty().replaceFirstChar { it.titlecase() } + if (profile?.pin != null && !profile.kids) "  🔒" else "",
             BODY, color = TEXT_2).apply { gravity = Gravity.CENTER; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
+        // A child's profile says so under the name, quietly, in place of the lock (its PIN is for leaving).
+        val kids = if (profile?.kids == true) caps("Kids").apply { gravity = Gravity.CENTER } else null
         return column(Gravity.CENTER_HORIZONTAL).apply {
             addView(circle, LinearLayout.LayoutParams(dp(112), dp(112)))
             addView(name, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            if (kids != null) addView(kids, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             if (last != null) addView(last, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             addView(dot, LinearLayout.LayoutParams(dp(5), dp(5)).apply { topMargin = dp(8); gravity = Gravity.CENTER_HORIZONTAL })
             isFocusable = true
@@ -234,12 +243,31 @@ class ProfilesActivity : Screen() {
                     Profiles.update(this, p.id, color = Profiles.COLORS[i]); showPicker()
                 }
             } },
-            if (p.pin == null) null else "Remove PIN" to {
+            // A child's profile keeps its PIN: without one anybody could leave it.
+            if (p.pin == null || p.kids) null else "Remove PIN" to {
                 withPin(p) { Profiles.update(this, p.id, clearPin = true); showPicker() }
             },
+            (if (p.kids) "Not a Kids profile" else "Make a Kids profile") to { withPin(p) { setKids(p, !p.kids) } },
             "Remove profile" to { withPin(p) { showPicker(); confirmRemove(p) } },
         )
         choose(p.name, items.map { it.first }) { i -> items[i].second() }
+    }
+
+    /**
+     * Flags a profile as a child's, or back to an ordinary one. Becoming a Kids profile needs a PIN to leave by, so one
+     * without a PIN chooses it first; cancelling (Back) leaves the profile as it was. Turning Kids off keeps the PIN
+     * as an ordinary one.
+     */
+    private fun setKids(p: Profile, on: Boolean) {
+        if (!on || p.pin != null) { Profiles.update(this, p.id, kids = on); return showPicker() }
+        askPin("Choose the PIN that leaves ${p.name}", ::showPicker) { first ->
+            askPin("Enter it again", ::showPicker, "PINs don't match. Try again.") { second ->
+                (second == first).also { same ->
+                    if (same) { Profiles.update(this, p.id, pin = first, kids = true); showPicker() }
+                }
+            }
+            true
+        }
     }
 
     /** Runs [then] straight away, or once the profile's PIN is typed, so a locked profile can't be changed around it. */
