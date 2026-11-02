@@ -5,7 +5,11 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
-class Profile(val id: String, val name: String, val color: Int, val authKey: String, val pin: String? = null)
+/**
+ * A [kids] profile is a child's: Home keeps to Continue and that profile's own lists, with no Search, TV, Movies or
+ * Settings, and its [pin] is the one that *leaves* it (a parent's), not one asked on the way in.
+ */
+class Profile(val id: String, val name: String, val color: Int, val authKey: String, val pin: String? = null, val kids: Boolean = false)
 
 /**
  * The profiles on this TV, kept in app storage. Each one is its own Stremio account, so history, Continue Watching,
@@ -20,7 +24,7 @@ object Profiles {
         migrate(prefs)
         return JSONArray(prefs.getString("profiles", "[]")).objects()
             .map { Profile(it.getString("id"), it.getString("name"), it.getInt("color").takeIf { c -> c in COLORS } ?: COLORS[0],
-                it.getString("authKey"), it.optString("pin").ifEmpty { null }) }
+                it.getString("authKey"), it.optString("pin").ifEmpty { null }, it.optBoolean("kids")) }
     }
 
     /** The profile in use: the one picked last, or the only one there is. */
@@ -59,7 +63,7 @@ object Profiles {
 
     /** A fresh sign-in for an existing profile: its new auth key, everything else kept. */
     fun signIn(context: Context, id: String, authKey: String) {
-        save(prefs(context), all(context).map { if (it.id != id) it else Profile(it.id, it.name, it.color, authKey, it.pin) })
+        save(prefs(context), all(context).map { if (it.id != id) it else Profile(it.id, it.name, it.color, authKey, it.pin, it.kids) })
         prefs(context).edit().remove("signedOut:$id").apply()
     }
 
@@ -74,17 +78,17 @@ object Profiles {
         return all(context).filter { it.id != current.id && sharesStreams(context, it.id) }
     }
 
-    /** Rename or set the PIN of a profile (clearPin removes it), keeping its place in the list. */
-    fun update(context: Context, id: String, name: String? = null, pin: String? = null, clearPin: Boolean = false, color: Int? = null) {
+    /** Rename, set the PIN (clearPin removes it), recolour or flag a profile as a child's, keeping its place in the list. */
+    fun update(context: Context, id: String, name: String? = null, pin: String? = null, clearPin: Boolean = false, color: Int? = null, kids: Boolean? = null) {
         save(prefs(context), all(context).map {
             if (it.id != id) it
-            else Profile(it.id, name ?: it.name, color ?: it.color, it.authKey, if (clearPin) null else pin ?: it.pin)
+            else Profile(it.id, name ?: it.name, color ?: it.color, it.authKey, if (clearPin) null else pin ?: it.pin, kids ?: it.kids)
         })
     }
 
     private fun save(prefs: SharedPreferences, list: List<Profile>) {
         val json = JSONArray(list.map {
-            JSONObject().put("id", it.id).put("name", it.name).put("color", it.color).put("authKey", it.authKey).put("pin", it.pin ?: "")
+            JSONObject().put("id", it.id).put("name", it.name).put("color", it.color).put("authKey", it.authKey).put("pin", it.pin ?: "").put("kids", it.kids)
         })
         prefs.edit().putString("profiles", json.toString()).apply()
     }
