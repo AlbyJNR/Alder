@@ -1342,6 +1342,9 @@ class PlayerActivity : Screen() {
         player.pause()
         if (!watched || player.isCurrentMediaItemLive || type == "series" && !plausibleEpisode(player.duration)) return
         record()
+        // Finished (past the credits) but not ticked yet, because the episode list came late or the viewer skipped
+        // through: the tick goes in now, so the guide, the blur and Home's NEW count agree with what was watched.
+        item?.let { it -> meta?.videos?.takeIf { v -> !tickedWatched && v.isNotEmpty() && Library.pastCredits(it) }?.let { v -> tickedWatched = true; Library.markWatched(it, v, videoId) } }
         // The player's own episode list first: Home's Resume passes no next episode when the title's details weren't in
         // yet, and a finished episode with no next one drops the title out of Continue Watching.
         item?.let { Library.stopped(it, nextVideo()?.id ?: intent.getStringExtra("nextVideoId")) }

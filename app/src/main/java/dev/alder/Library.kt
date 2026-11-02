@@ -75,6 +75,9 @@ object Library {
         item.put("_mtime", now())
     }
 
+    /** Stopped past the credits: finished, whatever the watched-time count says. */
+    fun pastCredits(item: JSONObject): Boolean = item.state.let { s -> s.optLong("duration") > 0 && s.optLong("timeOffset") > s.optLong("duration") * CREDITS }
+
     /** Where to resume [videoId] in milliseconds, 0 to start from the beginning. */
     fun resumeAt(item: JSONObject, videoId: String): Long {
         val s = item.state
@@ -150,8 +153,7 @@ object Library {
         if (s.optInt("flaggedWatched") == 0 && duration > 0 && s.optLong("timeWatched") > duration * WATCHED) {
             s.put("flaggedWatched", 1)
             s.put("timesWatched", s.optInt("timesWatched") + 1)
-            // ponytail: the per-episode "watched" ticks (stremio-core's watched bitfield) aren't written yet,
-            // so episodes finished here don't get Stremio's checkmark. Port WatchedBitField when that matters.
+            // The episode's own tick (the watched bitfield) is set by the player here, which has the episode list.
         }
         if (item.optBoolean("temp") && s.optInt("timesWatched") == 0) item.put("removed", true)
         if (item.optBoolean("removed")) item.put("temp", true)

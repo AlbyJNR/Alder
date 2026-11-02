@@ -228,7 +228,8 @@ class DetailsActivity : Screen() {
                         setPadding(dp(6), dp(2), dp(6), dp(2))
                         contentDescription = "Films and shows with $person"
                         rowFocus(6, rest = { null }) { has -> setTextColor(if (has) TEXT else TEXT_2) }
-                        setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("query", person)) }
+                        if (Profiles.active(this@DetailsActivity)?.kids == true) isFocusable = false // a Kids profile stays on its own titles
+                        else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("query", person)) }
                     }
                 }
                 castNames = names
@@ -309,7 +310,7 @@ class DetailsActivity : Screen() {
             } else null
         val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW))
             glassButton("Preview") { if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) } else null
-        val recap = if (type == "series" && Settings.titlePage(this, SettingsActivity.TITLE_RECAP))
+        val recap = if (type == "series" && Settings.titlePage(this, SettingsActivity.TITLE_RECAP) && Profiles.active(this)?.kids != true)
             glassButton("Recap") { openRecap(m, episode?.season ?: selectedSeason) } else null
         // Play and its small controls on one line; Trailer, Preview and Recap on a second, so none is ever squeezed
         // out of a line the text block's width can't hold (a series with a resume point had seven controls).

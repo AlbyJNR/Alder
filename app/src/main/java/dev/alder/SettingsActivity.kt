@@ -51,7 +51,7 @@ object Settings {
     fun setHidden(c: Context, all: org.json.JSONObject) = prefs(c).edit().putString(profileKey(c, "hidden"), all.toString()).apply()
     /** A removed profile's taste goes with it, so a new profile in its place starts with none. */
     fun forget(c: Context, profileId: String) = prefs(c).edit().apply {
-        listOf("release", "dub", "audioLang", "subLang", "hidden").forEach { remove("$it@$profileId") }
+        listOf("release", "dub", "audioLang", "subLang", "hidden", "hiddenRows").forEach { remove("$it@$profileId") }
         prefs(c).all.keys.filter { it.startsWith("title:") && it.endsWith("@$profileId") }.forEach(::remove)
     }.apply()
 
@@ -87,6 +87,9 @@ object Settings {
     /** Voices lifted above music and effects in the player (DialogueAudioProcessor); off with a receiver (passthrough). */
     fun clearDialogue(c: Context) = prefs(c).getBoolean("clearDialogue", false)
     fun setClearDialogue(c: Context, on: Boolean) = prefs(c).edit().putBoolean("clearDialogue", on).apply()
+    /** Rows the viewer hid (hold OK on a title → Hide row), as "<page>|<row name>", per profile. */
+    fun hiddenRows(c: Context): Set<String> = runCatching { org.json.JSONArray(prefs(c).getString(profileKey(c, "hiddenRows"), "[]")).strings().toSet() }.getOrDefault(emptySet())
+    fun setHiddenRows(c: Context, rows: Set<String>) = prefs(c).edit().putString(profileKey(c, "hiddenRows"), org.json.JSONArray(rows.toList()).toString()).apply()
     /** Episode stills of unwatched episodes blurred in the guide, against spoilers. */
     fun blurThumbnails(c: Context) = prefs(c).getBoolean("blurThumbnails", false)
 }
@@ -459,6 +462,14 @@ class SettingsActivity : Screen() {
                 actionRow("Manage profiles", "", "Rename profiles, change PINs or add another person.") {
                     startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                }
+                val hiddenRows = Settings.hiddenRows(this).sorted()
+                actionRow("Hidden rows", if (hiddenRows.isEmpty()) "None" else "${hiddenRows.size}", "Rows you hid by holding OK on a title. Choose one to show it again.") {
+                    if (hiddenRows.isEmpty()) return@actionRow
+                    val names = hiddenRows.map { "${it.substringAfter('|')}  ·  ${it.substringBefore('|')}" }
+                    choose("Show again", names + "Keep") { i ->
+                        if (i < hiddenRows.size) { Settings.setHiddenRows(this, Settings.hiddenRows(this) - hiddenRows[i]); showGroup(Group.PROFILE) }
+                    }
                 }
                 var hiddenValue: TextView? = null
                 fun count() { hiddenValue?.text = "${Settings.hidden(this).length()}  ›" }

@@ -15,6 +15,13 @@ Put changes that are not released under `## Unreleased`. Before each release, re
 
 ## Unreleased
 
+## 1.12.0
+
+- **Kids profile.** Hold OK on a profile and select **Make a Kids profile**. Its Home shows Continue and its own lists only, with no Search, TV, Movies or Settings. A PIN is needed to leave it.
+- **New episodes in Library.** Select **New episodes** on Library to see the series with an episode out since you last watched, newest first, each with a **NEW** mark.
+- **Hide a row.** Hold OK on a title in a row and select **Hide row**. Bring it back in **Settings → Profile → Hidden rows**.
+- **Episodes finished in CAS are ticked** in the guide and in Stremio, also when the episode list arrived late or you skipped to the end.
+
 ## 1.11.0
 
 - **Clear dialogue.** Turn on **Settings → Picture & sound → Clear dialogue** to lift voices above music and effects on TV speakers. Also in the player under **Audio & subtitles**.

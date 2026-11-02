@@ -101,7 +101,7 @@ class MainActivity : Screen() {
     private enum class Page(val label: String) { HOME("Home"), SHOWS("TV"), MOVIES("Movies"), LIVE("Live"), LIBRARY("Library") }
     private enum class Mode { CINEMA, BROWSE }
     private enum class ListFilter { ALL, MOVIES, SHOWS }
-    private enum class ListSort { RECENT, NAME, UNWATCHED }
+    private enum class ListSort { RECENT, NAME, UNWATCHED, NEW }
 
     private lateinit var profile: Profile
     override val backdrop get() = art
@@ -431,6 +431,8 @@ class MainActivity : Screen() {
 
     private val refreshOnReturn = Runnable {
         if (isFinishing || isDestroyed) return@Runnable
+        // A row shown again in Settings › Profile › Hidden rows: the page is built afresh with it.
+        if (hiddenSeen != null && Settings.hiddenRows(this) != hiddenSeen) return@Runnable showPage(page)
         refreshLibrary?.invoke()
         // The add-on list rarely changes while CAS is open: asked again at most every few minutes, not on every return.
         if (android.os.SystemClock.uptimeMillis() - lastAddonCheck > ADDON_RECHECK) refreshAddons?.invoke()
@@ -441,6 +443,7 @@ class MainActivity : Screen() {
 
     private var refreshLibrary: (() -> Unit)? = null // the open page's library rows (Home, Library), asked again
     private var newsChecking = false // NewEpisodes.refresh is running for Home
+    private var hiddenSeen: Set<String>? = null // the hidden rows the open page was built without; changed in Settings → rebuilt
     private var last: View? = null // where the remote last was in the rows
 
     override fun onResume() {
@@ -563,6 +566,8 @@ class MainActivity : Screen() {
     }
 
     private fun switchProfile() {
+        // From a Kids profile, Home stays underneath: Back on the picker's PIN screen returns to it.
+        if (::profile.isInitialized && profile.kids) return startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true))
         startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         finish()
@@ -606,7 +611,7 @@ class MainActivity : Screen() {
             nav.addView(this, LinearLayout.LayoutParams(width, height).apply { if (nav.childCount > 0) marginStart = dp(NAV_GAP) })
         }
         // As tall as the words' pills (match parent), the glyph 18 dp inside it.
-        search = ImageView(this).apply {
+        if (!profile.kids) search = ImageView(this).apply {
             setImageResource(R.drawable.ic_search)
             contentDescription = "Search"
             setPadding(dp(13), dp(7), dp(13), dp(7))
@@ -614,7 +619,7 @@ class MainActivity : Screen() {
             setOnClickListener { startActivity(Intent(this@MainActivity, SearchActivity::class.java)) }
         }.inNav(width = dp(44), height = -1)
         // A page opens as soon as the remote rests on its name. OK on Shows or Movies goes to its genres.
-        Page.entries.filter { it != Page.LIVE }.forEach { p ->
+        Page.entries.filter { it != Page.LIVE && (!profile.kids || it == Page.HOME) }.forEach { p ->
             navItems[p] = text(p.label, BODY).apply {
                 gravity = Gravity.CENTER
                 compoundDrawablePadding = dp(2)
@@ -648,6 +653,8 @@ class MainActivity : Screen() {
     private val switchPage = Runnable { if (pending != page && navItems[pending]?.isFocused == true) { jump = false; showPage(pending) } }
 
     private fun profileMenu() {
+        // A Kids profile has no Settings; switching away asks the PIN that leaves it (the picker does the asking).
+        if (profile.kids) return choose(profile.name, listOf("Switch profile", "Keep watching")) { i -> if (i == 0) switchProfile() }
         choose(profile.name, listOf("Switch profile", "Settings")) { i ->
             if (i == 0) switchProfile() else startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -1143,6 +1150,15 @@ class MainActivity : Screen() {
             if (built || g != generation) return
             built = true
             builtFrom = addons.map { it.id }
+            // A Kids profile's Home is Continue and its own lists, nothing from the catalogs.
+            if (profile.kids && p == Page.HOME) {
+                val note = text("Nothing here yet. A grown-up can hold OK on a title to put it in a list for you.", SMALL, color = TEXT_3)
+                    .apply { setPadding(dp(PAD), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+                content.addView(note)
+                homeEmptyNote = note
+                return
+            }
+            hiddenSeen = Settings.hiddenRows(this)
             // Each catalog on its page under a plain name, personal rows first; the sort keeps the addons' order within a rank.
             val shelves = addons.flatMap { it.catalogs }.mapNotNull { c -> shelf(c)?.takeIf { it.page == p }?.let { c to it } }
                 .sortedBy { it.second.rank }
@@ -1159,7 +1175,7 @@ class MainActivity : Screen() {
                 if (p == Page.HOME) homeEmptyNote = note
             }
             val genres = catalogGenres(catalogs.flatMap { it.genres })
-            val sections = sections(p, shelves)
+            val sections = sections(p, shelves).filterNot { "${p.label}|${it.first}" in hiddenSeen.orEmpty() }
             val genreNames = (if (p.isCatalog) sections.take(nextCatalogSection(sections.size, 0)).map { it.first }.filter { name -> genres.any { it.equals(name, true) } }
                 else emptyList()).toMutableList()
             val genreResults = mutableMapOf<String, Boolean>()
@@ -1345,7 +1361,7 @@ class MainActivity : Screen() {
         }
         // The two groups, what to show and how to order it, part at a hairline rather than a stray word.
         line.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(14)).apply { marginStart = dp(14); marginEnd = dp(8) })
-        listOf(ListSort.RECENT to "Recently added", ListSort.NAME to "A–Z", ListSort.UNWATCHED to "Unwatched first")
+        listOf(ListSort.RECENT to "Recently added", ListSort.NAME to "A–Z", ListSort.UNWATCHED to "Unwatched first", ListSort.NEW to "New episodes")
             .forEach { (value, label) ->
                 listSortChips[value] = add(label, value == listSort) {
                     if (listSort != value) { listSort = value; styleListChips(); redrawLibrary() }
@@ -1359,7 +1375,7 @@ class MainActivity : Screen() {
             ListFilter.ALL -> "All"; ListFilter.MOVIES -> "Movies"; ListFilter.SHOWS -> "TV"
         }, value == listFilter) }
         listSortChips.forEach { (value, view) -> view.select(when (value) {
-            ListSort.RECENT -> "Recently added"; ListSort.NAME -> "A–Z"; ListSort.UNWATCHED -> "Unwatched first"
+            ListSort.RECENT -> "Recently added"; ListSort.NAME -> "A–Z"; ListSort.UNWATCHED -> "Unwatched first"; ListSort.NEW -> "New episodes"
         }, value == listSort) }
     }
 
@@ -1458,12 +1474,15 @@ class MainActivity : Screen() {
     private fun showLibrary(slot: LinearLayout) {
         val all = library.filter { !it.optBoolean("removed") && it.optString("type") in listOf("movie", "series") }
             .filter { listFilter == ListFilter.ALL || it.optString("type") == if (listFilter == ListFilter.MOVIES) "movie" else "series" }
+        val news = NewEpisodes.all(this, profile.id, library)
         val ordered = when (listSort) {
             ListSort.RECENT -> all.sortedByDescending { it.optString("_ctime") }
             ListSort.NAME -> all.sortedBy { it.optString("name").lowercase() }
             ListSort.UNWATCHED -> all.sortedWith(compareBy<JSONObject> { libraryFinished(it) }.thenByDescending { it.optString("_ctime") })
+            // Series with an episode out since you last watched first, newest episode first; the rest as added.
+            ListSort.NEW -> all.sortedWith(compareByDescending<JSONObject> { news[it.optString("_id")]?.latest ?: "" }.thenByDescending { it.optString("_ctime") })
         }
-        val items = ordered.map(::libraryItem)
+        val items = ordered.map { libraryItem(it, news[it.optString("_id")]) }
         val build = ++listBuild
         listTotal = items.size
         listRows = listRowCount(items.size, LIST_COLUMNS)
@@ -1507,12 +1526,20 @@ class MainActivity : Screen() {
             "Rename ${l.name}…" to { askName("Rename ${l.name}", l.name) { name -> Lists.rename(this, l.id, name); redraw() } },
             "Delete ${l.name}…" to { choose("Delete ${l.name}?", listOf("Keep", "Delete"), "The titles stay in your library; only the list goes.") { if (it == 1) { Lists.remove(this, l.id); redraw() } } },
         ) } ?: emptyList()
+        // A catalog row (an add-on's, or Watchly's picks on Home) can be hidden from here; Settings › Profile brings it back.
+        val hideRow = rows.firstOrNull { r -> r.cards.any { it.item === item } }
+            ?.takeIf { it.listId == null && (page.isCatalog || page == Page.HOME && it.title != "Continue") }
+            ?.let { r -> listOf("Hide row “${r.title}”" to {
+                choose("Hide “${r.title}”?", listOf("Keep", "Hide"), "It comes back from Settings › Profile › Hidden rows.") {
+                    if (it == 1) { Settings.setHiddenRows(this, Settings.hiddenRows(this) + "${page.label}|${r.title}"); showPage(page) }
+                }
+            }) } ?: emptyList()
         val own = listOwn + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
             else -> emptyList()
-        }
+        } + hideRow
         listsMenu(Lists.Entry(item.id, item.type, item.name, item.poster), own, skip = inList?.id) { if (page == Page.HOME) refreshLibrary?.invoke() }
     }
 
@@ -1806,7 +1833,7 @@ class MainActivity : Screen() {
 
             fun showNew() {
                 newBadge.text = (if (item.newCount > 1) "${item.newCount} new" else "New").uppercase()
-                newBadge.visibility = if (wide && item.newEpisode) View.VISIBLE else View.GONE
+                newBadge.visibility = if ((wide || grid) && item.newEpisode) View.VISIBLE else View.GONE
             }
 
             init {
@@ -1829,7 +1856,7 @@ class MainActivity : Screen() {
                     setPadding(dp(8), dp(3), dp(8), dp(4))
                 }, LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(10), dp(10), 0) })
                 // A new episode: a small white mark in the corner, the one bright badge in the row, so it reads as news.
-                if (wide) face.addView(newBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(10), dp(10), 0, 0) })
+                if (wide || grid) face.addView(newBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { val m = dp(if (grid) 6 else 10); setMargins(m, m, 0, 0) })
                 showNew()
                 addView(face, LayoutParams(-1, -1))
                 // A white bar inset and rounded inside the card's dark foot, so it reads as a bar and not a cropped edge.
