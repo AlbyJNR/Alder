@@ -65,48 +65,108 @@ object Updates {
     }
 
     /** Downloads [release] into an install session and hands it to Android. Blocks: run it off the main thread. */
-    fun install(c: Context, release: Release) {
+    fun install(c: Context, release: Release) = commit(c, release, quiet = false)
+
+    /** What a quiet (overnight) check did, for the log. */
+    enum class Quiet { NOTHING, INSTALLING, READY_TO_CONFIRM, FAILED }
+
+    /**
+     * The overnight path: with Settings › About › Updates on Overnight, a newer release is downloaded and handed to
+     * Android with nobody at the remote. On Android 12+ where CAS installed itself last time, it goes in without a
+     * word and is there at the next start; where Android insists on its confirm box, the session is kept and Home
+     * offers it ([pending], [confirmPending]) next time someone is watching. No toast, no dialog, ever. Blocks.
+     */
+    fun quiet(c: Context): Quiet {
+        if (!Settings.autoUpdate(c) || !canInstall(c)) return Quiet.NOTHING
+        if (pending(c) != null) return Quiet.READY_TO_CONFIRM // one waiting already
+        val p = prefs(c)
+        if (!quietDue(p.getLong("quietChecked", 0), System.currentTimeMillis())) return Quiet.NOTHING
+        p.edit().putLong("quietChecked", System.currentTimeMillis()).apply()
+        val release = latest(c) ?: return Quiet.FAILED
+        if (!newerVersion(release.version, mine(c))) return Quiet.NOTHING
+        return runCatching { commit(c, release, quiet = true); Quiet.INSTALLING }
+            .onFailure { android.util.Log.w("CAS", "quiet update of ${release.version} failed: $it") }
+            .getOrDefault(Quiet.FAILED)
+    }
+
+    /** A quiet download Android would not put in place by itself: its version, for Home to offer. Null when none. */
+    fun pending(c: Context): Release? {
+        val p = prefs(c)
+        val id = p.getInt("pendingSession", -1).takeIf { it >= 0 } ?: return null
+        val version = p.getString("pendingVersion", null)
+        // The session is gone (installed, abandoned, or Android cleared it): nothing to offer.
+        if (version == null || c.packageManager.packageInstaller.getSessionInfo(id) == null) { clearPending(c); return null }
+        return Release(version, "")
+    }
+
+    /** Shows Android's confirm box for the quiet download that waits; false when there is none left to confirm. */
+    fun confirmPending(c: Context): Boolean {
+        pending(c) ?: return false
+        val confirm = prefs(c).getString("pendingIntent", null)?.let { runCatching { Intent.parseUri(it, Intent.URI_INTENT_SCHEME) }.getOrNull() }
+        if (confirm == null) { clearPending(c); return false }
+        return runCatching { c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true }
+            .onFailure { android.util.Log.w("CAS", "pending update confirm failed: $it"); clearPending(c) }.getOrDefault(false)
+    }
+
+    private fun clearPending(c: Context) = prefs(c).edit().remove("pendingSession").remove("pendingVersion").remove("pendingIntent").apply()
+
+    /**
+     * One install session for both paths: the file downloaded straight into it, checked for length, then committed to
+     * Android with [Status] as the listener. A [quiet] commit tells Status not to raise the confirm box.
+     */
+    private fun commit(c: Context, release: Release, quiet: Boolean) {
+        if (!release.apk.startsWith(RELEASES)) throw java.io.IOException("not a CAS release file")
         val installer = c.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(c.packageName)
         // Android 12+ can skip the confirm box when CAS installed itself last time; otherwise Android asks.
         if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         val id = installer.createSession(params)
-        installer.openSession(id).use { session ->
-            try {
+        try {
+            installer.openSession(id).use { session ->
                 // Timeouts: a stalled download used to wait forever with no word. A short file (a dropped connection)
                 // is refused here, before Android's installer calls it a package it can't parse.
-                val c = URL(release.apk).openConnection() as java.net.HttpURLConnection
-                c.connectTimeout = 15_000
-                c.readTimeout = 30_000
-                if (c.responseCode !in 200..299) throw java.io.IOException("HTTP ${c.responseCode}")
-                val expected = c.contentLengthLong
-                val written = c.inputStream.use { input ->
+                val conn = URL(release.apk).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 30_000
+                if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
+                val expected = conn.contentLengthLong
+                val written = conn.inputStream.use { input ->
                     session.openWrite("CAS.apk", 0, -1).use { out -> input.copyTo(out).also { session.fsync(out) } }
                 }
                 if (expected > 0 && written != expected) throw java.io.IOException("download cut short: $written of $expected bytes")
-            } catch (e: Exception) {
-                session.abandon()
-                throw e
+                val done = PendingIntent.getBroadcast(c, if (quiet) 1 else 0,
+                    Intent(c, Status::class.java).putExtra("quiet", quiet).putExtra("version", release.version).putExtra("session", id),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
+                session.commit(done.intentSender)
             }
-            val done = PendingIntent.getBroadcast(c, 0, Intent(c, Status::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
-            session.commit(done.intentSender)
+        } catch (e: Exception) {
+            runCatching { installer.abandonSession(id) }
+            throw e
         }
     }
 
-    /** The install session reports here: show Android's confirm box, or say why it failed. */
+    /** The install session reports here: show Android's confirm box (or keep it for later, overnight), or say why it failed. */
     class Status : BroadcastReceiver() {
         override fun onReceive(c: Context, intent: Intent) {
+            val quiet = intent.getBooleanExtra("quiet", false)
             when (val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
                 PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                     @Suppress("DEPRECATION")
-                    intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)?.let { c.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                    if (!quiet) return c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    // Nobody is watching: the download waits in its session, and Home offers it next time.
+                    prefs(c).edit().putInt("pendingSession", intent.getIntExtra("session", -1))
+                        .putString("pendingVersion", intent.getStringExtra("version"))
+                        .putString("pendingIntent", confirm.toUri(Intent.URI_INTENT_SCHEME)).apply()
+                    android.util.Log.i("CAS", "quiet update ${intent.getStringExtra("version")} waits for a confirm")
                 }
-                PackageInstaller.STATUS_SUCCESS, PackageInstaller.STATUS_FAILURE_ABORTED -> {}
+                PackageInstaller.STATUS_SUCCESS -> { clearPending(c); prefs(c).edit().remove("offered").apply() }
+                PackageInstaller.STATUS_FAILURE_ABORTED -> clearPending(c)
                 else -> {
+                    clearPending(c)
                     android.util.Log.w("CAS", "update install failed: $status ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)}")
-                    Toast.makeText(c, "Couldn't install the update", Toast.LENGTH_LONG).show()
+                    if (!quiet) Toast.makeText(c, "Couldn't install the update", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -114,6 +174,9 @@ object Updates {
 
     private fun prefs(c: Context) = c.getSharedPreferences("updates", Context.MODE_PRIVATE)
 }
+
+/** A quiet check is worth making again six hours after the last ([lastMs] 0 for never). */
+internal fun quietDue(lastMs: Long, nowMs: Long): Boolean = nowMs - lastMs > 6 * 3600_000L
 
 /** True when version [a] is newer than [b] ("1.10" > "1.9"; missing parts count as 0). */
 internal fun newerVersion(a: String, b: String): Boolean {
