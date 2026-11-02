@@ -90,6 +90,10 @@ object Settings {
     /** Rows the viewer hid (hold OK on a title → Hide row), as "<page>|<row name>", per profile. */
     fun hiddenRows(c: Context): Set<String> = runCatching { org.json.JSONArray(prefs(c).getString(profileKey(c, "hiddenRows"), "[]")).strings().toSet() }.getOrDefault(emptySet())
     fun setHiddenRows(c: Context, rows: Set<String>) = prefs(c).edit().putString(profileKey(c, "hiddenRows"), org.json.JSONArray(rows.toList()).toString()).apply()
+    /** A source that keeps stalling: the player switches to a lighter one by itself ("auto"), or asks first ("ask"). */
+    fun stallSwitch(c: Context): String = prefs(c).getString("stallSwitch", "auto") ?: "auto"
+    /** New versions installed by CAS itself while the TV sits on the screensaver, with nothing to press. */
+    fun autoUpdate(c: Context) = prefs(c).getBoolean("autoUpdate", true)
     /** Episode stills of unwatched episodes blurred in the guide, against spoilers. */
     fun blurThumbnails(c: Context) = prefs(c).getBoolean("blurThumbnails", false)
 }
@@ -195,6 +199,8 @@ class SettingsActivity : Screen() {
             listOf(true to "On", false to "Off")),
         Choice("passthrough", "Audio output", "Receiver sends Dolby and DTS untouched to a soundbar or receiver. TV speakers decodes the sound on the TV, which always works.",
             listOf(false to "TV speakers", true to "Receiver")),
+        Choice("stallSwitch", "When a source keeps stalling", "A lighter file of the same title takes over from the same second. Ask me shows the choice instead.",
+            listOf("auto" to "Switch by itself", "ask" to "Ask me")),
         Choice("clearDialogue", "Clear dialogue", "Lifts voices above music and effects, for TV speakers. Also in the player under Audio & subtitles. Does nothing with Audio output set to Receiver.",
             listOf(false to "Off", true to "On")),
     )
@@ -499,6 +505,8 @@ class SettingsActivity : Screen() {
                 detailRows.addView(brand(SERIF_TITLE), LinearLayout.LayoutParams(-2, -2).apply {
                     marginStart = dp(12); bottomMargin = dp(14)
                 })
+                choiceRow(Choice("autoUpdate", "Updates", "Overnight: a new version installs by itself while the screensaver is on, and is there next time. Ask me offers it on Home instead.",
+                    listOf(true to "Overnight", false to "Ask me")))
                 actionRow("CAS", "Version " + Updates.mine(this),
                     "A quieter way to watch. CAS connects your Stremio account to your TV.") {
                     choose("CAS", listOf("OK"), "A TV interface for your Stremio account.") {}
