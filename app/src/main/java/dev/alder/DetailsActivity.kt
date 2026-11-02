@@ -272,6 +272,8 @@ class DetailsActivity : Screen() {
     /** Where you are, then the main action and three small glass controls. */
     private fun addWatch(m: Meta, stack: LinearLayout) {
         val target = playTarget(m)
+        // What Play would play: its sources asked for now, so Play (and Preview) start without the add-ons' wait.
+        target?.first?.let { Sources.prefetch(this, key, type, it) }
         val episode = target?.second
         // Under a minute in is not started: a title opened and closed at 0:00 offers Play, not Resume.
         val resumeAt = (item?.let { Library.resumeAt(it, target?.first ?: metaId) } ?: 0L).takeIf { it >= STARTED } ?: 0L
@@ -364,9 +366,7 @@ class DetailsActivity : Screen() {
         val episode = m.videos.firstOrNull { it.id == videoId }?.let { "S${it.season} E${it.episode}" }
         showPreview(listOfNotNull(m.name, episode).joinToString("  ·  ")) {
             val tv = Device.of(this)
-            val all = streamAddons(this, key, type, videoId).parallelStream()
-                .map { a -> runCatching { a.streams(type, videoId).playable }.getOrDefault(emptyList()) }
-                .collect(java.util.stream.Collectors.toList()).flatten() // Stream.toList() needs Android 14
+            val all = Sources.all(this, key, type, videoId).values.flatMap { it.getOrNull()?.playable.orEmpty() }
             rankSources(this, all.filter { it.isVideo && it.playableOn(tv) && wantedSource(this, it) }, videoId, metaId).take(3)
         }
     }

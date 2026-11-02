@@ -260,8 +260,7 @@ class StreamsActivity : Screen() {
                 finish()
             }
 
-            addons.forEachIndexed { i, addon ->
-                background({ addon.streams(type, videoId) }) { streams ->
+            fun answered(i: Int, addon: Addon, streams: Result<Addon.Streams>) {
                     streams.exceptionOrNull()?.let { e ->
                         failures[i] = e
                         android.util.Log.w("CAS", "streams from ${addon.name} failed", e)
@@ -277,7 +276,12 @@ class StreamsActivity : Screen() {
                             main.postDelayed({ tryStart(allowGaps = true) }, 800)
                         }
                     }
-                }
+            }
+            // Answers fetched ahead (resting on the title on Home, or its page) are in already: no wait on those add-ons.
+            addons.forEachIndexed { i, addon ->
+                val kept = Sources.saved(key, type, videoId, addon)
+                if (kept != null) main.post { if (!isDestroyed) answered(i, addon, kept) }
+                else background({ runCatching { addon.streams(type, videoId) }.also { Sources.keep(key, type, videoId, addon, it) }.getOrThrow() }) { answered(i, addon, it) }
             }
         }
     }

@@ -902,7 +902,17 @@ class MainActivity : Screen() {
     }
 
     /** The focused title: its art across the screen, and logo, facts (and time left) and description top left. */
+    private val sourcesAhead = Runnable {
+        val item = heroItem ?: return@Runnable
+        if (mode != Mode.BROWSE) return@Runnable
+        // A film, or a series with its next episode known (Continue): ask the add-ons now, so Play starts at once.
+        val videoId = item.videoId ?: item.id.takeIf { item.type == "movie" } ?: return@Runnable
+        Sources.prefetch(this, profile.authKey, item.type, videoId)
+    }
+
     private fun showHero(item: Item) {
+        main.removeCallbacks(sourcesAhead)
+        main.postDelayed(sourcesAhead, SOURCES_AHEAD_WAIT)
         // A new title's words fade up with its art instead of snapping (the fade itself runs below, once).
         val newTitle = heroItem !== item && heroItem != null && mode == Mode.BROWSE
         if (newTitle) { browseInfo.animate().cancel(); browseInfo.alpha = 0.4f }
@@ -2167,6 +2177,7 @@ class MainActivity : Screen() {
         const val FIRST = 10 // cards per row loaded before it's scrolled sideways (a screenful, the one past the edge, one more)
         const val CINEMA_MAX = 8
         const val IDLE = 5 * 60_000L // ms without a key before the cinema takes over (the TV's own screensaver: 10 min)
+        const val SOURCES_AHEAD_WAIT = 1_500L // resting on a title this long fetches its sources ahead
         const val ADDON_RECHECK = 5 * 60_000L // ms between asking Stremio for the add-on list again on coming back to the front
         const val WARM_FIRST = 3 // titles at the top of Shows and Movies readied (details, art, logo) while Home is open
         const val DIM_AFTER = 10_000L

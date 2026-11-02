@@ -15,6 +15,12 @@ Put changes that are not released under `## Unreleased`. Before each release, re
 
 ## Unreleased
 
+## 1.13.0
+
+- **Play starts at once.** When you rest on a title on Home, or open its page, CAS asks the add-ons for its sources in the background. Play and Preview then start without the wait.
+- **A source that stalls is replaced by itself.** After three stalls in a minute, or one long one, the player moves to a lighter file of the same title from the same second and says so in one line. Select **Ask me** in **Settings → Picture & sound → When a source keeps stalling** to choose instead.
+- **Updates install overnight.** A new version installs while the screensaver is on, with nothing to press, and is there next time. Select **Ask me** in **Settings → About → Updates** to be offered it instead.
+
 ## 1.12.0
 
 - **Kids profile.** Hold OK on a profile and select **Make a Kids profile**. Its Home shows Continue and its own lists only, with no Search, TV, Movies or Settings. A PIN is needed to leave it.
