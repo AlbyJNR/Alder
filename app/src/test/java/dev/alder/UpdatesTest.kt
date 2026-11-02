@@ -13,4 +13,12 @@ class UpdatesTest {
         assertFalse(newerVersion("1.0", "1.0.1"))
         assertFalse(newerVersion("1.0.0", "1.0"))
     }
+
+    @Test fun quietCheckIsDueSixHoursAfterTheLast() {
+        val h = 3600_000L
+        assertTrue(quietDue(0, 10 * h))
+        assertTrue(quietDue(1 * h, 8 * h))
+        assertFalse(quietDue(1 * h, 6 * h))
+        assertFalse(quietDue(5 * h, 5 * h + 1))
+    }
 }
