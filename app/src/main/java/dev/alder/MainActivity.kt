@@ -543,12 +543,18 @@ class MainActivity : Screen() {
                     ?.requestFocus()?.let { if (it) return true }
             }
         }
-        // Left from the first card of a row, or the first chip, opens the rail on the page you're on: the focus
-        // search alone would land on whichever entry is nearest in height.
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN && mode == Mode.BROWSE &&
-            (scroller.hasFocus() || genreStrip.hasFocus())) {
-            val next = currentFocus?.focusSearch(View.FOCUS_LEFT)
-            if (next == null || isInside(next, header)) { if (navItems[page]?.requestFocus() == true) return true }
+        // Left from the first card of a row, or the first chip, goes to the rail, on the page you're on. By hand: rows
+        // below the rail's height sit outside the focus search's beam, and from there it weighed the top chip against
+        // the rail and often chose neither (Alan: Left did nothing three rows down).
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN && mode == Mode.BROWSE) {
+            val focused = currentFocus
+            val row = rows.firstOrNull { r -> focused != null && r.view.isAttachedToWindow && isInside(focused, r.view) }
+            val atStart = when {
+                row != null -> row.selected == 0
+                focused != null && isInside(focused, genreStrip) -> focused.focusSearch(View.FOCUS_LEFT)?.let { !isInside(it, genreStrip) } ?: true
+                else -> false
+            }
+            if (atStart && navItems[page]?.requestFocus() == true) return true
         }
         if (event.action == KeyEvent.ACTION_DOWN && scroller.hasFocus() && mode == Mode.BROWSE &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
