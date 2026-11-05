@@ -11,7 +11,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.18.2
+Put changes that are not released under `## 1.18.3
+
+- Moving Up or Down between rows lands on that row's own place: its first title on a row you haven't been along, or where you left it on one you have. Before, the remote carried its column across, so every row seemed to start several titles in (Alan's report).
+
+## 1.18.2
 
 - The rail no longer opens. It stays a slim column of glyphs whether or not the remote is on it; Alan found the glyphs say enough and the panel too broad. The profile entry is your initial in a small disc; OK on it still opens the profile menu.
 

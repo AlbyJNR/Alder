@@ -558,7 +558,9 @@ class MainActivity : Screen() {
                 val next = ordered.getOrNull(at + if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN) 1 else -1)
                 if (next != null) {
                     next.view.visibility = View.VISIBLE
-                    if (next.cards.getOrNull(minOf(ordered[at].selected, next.cards.lastIndex))?.requestFocus() == true) return true
+                    // Each row keeps its own place: a fresh row starts at its first title, one you've been along picks up
+                    // where you left it. Carrying the column across made every row seem to start several titles in.
+                    if (next.cards.getOrNull(next.selected.coerceIn(0, next.cards.lastIndex))?.requestFocus() == true) return true
                 }
             }
         }
