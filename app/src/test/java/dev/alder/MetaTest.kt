@@ -130,6 +130,8 @@ class MetaTest {
         assertTrue(imdbListQuery(ImdbList.NEW_SERIES, "2026-11-05").contains("start:\\\"2026-11-01\\\",end:\\\"2026-11-30\\\""))
         assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05").contains("amzn1.imdb.w2w.provider.netflix"))
         assertTrue(imdbListQuery(ImdbList.BOX_OFFICE, "2026-11-05").contains("boxOfficeWeekendChart"))
+        assertTrue(imdbListQuery(ImdbList.THIS_MONTH, "2026-11-05").contains("popularTitles(limit:50,queryFilter:{releaseDateRange:{start:\\\"2026-11-01\\\",end:\\\"2026-11-30\\\"}})"))
+        assertTrue(imdbListQuery(ImdbList.ON_MAX, "2026-11-05").contains("provider.hbo_max"))
         assertTrue(imdbListQuery(ImdbList.ANTICIPATED, "2026-11-05").contains("start:\\\"2026-11-05\\\",end:\\\"2027-02-03\\\""))
         assertTrue(imdbListQuery(ImdbList.TOP_TV, "2026-11-05").contains("rankingsChartType:TOP_250_TV"))
         assertTrue(imdbListQuery(ImdbList.HOT_MOVIES, "2026-11-05").contains("MOST_POPULAR_MOVIES"))

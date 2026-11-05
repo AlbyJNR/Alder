@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.21.0
+Put changes that are not released under `## 1.22.0
+
+- TV opens with IMDb's New series this month and Most popular TV above your catalogs; Movies with Most popular films and Top box office. The Coming soon rows (and their setting) go: the IMDb page carries that and more.
+- The IMDb page adds Most anticipated this month (the month's releases, films and series, most awaited first, as imdb.com's page of that name) and Popular on HBO Max. A Popular on Peacock row appears where Peacock streams (the US); it stays away in the UK.
+- IMDb's box office chart is its weekend top ten, and ten is all it gives.
+
+## 1.21.0
 
 - Six more rows on the IMDb page, between the trailers and the charts: Top box office (the weekend chart Box Office Mojo publishes, as IMDb carries it, with each film's weekend gross), New series this month, and what's popular on Netflix, Prime Video, Disney+ and Apple TV+ in the TV's country, on the subscription rather than to rent. IMDb's "What's on TV" page itself is editorial and can't be read from a TV, so these are its parts, live.
 - Move row up / Move row down: hold OK on any title and the row it sits in can move up or down the page. The order is kept for that page and profile. New rows join at the bottom.

@@ -351,10 +351,12 @@ class ImdbPick(
  * [provider] is IMDb's watch-provider id for the streaming rows.
  */
 enum class ImdbList(val title: String, val trailers: Boolean = false, val provider: String? = null) {
-    TRENDING("Trending trailers", true), ANTICIPATED("Most anticipated", true), POPULAR("Popular trailers", true), RECENT("New trailers", true),
+    TRENDING("Trending trailers", true), ANTICIPATED("Most anticipated", true), THIS_MONTH("Most anticipated this month"),
+    POPULAR("Popular trailers", true), RECENT("New trailers", true),
     BOX_OFFICE("Top box office"), NEW_SERIES("New series this month"),
     ON_NETFLIX("Popular on Netflix", provider = "netflix"), ON_PRIME("Popular on Prime Video", provider = "prime_video"),
     ON_DISNEY("Popular on Disney+", provider = "disneyplus"), ON_APPLE("Popular on Apple TV+", provider = "appletv"),
+    ON_MAX("Popular on HBO Max", provider = "hbo_max"), ON_PEACOCK("Popular on Peacock", provider = "peacock"),
     TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV");
 }
 
@@ -369,6 +371,11 @@ internal fun imdbListQuery(list: ImdbList, today: String): String {
         ImdbList.TRENDING -> "trendingTitles(limit:$IMDB_LIST_SIZE){titles{$titleWithTrailer}}"
         ImdbList.ANTICIPATED -> "popularTitles(limit:$IMDB_LIST_SIZE,queryFilter:{releaseDateRange:{start:\"$today\",end:\"$ahead\"}}){titles{$titleWithTrailer}}"
         ImdbList.POPULAR -> "popularTitles(limit:$IMDB_LIST_SIZE,queryFilter:{releaseDateRange:{end:\"$today\"}}){titles{$titleWithTrailer}}"
+        // imdb.com/most-anticipated/this-month as data: the month's releases, films and series, most awaited first.
+        ImdbList.THIS_MONTH -> {
+            val month = java.time.YearMonth.from(java.time.LocalDate.parse(today))
+            "popularTitles(limit:$IMDB_LIST_SIZE,queryFilter:{releaseDateRange:{start:\"${month.atDay(1)}\",end:\"${month.atEndOfMonth()}\"}}){titles{$titleWithTrailer}}"
+        }
         ImdbList.RECENT -> "recentVideos(limit:$IMDB_LIST_SIZE,queryFilter:{contentTypes:[TRAILER]}){videos{$IMDB_CLIP_FIELDS primaryTitle{$IMDB_TITLE_FIELDS}}}"
         ImdbList.TOP_MOVIES -> "titleChartRankings(first:$IMDB_LIST_SIZE,input:{rankingsChartType:TOP_250}){edges{node{item{$IMDB_TITLE_FIELDS}}}}"
         ImdbList.TOP_TV -> "titleChartRankings(first:$IMDB_LIST_SIZE,input:{rankingsChartType:TOP_250_TV}){edges{node{item{$IMDB_TITLE_FIELDS}}}}"
@@ -382,7 +389,7 @@ internal fun imdbListQuery(list: ImdbList, today: String): String {
         }
         // What people are watching on the service in the TV's country (the country rides in a header): titles it
         // streams on the subscription, not its rentals, popularity first.
-        ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE ->
+        ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK ->
             "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{watchOptionsConstraint:{anyWatchProviderIds:[\"amzn1.imdb.w2w.provider.${list.provider}\"],hasWatchOptionTypes:[SUBSCRIPTION]}," +
                 "titleTypeConstraint:{anyTitleTypeIds:[\"movie\",\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
     }
@@ -432,6 +439,7 @@ internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
     return when (list) {
         ImdbList.TRENDING -> data.optJSONObject("trendingTitles")?.optJSONArray("titles").objects().mapNotNull { t -> t.optJSONObject("latestTrailer")?.let { title(t, it, null) } }
         ImdbList.ANTICIPATED, ImdbList.POPULAR -> data.optJSONObject("popularTitles")?.optJSONArray("titles").objects().mapNotNull { t -> t.optJSONObject("latestTrailer")?.let { title(t, it, null) } }
+        ImdbList.THIS_MONTH -> data.optJSONObject("popularTitles")?.optJSONArray("titles").objects().mapNotNull { t -> title(t, t.optJSONObject("latestTrailer"), null) }
         ImdbList.RECENT -> data.optJSONObject("recentVideos")?.optJSONArray("videos").objects().mapNotNull { v -> v.optJSONObject("primaryTitle")?.let { title(it, v, null) } }
         ImdbList.TOP_MOVIES, ImdbList.TOP_TV -> data.optJSONObject("titleChartRankings")?.optJSONArray("edges").objects()
             .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.optJSONObject("item")?.let { title(it, null, i + 1) } }
@@ -439,7 +447,7 @@ internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
             .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.let { title(it, null, e.optInt("currentRank", 0).takeIf { r -> r > 0 } ?: (i + 1)) } }
         ImdbList.BOX_OFFICE -> data.optJSONObject("boxOfficeWeekendChart")?.optJSONArray("entries").objects()
             .mapIndexedNotNull { i, e -> e.optJSONObject("title")?.let { title(it, null, i + 1, e.optJSONObject("weekendGross")?.optJSONObject("total")?.let(::money)?.let { "$it weekend" }) } }
-        ImdbList.NEW_SERIES, ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE -> searched()
+        ImdbList.NEW_SERIES, ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK -> searched()
     }.distinctBy { it.id }
 }
 

@@ -97,8 +97,6 @@ object Settings {
     fun stallSwitch(c: Context): String = prefs(c).getString("stallSwitch", "auto") ?: "auto"
     /** New versions installed by CAS itself while the TV sits on the screensaver, with nothing to press. */
     fun autoUpdate(c: Context) = prefs(c).getBoolean("autoUpdate", true)
-    /** A "Coming soon" row at the top of TV and Movies, from IMDb, in the TV's country. */
-    fun comingSoon(c: Context) = prefs(c).getBoolean("comingSoon", true)
     /** Episode stills of unwatched episodes blurred in the guide, against spoilers. */
     fun blurThumbnails(c: Context) = prefs(c).getBoolean("blurThumbnails", false)
 }
@@ -467,7 +465,6 @@ class SettingsActivity : Screen() {
                 }
             }
             Group.PROFILE -> {
-                choiceRow(Choice("comingSoon", "Coming soon", "A row at the top of TV and Movies with what IMDb lists as coming soon in your country, each a press from its trailer.", onOff))
                 actionRow("Switch profile", "", "Choose who is watching.") {
                     startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))

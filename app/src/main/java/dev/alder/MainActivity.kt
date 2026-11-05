@@ -1239,28 +1239,11 @@ class MainActivity : Screen() {
                 showGenreChips(emptyList())
                 genreStrip.visibility = View.VISIBLE
             }
-            // IMDb's coming-soon list for the page, in the TV's country: a row of its own above the catalogs, each title's
-            // page (and so its trailer) a press away. Last time's list first, from disk; today's replaces it when it differs.
-            if (p.isCatalog && !profile.kids && Settings.comingSoon(this) && "${p.label}|$COMING_SOON" !in hiddenSeen.orEmpty()) {
-                val slot = slot()
-                val kind = if (p == Page.MOVIES) "MOVIE" else "TV"
-                val country = java.util.Locale.getDefault().country.ifEmpty { "GB" }
-                val from = comingSoonFrom()
-                var shownIds = emptyList<String>()
-                fun showUpcoming(list: List<Upcoming>) {
-                    val ids = list.map { it.id }
-                    if (g != generation || list.isEmpty() || ids == shownIds) return
-                    shownIds = ids
-                    rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
-                    slot.removeAllViews()
-                    val items = list.map { upcomingItem(it, p) }
-                    slot.addView(row(COMING_SOON, items.take(START), later(items)).view)
-                }
-                background({ savedComingSoon(kind, from) }) { r -> r.getOrNull()?.let(::showUpcoming) }
-                background({ imdbComingSoon(kind, country, from) }) { r ->
-                    r.exceptionOrNull()?.let { android.util.Log.w("CAS", "coming soon ($kind) failed: $it") }
-                    r.getOrNull()?.let(::showUpcoming)
-                }
+            // IMDb's rows for the page above the catalogs: new series and the most popular TV on TV, the most popular films
+            // and the weekend box office on Movies. The IMDb page has them too; here they sit where the eye starts.
+            if (p.isCatalog && !profile.kids) {
+                val wanted = if (p == Page.MOVIES) listOf(ImdbList.HOT_MOVIES, ImdbList.BOX_OFFICE) else listOf(ImdbList.NEW_SERIES, ImdbList.HOT_TV)
+                wanted.filter { "${p.label}|${it.title}" !in hiddenSeen.orEmpty() }.forEach { imdbRow(slot(), it, g) }
             }
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
@@ -2112,8 +2095,6 @@ class MainActivity : Screen() {
         m.genres.take(2).joinToString(", ").ifEmpty { null }, m.year, m.rating?.let { "IMDb $it" },
     )
 
-    /** Monday of this week, ISO: the coming-soon list is asked from there, so one kept answer serves the whole week. */
-    private fun comingSoonFrom(): String = java.time.LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString()
 
     /**
      * The IMDb page, in the TV and Films style: IMDb's own lists as poster rows under the hero. The four from
@@ -2121,26 +2102,26 @@ class MainActivity : Screen() {
      * most popular films and TV), numbered. The hero adds when a title is out; OK opens the title page as anywhere,
      * where Trailer plays the trailer IMDb listed. Last time's lists first, from disk; today's replace them.
      */
-    private fun buildImdb(g: Int) {
+    private fun buildImdb(g: Int) = ImdbList.entries.forEach { imdbRow(slot(), it, g) }
+
+    /** One of IMDb's lists as a row in [slot]: last time's from disk at once, today's in its place when it differs. */
+    private fun imdbRow(slot: LinearLayout, list: ImdbList, g: Int) {
         val today = java.time.LocalDate.now().toString()
         val country = java.util.Locale.getDefault().country.ifEmpty { "GB" }
-        ImdbList.entries.forEach { list ->
-            val slot = slot()
-            var shownIds = emptyList<String>()
-            fun show(picks: List<ImdbPick>) {
-                val ids = picks.map { it.id }
-                if (g != generation || picks.isEmpty() || ids == shownIds) return
-                shownIds = ids
-                rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
-                slot.removeAllViews()
-                val items = picks.map { imdbItem(it, list, today) }
-                slot.addView(row(list.title, items.take(START), later(items)).view)
-            }
-            background({ savedImdbList(list, today) }) { r -> r.getOrNull()?.let(::show) }
-            background({ imdbList(list, today, country) }) { r ->
-                r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
-                r.getOrNull()?.let(::show)
-            }
+        var shownIds = emptyList<String>()
+        fun show(picks: List<ImdbPick>) {
+            val ids = picks.map { it.id }
+            if (g != generation || picks.isEmpty() || ids == shownIds) return
+            shownIds = ids
+            rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
+            slot.removeAllViews()
+            val items = picks.map { imdbItem(it, list, today) }
+            slot.addView(row(list.title, items.take(START), later(items)).view)
+        }
+        background({ savedImdbList(list, today) }) { r -> r.getOrNull()?.let(::show) }
+        background({ imdbList(list, today, country) }) { r ->
+            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
+            r.getOrNull()?.let(::show)
         }
     }
 
@@ -2153,19 +2134,6 @@ class MainActivity : Screen() {
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" }, pk.gross)
         return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
             null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
-    }
-
-    private fun upcomingItem(u: Upcoming, p: Page): Item {
-        val today = java.time.LocalDate.now().toString()
-        val day = shortDay(u.date, today)
-        val note = when {
-            day == null -> null
-            u.date <= today -> "Out now"
-            p == Page.MOVIES -> "In cinemas $day"
-            else -> "From $day"
-        }
-        return Item(u.id, if (p == Page.MOVIES) "movie" else "series", u.name, u.poster, null, Images.logoFor(u.id), "",
-            listOfNotNull(u.genres.take(2).joinToString(", ").ifEmpty { null }), null, 0f, resume = false, left = null, note = note)
     }
 
     private fun metaItem(m: Meta) = Item(
@@ -2352,7 +2320,6 @@ class MainActivity : Screen() {
         const val FIRST = 10 // cards per row loaded before it's scrolled sideways (a screenful, the one past the edge, one more)
         const val CINEMA_MAX = 8
         const val IDLE = 5 * 60_000L // ms without a key before the cinema takes over (the TV's own screensaver: 10 min)
-        const val COMING_SOON = "Coming soon"
         const val SOURCES_AHEAD_WAIT = 1_500L // resting on a title this long fetches its sources ahead
         const val ADDON_RECHECK = 5 * 60_000L // ms between asking Stremio for the add-on list again on coming back to the front
         const val WARM_FIRST = 3 // titles at the top of Shows and Movies readied (details, art, logo) while Home is open
