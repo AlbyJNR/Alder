@@ -44,6 +44,41 @@ class MetaTest {
         assertEquals("Official Trailer", streams[1].title)
     }
 
+    @Test fun imdbTrailerPrefersTheFullOfficialTrailerOverASpotAndAClip() {
+        // Dune: Part Two as IMDb lists it: a 31-second "Final Trailer" first, then the real trailers, then clips.
+        fun video(id: String, name: String, type: String, seconds: Int, date: String) =
+            """{"id":"$id","name":{"value":"$name"},"contentType":{"displayName":{"value":"$type"}},"runtime":{"value":$seconds},"createdDate":"$date",
+                "playbackURLs":[{"displayName":{"value":"1080p"},"url":"https://c/$id.mp4","videoMimeType":"MP4"}]}"""
+        val json = JSONObject("""{"data":{"title":{"latestTrailer":${video("spot", "Final Trailer", "Trailer", 31, "2024-02-28T00:00:00Z")},
+            "primaryVideos":{"edges":[
+            {"node":${video("spot", "Final Trailer", "Trailer", 31, "2024-02-28T00:00:00Z")}},
+            {"node":${video("t3", "Official Trailer", "Trailer", 160, "2023-12-12T00:00:00Z")}},
+            {"node":${video("t2", "Official Trailer 2", "Trailer", 184, "2023-06-29T00:00:00Z")}},
+            {"node":${video("t1", "Official Trailer", "Trailer", 145, "2023-05-03T00:00:00Z")}},
+            {"node":${video("clip", "Raid on the Spice Harvester - Clip", "Clip", 241, "2026-03-13T00:00:00Z")}}
+        ]}}}}""")
+        assertEquals(listOf("https://c/t3.mp4"), parseImdbTrailerStreams(json).map { it.url })
+    }
+
+    @Test fun imdbTrailerTakesTheLatestTrailerWhenTheFeaturedVideosAreAllClips() {
+        // A series mid-season: five clips up front, the real trailer only under latestTrailer.
+        val json = JSONObject("""{"data":{"title":{"latestTrailer":{"id":"vt","name":{"value":"Finale Trailer - Season 5"},"contentType":{"displayName":{"value":"Trailer"}},
+            "runtime":{"value":86},"createdDate":"2025-12-30T00:00:00Z","playbackURLs":[{"displayName":{"value":"720p"},"url":"https://c/finale.mp4","videoMimeType":"MP4"}]},
+            "primaryVideos":{"edges":[
+            {"node":{"id":"c1","name":{"value":"Dustin's Speech"},"contentType":{"displayName":{"value":"Clip"}},"runtime":{"value":154},"createdDate":"2026-01-06T00:00:00Z",
+             "playbackURLs":[{"displayName":{"value":"720p"},"url":"https://c/c1.mp4","videoMimeType":"MP4"}]}}
+        ]}}}}""")
+        assertEquals(listOf("https://c/finale.mp4"), parseImdbTrailerStreams(json).map { it.url })
+    }
+
+    @Test fun imdbTrailerNeverSettlesForAClip() {
+        val json = JSONObject("""{"data":{"title":{"latestTrailer":null,"primaryVideos":{"edges":[
+            {"node":{"id":"c1","name":{"value":"Scene: Get Out Of The Car"},"contentType":{"displayName":{"value":"Clip"}},"runtime":{"value":60},"createdDate":"2023-02-27T00:00:00Z",
+             "playbackURLs":[{"displayName":{"value":"720p"},"url":"https://c/c1.mp4","videoMimeType":"MP4"}]}}
+        ]}}}}""")
+        assertEquals(emptyList<Stream>(), parseImdbTrailerStreams(json))
+    }
+
     @Test fun imdbTrailerEmptyWhenNoVideos() {
         assertEquals(emptyList<Stream>(), parseImdbTrailerStreams(JSONObject("""{"data":{"title":{"primaryVideos":{"edges":[]}}}}""")))
     }

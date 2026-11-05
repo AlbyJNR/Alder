@@ -207,7 +207,7 @@ internal fun imdbTrailerStreams(imdbId: String): List<Stream> {
     imdbTrailerCache[imdbId]?.let { return it }
     return runCatching {
         val query = JSONObject().put("query",
-            "{title(id:\"$imdbId\"){primaryVideos(first:5){edges{node{id name{value}contentType{displayName{value}}playbackURLs{displayName{value}url videoMimeType}}}}}}").toString()
+            "{title(id:\"$imdbId\"){latestTrailer{$IMDB_VIDEO_FIELDS}primaryVideos(first:10){edges{node{$IMDB_VIDEO_FIELDS}}}}}").toString()
         // A TV stick's first call to a new host can take a few seconds (DNS, TLS): time enough, and one more try.
         val raw = (1..2).firstNotNullOfOrNull { attempt ->
             runCatching { Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized")) }
@@ -287,28 +287,52 @@ internal fun shortDay(date: String, today: String): String? {
 internal fun parseImdbCertificate(json: JSONObject): String? =
     json.optJSONObject("data")?.optJSONObject("title")?.optJSONObject("certificate")?.text("rating")?.trim()?.takeIf { it.isNotEmpty() && it.length <= 8 }
 
-/** The trailer among IMDb's videos (a trailer before a clip or featurette), its files best quality first. */
+private const val IMDB_VIDEO_FIELDS = "id name{value}contentType{displayName{value}}runtime{value}createdDate playbackURLs{displayName{value}url videoMimeType}"
+
+/**
+ * The trailer among IMDb's videos, its files best quality first. IMDb's featured videos for a title lead with whatever
+ * is newest, often clips and interviews (a series mid-season has nothing else in its first five), and a 30-second TV
+ * spot counts as a "Trailer" too. So: only trailers and teasers, never a clip; the newest full-length official trailer
+ * first, a short spot or a teaser only when that is all there is. The title's `latestTrailer` is in the running as
+ * well, for the series whose featured videos are all clips. Empty when IMDb has no trailer: the YouTube route is next.
+ */
 internal fun parseImdbTrailerStreams(json: JSONObject): List<Stream> {
-    val nodes = json.optJSONObject("data")?.optJSONObject("title")?.optJSONObject("primaryVideos")?.optJSONArray("edges").objects()
-        .mapNotNull { it.optJSONObject("node") }
+    val title = json.optJSONObject("data")?.optJSONObject("title") ?: return emptyList()
+    val nodes = (listOfNotNull(title.optJSONObject("latestTrailer")) +
+        title.optJSONObject("primaryVideos")?.optJSONArray("edges").objects().mapNotNull { it.optJSONObject("node") })
+        .distinctBy { it.text("id") ?: it.toString() }
         .filter { node -> node.optJSONArray("playbackURLs").objects().any { it.text("url") != null } }
-    val best = nodes.minByOrNull { node ->
-        val type = node.optJSONObject("contentType")?.optJSONObject("displayName")?.text("value").orEmpty()
-        val name = node.optJSONObject("name")?.text("value").orEmpty()
-        when {
-            type.equals("Trailer", true) -> 0
-            name.contains("trailer", true) -> 1
-            else -> 2
-        }
-    } ?: return emptyList()
-    val title = best.optJSONObject("name")?.text("value")?.ifBlank { null } ?: "Trailer"
+    val best = nodes.filter { trailerRank(it) < 9 }.sortedWith(compareBy<JSONObject> { trailerRank(it) }.thenByDescending { it.text("createdDate").orEmpty() }).firstOrNull()
+        ?: return emptyList()
+    val name = best.optJSONObject("name")?.text("value")?.ifBlank { null } ?: "Trailer"
     val order = listOf("1080p", "auto", "720p", "480p", "sd")
     return best.optJSONArray("playbackURLs").objects()
         .mapNotNull { u -> u.text("url")?.let { url -> (u.optJSONObject("displayName")?.text("value") ?: u.text("videoMimeType") ?: "") to url } }
         .sortedBy { (quality, _) -> order.indexOf(quality.lowercase()).let { if (it < 0) order.size else it } }
         .distinctBy { it.second }
-        .map { (quality, url) -> Stream(if (quality.isNotBlank() && !quality.equals("auto", true)) "$title ($quality)" else title, quality, url, emptyMap(), 0L, null, null) }
+        .map { (quality, url) -> Stream(if (quality.isNotBlank() && !quality.equals("auto", true)) "$name ($quality)" else name, quality, url, emptyMap(), 0L, null, null) }
 }
+
+/**
+ * Where a video stands as the title's trailer: 0 a full-length official trailer, 1 another full-length trailer,
+ * 2 a teaser, 3 a short spot (under a minute, "Final Trailer" the day before release), 9 not a trailer at all.
+ */
+private fun trailerRank(node: JSONObject): Int {
+    val type = node.optJSONObject("contentType")?.optJSONObject("displayName")?.text("value").orEmpty()
+    val name = node.optJSONObject("name")?.text("value").orEmpty()
+    val seconds = node.optJSONObject("runtime")?.optInt("value", 0) ?: 0
+    val trailer = type.equals("Trailer", true) || name.contains("trailer", true)
+    val teaser = type.equals("Teaser", true) || name.contains("teaser", true)
+    return when {
+        !trailer && !teaser -> 9
+        teaser && !trailer -> 2
+        seconds in 1 until SPOT_SECONDS -> 3
+        name.contains("official", true) -> 0
+        else -> 1
+    }
+}
+
+private const val SPOT_SECONDS = 60
 
 class Meta(json: JSONObject) {
     val id: String = json.getString("id")

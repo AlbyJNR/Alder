@@ -11,7 +11,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.18.4
+Put changes that are not released under `## 1.19.0
+
+- Trailer plays the real trailer. IMDb's featured videos lead with whatever is newest, so CAS was playing a 30-second spot for one film and a mid-season clip for a series whose trailer sat elsewhere. CAS now asks for the title's latest trailer as well as its ten featured videos, keeps only trailers and teasers, and plays the newest full-length official trailer; a short spot or a teaser only when that is all IMDb has, and never a clip or interview. Titles IMDb has no trailer for still take the YouTube route.
+
+## 1.18.4
 
 - Left from the first title of any row reaches the rail, however far down the page you are. It only worked from rows level with the rail (Alan's report).
 
