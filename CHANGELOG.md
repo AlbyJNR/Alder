@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
 
+## 1.16.1
+
+- **Seasons follow the remote.** In the episode list, move to a season and its episodes show. Before, you had to press OK.
+- **The director is a name you can select.** On a film's page, select the director to see their other films and shows, as with the cast.
+- In the player, the **Audio & subtitles** panel closes when you select an audio track, a subtitle track or a sound option. Before, it stayed open.
+
 ## 1.16.0
 
 - **Move to the front.** Hold OK on a title in one of your lists on Home and select **Move to the front**. The title becomes the first card of the row.

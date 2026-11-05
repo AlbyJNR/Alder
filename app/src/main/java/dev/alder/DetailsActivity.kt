@@ -221,17 +221,17 @@ class DetailsActivity : Screen() {
             // The leads, one quiet line, each a name the remote can select to find more of their work; the full
             // list stays behind the information button. Then the director, for films.
             castNames = emptyList()
+            // A name the remote can select, for the leads and the director alike: their other work, as a search.
+            fun person(person: String) = text(person, SMALL, color = TEXT_2).onArt().apply {
+                maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(150)
+                setPadding(dp(6), dp(2), dp(6), dp(2))
+                contentDescription = "Films and shows with $person"
+                rowFocus(6, rest = { null }) { has -> setTextColor(if (has) TEXT else TEXT_2) }
+                if (Profiles.active(this@DetailsActivity)?.kids == true) isFocusable = false // a Kids profile stays on its own titles
+                else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("query", person)) }
+            }
             if (m.cast.isNotEmpty() && Settings.titlePage(this, SettingsActivity.TITLE_CAST)) {
-                val names = m.cast.take(3).map { person ->
-                    text(person, SMALL, color = TEXT_2).onArt().apply {
-                        maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(150)
-                        setPadding(dp(6), dp(2), dp(6), dp(2))
-                        contentDescription = "Films and shows with $person"
-                        rowFocus(6, rest = { null }) { has -> setTextColor(if (has) TEXT else TEXT_2) }
-                        if (Profiles.active(this@DetailsActivity)?.kids == true) isFocusable = false // a Kids profile stays on its own titles
-                        else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("query", person)) }
-                    }
-                }
+                val names = m.cast.take(3).map(::person)
                 castNames = names
                 stack.addView(LinearLayout(this).apply {
                     gravity = Gravity.CENTER_VERTICAL
@@ -244,13 +244,17 @@ class DetailsActivity : Screen() {
                 }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8); marginStart = -dp(6) })
             }
             if (m.director.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR)) {
+                val directors = m.director.take(2).map(::person)
+                castNames = castNames + directors // Down from a director's name goes to Play too
                 stack.addView(LinearLayout(this).apply {
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt())
-                    addView(text(m.director.take(2).joinToString("  ·  "), SMALL, color = TEXT_2).onArt().apply {
-                        maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(4) })
+                    clipChildren = false
+                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), wrap().apply { marginEnd = dp(4) })
+                    directors.forEachIndexed { i, name ->
+                        if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
+                        addView(name, wrap())
+                    }
+                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(4); marginStart = -dp(6) })
             }
             addWatch(m, stack)
         }
@@ -577,6 +581,13 @@ class DetailsActivity : Screen() {
         fillGuide()
     }
 
+    private var pendingSeason = 1
+    private val seasonSwitch = Runnable {
+        selectedSeason = pendingSeason
+        fillGuide()
+        seasonButtons[selectedSeason]?.requestFocus()
+    }
+
     private fun fillGuide() {
         val videos = meta?.videos.orEmpty()
         val seasons = videos.map { it.season }.distinct()
@@ -585,10 +596,15 @@ class DetailsActivity : Screen() {
             chip(if (season == selectedSeason) {
                 if (season == 0) "Specials" else "Season $season"
             } else if (season == 0) "Specials" else season.toString(), season == selectedSeason).apply {
+                // As Home's pages: landing on a season shows it, after the beat that lets the remote skate past.
+                setOnFocusChangeListener { _, has ->
+                    main.removeCallbacks(seasonSwitch)
+                    if (has && season != selectedSeason) { pendingSeason = season; main.postDelayed(seasonSwitch, SEASON_WAIT) }
+                }
                 setOnClickListener {
-                    selectedSeason = season
-                    fillGuide()
-                    seasonButtons[season]?.requestFocus()
+                    main.removeCallbacks(seasonSwitch)
+                    if (season == selectedSeason) episodeRows.firstOrNull()?.requestFocus()
+                    else { pendingSeason = season; seasonSwitch.run() }
                 }
                 // Held: the whole season ticked as watched, or unticked.
                 setOnLongClickListener { seasonMenu(season, videos); true }
@@ -930,5 +946,6 @@ class DetailsActivity : Screen() {
         const val RATING_ALPHA = 0.65f // the age rating capsule: present, not loud
         const val AIRS_ALPHA = 0.65f // an episode not out yet sits back in the list
         const val ORB = 36 // dp, the small frosted circles under the disc
+        const val SEASON_WAIT = 300L // ms on a season chip before its episodes show (Home's pages switch the same way)
     }
 }

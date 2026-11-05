@@ -1176,7 +1176,7 @@ class PlayerActivity : Screen() {
             SMALL, color = TEXT_2).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, wrap().apply { topMargin = dp(5) })
 
         val audio = audioGroups.filter { it.isTrackSupported(0) }
-        if (audio.isNotEmpty()) section(list, "Audio", audio.map { trackName(it.getTrackFormat(0), true) }, audio.indexOfFirst { it.isSelected }) { i ->
+        if (audio.isNotEmpty()) section(list, "Audio", audio.map { trackName(it.getTrackFormat(0), true) }, audio.indexOfFirst { it.isSelected }, closes = true) { i ->
             audioPicked = true
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                 .setOverrideForType(TrackSelectionOverride(audio[i].mediaTrackGroup, (0 until audio[i].length).toList())).build()
@@ -1191,7 +1191,7 @@ class PlayerActivity : Screen() {
             else -> subs.indexOfFirst { it.isSelected } + 1
         }
         val subsFirst = section(list, "Subtitles", listOf("Off") + subs.map { trackName(it.getTrackFormat(0), false) + "  ·  in the file" } +
-            addonSubs.map { "${it.language}  ·  ${it.addon}" }, chosen) { i ->
+            addonSubs.map { "${it.language}  ·  ${it.addon}" }, chosen, closes = true) { i ->
             val p = player.trackSelectionParameters.buildUpon()
             val sub = addonSubs.getOrNull(i - 1 - subs.size)
             remember(if (i == 0) "" else sub?.lang ?: subs[i - 1].getTrackFormat(0).language, addonFile = sub != null)
@@ -1211,7 +1211,7 @@ class PlayerActivity : Screen() {
                 steps.indexOf(subDelay)) { i -> shiftSubtitles(shiftable, steps[i]) }
         }
         // Clear dialogue, where the sound is chosen; not offered with a receiver, which gets the sound undecoded.
-        if (!passthrough) section(list, "Sound", listOf("Normal", "Clear dialogue  ·  voices lifted"), if (dialogueProcessor.enabled) 1 else 0) { i ->
+        if (!passthrough) section(list, "Sound", listOf("Normal", "Clear dialogue  ·  voices lifted"), if (dialogueProcessor.enabled) 1 else 0, closes = true) { i ->
             dialogueProcessor.enabled = i == 1
             Settings.setClearDialogue(this, i == 1)
         }
@@ -1256,7 +1256,8 @@ class PlayerActivity : Screen() {
     }
 
     /** Rows stay on clear glass; a tungsten rim and tick carry focus and selection. */
-    private fun section(list: LinearLayout, heading: String, labels: List<String>, chosen: Int, pick: (Int) -> Unit): View {
+    /** [closes]: a choice made here is the end of the visit; the panel goes once the dot has moved. */
+    private fun section(list: LinearLayout, heading: String, labels: List<String>, chosen: Int, closes: Boolean = false, pick: (Int) -> Unit): View {
         // The heading names the choice in use ("SUBTITLES · SPANISH"), so it reads before any scrolling.
         fun headingFor(index: Int) = (listOf(heading) + listOfNotNull(labels.getOrNull(index)?.substringBefore("  ·  "))).joinToString(" · ")
         val title = caps(headingFor(chosen), TUNGSTEN)
@@ -1296,6 +1297,7 @@ class PlayerActivity : Screen() {
                     checks.forEachIndexed { i, icon -> icon.visibility = if (i == index) View.VISIBLE else View.INVISIBLE }
                     title.text = headingFor(index).uppercase()
                     names.forEachIndexed { i, word -> word.setTextColor(if (i == index) TEXT else TEXT_2) }
+                    if (closes) main.postDelayed({ if (options.visibility == View.VISIBLE) closeOptions() }, PICK_SEEN)
                 }
             }.also { list.addView(it, LinearLayout.LayoutParams(-1, dp(32))) }
         }
@@ -1421,6 +1423,7 @@ class PlayerActivity : Screen() {
         const val SEEK_SETTLE = 600L // ms after the last skip before seeking
         const val SKIP_SHOWN = 10_000L // ms the Skip intro pill stays, as in NuvioTV
         const val HIDE = 5_000L // ms the controls stay up while playing
+        const val PICK_SEEN = 320L // ms the moved dot shows before the Audio & subtitles panel closes on its own
         const val START_WAIT = 12_000L // ms for a source to show a picture before the next is tried (4K DV from debrid took 6 s)
         const val ADDON_SUB = "addon-subtitle" // the id an addon subtitle file is attached under
         const val SUB_WAIT = 2_000L // ms the start waits for the addon's subtitles
