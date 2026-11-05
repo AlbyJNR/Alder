@@ -1246,6 +1246,7 @@ class MainActivity : Screen() {
             if (p.isCatalog && !profile.kids) {
                 val wanted = if (p == Page.MOVIES) listOf(ImdbList.HOT_MOVIES, ImdbList.BOX_OFFICE) else listOf(ImdbList.NEW_SERIES, ImdbList.HOT_TV)
                 wanted.filter { "${p.label}|${it.title}" !in hiddenSeen.orEmpty() }.forEach { imdbRow(slot(), it, g) }
+                if (p == Page.MOVIES && "${p.label}|$EBERT_ROW" !in hiddenSeen.orEmpty()) ebertRow(slot(), g)
             }
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
@@ -2144,7 +2145,10 @@ class MainActivity : Screen() {
      * most popular films and TV), numbered. The hero adds when a title is out; OK opens the title page as anywhere,
      * where Trailer plays the trailer IMDb listed. Last time's lists first, from disk; today's replace them.
      */
-    private fun buildImdb(g: Int) = ImdbList.entries.forEach { imdbRow(slot(), it, g) }
+    private fun buildImdb(g: Int) {
+        ImdbList.entries.forEach { imdbRow(slot(), it, g) }
+        ebertRow(slot(), g)
+    }
 
     /** One of IMDb's lists as a row in [slot]: last time's from disk at once, today's in its place when it differs. */
     private fun imdbRow(slot: LinearLayout, list: ImdbList, g: Int) {
@@ -2191,6 +2195,40 @@ class MainActivity : Screen() {
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" }, pk.gross)
         return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
             null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
+    }
+
+    /**
+     * RogerEbert.com's newest reviews as a poster row, on Movies and the IMDb page: the film as IMDb knows it, the
+     * critic's name on the card, their one-line verdict where the plot would go. The site's star ratings are not in
+     * its feed, so the IMDb rating stands in. Last time's row from disk first, today's in its place.
+     */
+    private fun ebertRow(slot: LinearLayout, g: Int) {
+        val today = java.time.LocalDate.now().toString()
+        var shownIds = emptyList<String>()
+        fun show(picks: List<EbertPick>) {
+            val ids = picks.map { it.title.id }
+            if (g != generation || picks.isEmpty() || ids == shownIds) return
+            shownIds = ids
+            rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
+            slot.removeAllViews()
+            val items = picks.map { ebertItem(it, today) }
+            slot.addView(row(EBERT_ROW, items.take(START), later(items)).view)
+        }
+        val country = imdbCountry()
+        background({ ebertReviews(country, offline = true) }) { r -> r.getOrNull()?.let(::show) }
+        background({ ebertReviews(country) }) { r ->
+            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "RogerEbert.com reviews failed: $it") }
+            r.getOrNull()?.let(::show)
+        }
+    }
+
+    private fun ebertItem(e: EbertPick, today: String): Item {
+        val pk = e.title
+        val said = e.review.verdict?.let { v -> "\u201C$v\u201D" + (e.review.critic?.let { " \u2014 $it" } ?: "") }
+        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" },
+            e.review.date?.let { d -> shortDay(d, today)?.let { "Reviewed $it" } })
+        return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), said ?: pk.plot ?: "", facts,
+            null, 0f, resume = false, left = null, note = e.review.critic, released = pk.date)
     }
 
     private fun metaItem(m: Meta) = Item(
@@ -2387,3 +2425,5 @@ class MainActivity : Screen() {
         const val REVEAL_WAIT = 1200L // ms the cinema waits for a title's art and logo before showing its words anyway
     }
 }
+
+private const val EBERT_ROW = "Roger Ebert: new reviews"

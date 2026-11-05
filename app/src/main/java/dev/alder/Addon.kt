@@ -361,7 +361,7 @@ enum class ImdbList(val title: String, val trailers: Boolean = false, val provid
     TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV");
 }
 
-private const val IMDB_TITLE_FIELDS = "id titleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}"
+internal const val IMDB_TITLE_FIELDS = "id titleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}"
 private const val IMDB_CLIP_FIELDS = "id name{value}runtime{value}description{value}thumbnail{url}"
 
 /** The list's query, as imdb.com asks it ([today] ISO: the trailer lists split on the release date). */
@@ -417,29 +417,32 @@ internal fun imdbList(list: ImdbList, today: String, country: String): List<Imdb
 internal fun savedImdbList(list: ImdbList, today: String, country: String): List<ImdbPick>? =
     Http.savedAnswer("https://api.graphql.imdb.com/", imdbListQuery(list, today, list.region ?: country))?.let { runCatching { parseImdbList(list, JSONObject(it)) }.getOrNull() }
 
+/** One IMDb title as a pick: [clip] its trailer when the list carries one, [rank] its place in a chart, [gross] its weekend. */
+internal fun imdbPick(t: JSONObject, clip: JSONObject? = null, rank: Int? = null, gross: String? = null): ImdbPick? {
+    val id = t.text("id")?.takeIf { it.startsWith("tt") } ?: return null
+    val name = t.optJSONObject("titleText")?.text("text") ?: return null
+    val kind = t.optJSONObject("titleType")?.text("id").orEmpty()
+    val d = t.optJSONObject("releaseDate")
+    val date = d?.takeIf { it.optInt("year") > 0 && it.optInt("month") > 0 && it.optInt("day") > 0 }
+        ?.let { "%04d-%02d-%02d".format(it.optInt("year"), it.optInt("month"), it.optInt("day")) }
+    val rating = t.optJSONObject("ratingsSummary")?.optDouble("aggregateRating", 0.0)?.takeIf { it > 0 }?.let { "%.1f".format(Locale.US, it) }
+    return ImdbPick(
+        id, name, if (kind.startsWith("tv") && kind != "tvMovie" && kind != "tvSpecial") "series" else "movie",
+        t.optJSONObject("primaryImage")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX360_.jpg"),
+        t.optJSONObject("releaseYear")?.optInt("year", 0)?.takeIf { it > 0 }?.toString(),
+        t.optJSONObject("plot")?.optJSONObject("plotText")?.text("plainText"),
+        t.optJSONObject("genres")?.optJSONArray("genres").objects().mapNotNull { it.text("text") },
+        rating, rank, date,
+        clip?.text("id"), clip?.optJSONObject("thumbnail")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX640_.jpg"),
+        clip?.optJSONObject("runtime")?.optInt("value", 0)?.takeIf { it > 0 },
+        gross,
+    )
+}
+
 /** The titles in IMDb's answer to [list], in its order; charts numbered from one, trailer lists only where a trailer exists. */
 internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
     val data = json.optJSONObject("data") ?: return emptyList()
-    fun title(t: JSONObject, clip: JSONObject?, rank: Int?, gross: String? = null): ImdbPick? {
-        val id = t.text("id")?.takeIf { it.startsWith("tt") } ?: return null
-        val name = t.optJSONObject("titleText")?.text("text") ?: return null
-        val kind = t.optJSONObject("titleType")?.text("id").orEmpty()
-        val d = t.optJSONObject("releaseDate")
-        val date = d?.takeIf { it.optInt("year") > 0 && it.optInt("month") > 0 && it.optInt("day") > 0 }
-            ?.let { "%04d-%02d-%02d".format(it.optInt("year"), it.optInt("month"), it.optInt("day")) }
-        val rating = t.optJSONObject("ratingsSummary")?.optDouble("aggregateRating", 0.0)?.takeIf { it > 0 }?.let { "%.1f".format(Locale.US, it) }
-        return ImdbPick(
-            id, name, if (kind.startsWith("tv") && kind != "tvMovie" && kind != "tvSpecial") "series" else "movie",
-            t.optJSONObject("primaryImage")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX360_.jpg"),
-            t.optJSONObject("releaseYear")?.optInt("year", 0)?.takeIf { it > 0 }?.toString(),
-            t.optJSONObject("plot")?.optJSONObject("plotText")?.text("plainText"),
-            t.optJSONObject("genres")?.optJSONArray("genres").objects().mapNotNull { it.text("text") },
-            rating, rank, date,
-            clip?.text("id"), clip?.optJSONObject("thumbnail")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX640_.jpg"),
-            clip?.optJSONObject("runtime")?.optInt("value", 0)?.takeIf { it > 0 },
-            gross,
-        )
-    }
+    fun title(t: JSONObject, clip: JSONObject?, rank: Int?, gross: String? = null) = imdbPick(t, clip, rank, gross)
     fun searched() = data.optJSONObject("advancedTitleSearch")?.optJSONArray("edges").objects()
         .mapNotNull { e -> e.optJSONObject("node")?.optJSONObject("title")?.let { title(it, null, null) } }
     return when (list) {

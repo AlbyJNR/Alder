@@ -113,6 +113,31 @@ class MetaTest {
         assertEquals("tt4" to "vi9", r.id to r.trailerId)
     }
 
+    @Test fun ebertFeedParsesAndItsTitlesMatchOnImdb() {
+        val xml = """<rss><channel><item>
+            <title>Trauma or, Monsters All</title>
+            <link>https://www.rogerebert.com/reviews/trauma-or-monsters-all-movie-review-2026</link>
+            <dc:creator><![CDATA[Brian Tallerico]]></dc:creator>
+            <pubDate>Wed, 04 Nov 2026 14:00:00 +0000</pubDate>
+            <description><![CDATA[<p>A film that doesn&#8217;t flinch &#038; doesn't blink.  </p>]]></description>
+            </item><item><title>No link</title></item></channel></rss>"""
+        val reviews = parseEbertFeed(xml)
+        assertEquals(1, reviews.size)
+        assertEquals("Trauma or, Monsters All", reviews[0].title)
+        assertEquals("Brian Tallerico", reviews[0].critic)
+        assertEquals("A film that doesn\u2019t flinch & doesn't blink.", reviews[0].verdict)
+        assertEquals("2026-11-04", reviews[0].date)
+        assertEquals(2026, reviews[0].year)
+        val found = JSONObject("""{"d":[{"id":"nm1","l":"Someone"},{"id":"tt0316219","l":"Manhood","y":2003,"qid":"movie"},
+            {"id":"tt39637432","l":"Manhood","y":2026,"qid":"movie"},{"id":"tt1","l":"Manhood: The Series","y":2025,"qid":"tvSeries"}]}""")
+        assertEquals("tt39637432", imdbTitleFor("Manhood", 2026, found))
+        assertEquals(null, imdbTitleFor("Manhood", 2010, found))
+        assertEquals("tt1", imdbTitleFor("Manhood: the series", 2026, found))
+        assertEquals("https://v3.sg.media-imdb.com/suggestion/x/the%20last%20temptation.json", imdbSuggestUrl("The Last Temptation"))
+        assertEquals(EBERT_FEED, ebertFeedUrl(1))
+        assertEquals("$EBERT_FEED?paged=3", ebertFeedUrl(3))
+    }
+
     @Test fun imdbBoxOfficeAndSearchListsParse() {
         val box = JSONObject("""{"data":{"boxOfficeWeekendChart":{"weekendStartDate":"2026-10-30","entries":[
             {"title":{"id":"tt1","titleText":{"text":"You Can See Everything"},"titleType":{"id":"movie"}},"weekendGross":{"total":{"amount":42134567,"currency":"USD"}}},

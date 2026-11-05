@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.23.0
+Put changes that are not released under `## 1.24.0
+
+- Roger Ebert: new reviews, a row on Movies and at the end of the IMDb page: the newest thirty reviews on RogerEbert.com, as posters. The card shows the critic's name; the title line shows their one-line verdict, with the film's year and IMDb rating.
+- The site's star ratings are not in the feed it publishes, and its pages do not open for a TV app, so the row has no stars. Its Great Movies and Streaming pages have no feed, so they are not in CAS.
+
+## 1.23.0
 
 - The IMDb page has a line of countries above its rows: UK, US, Ireland, Canada, Australia, India, Germany, France. Select one and each row asks IMDb again from that country, in its place. The Popular on… rows show that country's catalogue; the Top 250 and the charts do not move.
 - CAS keeps the country you select. The IMDb rows on TV and Movies follow it too. Before, the rows followed the TV's own country, with no way to change it.
