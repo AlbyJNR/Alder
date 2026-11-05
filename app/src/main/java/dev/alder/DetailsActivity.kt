@@ -84,6 +84,11 @@ class DetailsActivity : Screen() {
     private var certificateRequested = false
     private var tomatoes: RtScores? = null // Rotten Tomatoes' meters and consensus, when it has the title
     private var tomatoesRequested = false
+    private var factRow: LinearLayout? = null // the year · genre · scores line: refilled where it is as a rating or RT arrives
+    private var consensusSlot: LinearLayout? = null // under the plot: the critics' sentence, filled in when RT answers
+    private var watchState: String? = null // what the watch block drew from the library item: the same again redraws nothing
+    private var leadControl: View? = null // Play, or Trailer for a title not out yet
+    private var lastKeyAt = 0L // the remote's last press: the hero is never rebuilt under a moving remote
     private var tickers = emptyMap<String, () -> Unit>() // each episode row's words, redrawn when a tick changes
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -110,6 +115,9 @@ class DetailsActivity : Screen() {
         (initialArt ?: poster)?.let { Images.load(it, heroArt, artWidth, urgent = true) { heroArt.alpha = 1f; refrost() } }
 
         fun show(m: Meta) {
+            // The fresh details are the saved ones again, the usual case: nothing to redraw, no guide to rebuild.
+            if (meta?.stamp == m.stamp) return
+            val first = meta == null
             meta = m
             val art = m.background ?: initialArt ?: poster
             if (heroArt.tag != art) Images.load(art, heroArt, artWidth, urgent = true) {
@@ -121,7 +129,8 @@ class DetailsActivity : Screen() {
             val wasGuide = guideOpen
             val episodeTag = currentFocus?.takeIf { it in episodeRows }?.tag
             certificate = m.certification ?: certificate
-            showHero(m)
+            // The first details build the page at once; fresh ones that differ rebuild it once the remote rests.
+            if (first) showHero(m) else whenStill { showHero(meta) }
             m.imdbId?.let { id -> background({ imdbTrailerStreams(id) }) {} } // ready before the button is pressed
             // The age rating, from IMDb when the add-on has none; the facts line is redrawn once when it comes.
             if (certificate == null && !certificateRequested && m.imdbId != null && Settings.titlePage(this, SettingsActivity.TITLE_RATING)) {
@@ -129,7 +138,7 @@ class DetailsActivity : Screen() {
                 background({ imdbCertificate(m.imdbId) }) { r ->
                     val found = r.getOrNull() ?: return@background
                     certificate = found
-                    if (!guideOpen && !infoOpen && !similarOpen) showHero(meta)
+                    refreshFacts()
                 }
             }
             // Rotten Tomatoes' two meters and the critics' consensus, by the title's name and year; drawn in once they come.
@@ -138,7 +147,7 @@ class DetailsActivity : Screen() {
                 val year = m.year?.take(4)?.toIntOrNull()
                 background({ rtScores(m.name, year, type == "series") }) { r ->
                     tomatoes = r.getOrNull() ?: return@background
-                    if (!guideOpen && !infoOpen && !similarOpen) showHero(meta)
+                    refreshFacts()
                 }
             }
             if (type == "series" && m.videos.isNotEmpty()) {
@@ -163,7 +172,9 @@ class DetailsActivity : Screen() {
         background({ Stremio.library(key, listOf(metaId)).firstOrNull() }) { result ->
             if (!itemChangedHere) {
                 item = result.getOrNull() ?: item
-                if (meta != null) showHero(meta)
+                // Only a library item that changes the watch block (a resume point, My List) redraws it; the usual
+                // answer repeats what the saved copy already showed.
+                meta?.let { m -> if (watchKey(m) != watchState) whenStill { showHero(meta) } }
             }
         }
     }
@@ -203,52 +214,19 @@ class DetailsActivity : Screen() {
             stack.addView(error.marginTop(16))
             error.post { error.getChildAt(2).requestFocus() }
         } else {
-            val length = if (type == "series") m.videos.map { it.season }.filter { it > 0 }.distinct().size
-                .takeIf { it > 0 }?.let(::seasons) else m.runtime
-            val facts = listOfNotNull(m.year, m.genres.firstOrNull(), length).joinToString(DOT)
-            val factRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            // The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it.
-            val cert = certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
-            if (cert != null) factRow.addView(text(cert, 10.5f, bold = true, color = TEXT_2).apply {
-                letterSpacing = 0.04f
-                setPadding(dp(5), dp(2), dp(5), dp(2))
-                background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
-                alpha = RATING_ALPHA
-            }, wrap().apply { marginEnd = dp(8) })
-            factRow.addView(text(facts, SMALL, color = TEXT_2).onArt().apply {
-                maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-            })
-            m.rating?.let { rating ->
-                factRow.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
-                factRow.addView(text("IMDb", 9f, bold = true, color = BASE).apply {
-                    setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
-                })
-                factRow.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
-            }
-            // Rotten Tomatoes after IMDb, the same way: its badge, then C for critics and A for audience, as percentages.
-            tomatoes?.takeIf { it.critics != null || it.audience != null }?.let { rt ->
-                factRow.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
-                factRow.addView(text("RT", 9f, bold = true, color = BASE).apply {
-                    setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
-                })
-                val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ")
-                factRow.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
-            }
-            stack.addView(factRow, wrap().apply { topMargin = dp(12) })
+            // The facts line and the critics' line are filled apart from the block, so a late number (the age rating,
+            // Rotten Tomatoes) refills them where they are instead of rebuilding the controls under the remote.
+            val facts = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; fillFacts(this, m) }
+            factRow = facts
+            stack.addView(facts, wrap().apply { topMargin = dp(12) })
             m.description?.takeIf { it.isNotBlank() }?.let {
                 stack.addView(text(it, BODY, color = TEXT).onArt().apply {
                     maxLines = 3; ellipsize = TextUtils.TruncateAt.END
                 }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
             }
-            // The critics' consensus, one line in their words under the plot: what the meters mean, in a sentence.
-            tomatoes?.takeIf { it.consensus != null }?.let { rt ->
-                val line = rt.consensus!!
-                stack.addView(LinearLayout(this).apply {
-                    gravity = Gravity.TOP
-                    addView(caps(rt.season?.let { "Critics · S$it" } ?: "Critics", TEXT_3).onArt(), wrap().apply { marginEnd = dp(8); topMargin = dp(3) })
-                    addView(text(line, SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
-            }
+            val consensus = LinearLayout(this).apply { gravity = Gravity.TOP; fillConsensus(this) }
+            consensusSlot = consensus
+            stack.addView(consensus, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
             // The leads, one quiet line, each a name the remote can select to find more of their work; the full
             // list stays behind the information button. Then the director, for films.
             castNames = emptyList()
@@ -292,20 +270,103 @@ class DetailsActivity : Screen() {
         hero.addView(stack, FrameLayout.LayoutParams(dp(HERO_W), -2, Gravity.BOTTOM or Gravity.START).apply {
             leftMargin = dp(PAD); bottomMargin = dp(118)
         })
-        val hasEpisodes = type == "series" && m?.videos?.isNotEmpty() == true
-        if (hasEpisodes || ::similarOverlay.isInitialized) {
-            hero.addView(caps(if (hasEpisodes) "▾  Episodes" else "▾  More like this", TEXT_2).onArt().apply {
-                isFocusable = true
-                setOnClickListener { if (hasEpisodes) showGuide() else showSimilar() }
-                rowFocus(rest = { null })
-            }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-                leftMargin = dp(PAD); bottomMargin = dp(28)
-            })
+        addMoreHint()
+        if (m != null && !guideOpen && !infoOpen && !similarOpen) {
+            // The remote goes straight back to the control it was on (Trailer, a cast name, ⓘ), at its focused size:
+            // no frame without focus for a press to fall into, and no second growth. The post is the fallback for a
+            // view the window would not focus before its first layout.
+            val back = keepFocus?.let { keyed(hero, it) } ?: leadControl ?: playButton
+            back.requestFocus()
+            back.settleFocus()
+            hero.post { if (!guideOpen && !infoOpen && !similarOpen && currentFocus?.let { isInside(it, hero) } != true) back.requestFocus() }
         }
+    }
+
+    /** "▾ Episodes" or "▾ More like this" under the block, once there is something below; added in place when it comes. */
+    private fun addMoreHint() {
+        hero.findViewWithTag<View>(MORE_HINT)?.let(hero::removeView)
+        val hasEpisodes = type == "series" && meta?.videos?.isNotEmpty() == true
+        if (!hasEpisodes && !::similarOverlay.isInitialized) return
+        hero.addView(caps(if (hasEpisodes) "▾  Episodes" else "▾  More like this", TEXT_2).onArt().apply {
+            tag = MORE_HINT
+            isFocusable = true
+            setOnClickListener { if (hasEpisodes) showGuide() else showSimilar() }
+            rowFocus(rest = { null })
+        }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
+            leftMargin = dp(PAD); bottomMargin = dp(28)
+        })
+    }
+
+    /** The year, a genre, the length, then IMDb's number and Rotten Tomatoes' two: refilled as each arrives. */
+    private fun fillFacts(row: LinearLayout, m: Meta) {
+        row.removeAllViews()
+        val length = if (type == "series") m.videos.map { it.season }.filter { it > 0 }.distinct().size
+            .takeIf { it > 0 }?.let(::seasons) else m.runtime
+        val facts = listOfNotNull(m.year, m.genres.firstOrNull(), length).joinToString(DOT)
+        // The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it.
+        val cert = certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
+        if (cert != null) row.addView(text(cert, 10.5f, bold = true, color = TEXT_2).apply {
+            letterSpacing = 0.04f
+            setPadding(dp(5), dp(2), dp(5), dp(2))
+            background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
+            alpha = RATING_ALPHA
+        }, wrap().apply { marginEnd = dp(8) })
+        row.addView(text(facts, SMALL, color = TEXT_2).onArt().apply {
+            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        })
+        m.rating?.let { rating ->
+            row.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
+            row.addView(text("IMDb", 9f, bold = true, color = BASE).apply {
+                setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
+            })
+            row.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+        }
+        // Rotten Tomatoes after IMDb, the same way: its badge, then C for critics and A for audience, as percentages.
+        tomatoes?.takeIf { it.critics != null || it.audience != null }?.let { rt ->
+            row.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
+            row.addView(text("RT", 9f, bold = true, color = BASE).apply {
+                setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
+            })
+            val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ")
+            row.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+        }
+    }
+
+    /** The critics' consensus, one line in their words under the plot: what the meters mean, in a sentence. */
+    private fun fillConsensus(slot: LinearLayout) {
+        slot.removeAllViews()
+        val rt = tomatoes?.takeIf { it.consensus != null }
+        slot.visibility = if (rt == null) View.GONE else View.VISIBLE
+        val line = rt?.consensus ?: return
+        slot.addView(caps(rt.season?.let { "Critics · S$it" } ?: "Critics", TEXT_3).onArt(), wrap().apply { marginEnd = dp(8); topMargin = dp(3) })
+        slot.addView(text(line, SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
+    }
+
+    /** A late fact (the age rating, Rotten Tomatoes): its two lines refill where they are; the controls, and the remote on them, stay. */
+    private fun refreshFacts() {
+        val m = meta ?: return
+        factRow?.let { fillFacts(it, m) }
+        consensusSlot?.let(::fillConsensus)
+    }
+
+    /** What the watch block draws from the library item; the same key again means the same block. */
+    private fun watchKey(m: Meta): String {
+        val target = playTarget(m)?.first ?: metaId
+        val resumeAt = item?.let { Library.resumeAt(it, target) } ?: 0L
+        val duration = item?.optJSONObject("state")?.optLong("duration") ?: 0L
+        return listOf(target, resumeAt, duration, Library.inList(item)).joinToString("|")
+    }
+
+    /** Runs [action] once the remote has rested a moment: a block rebuilt under a moving remote drops the press. */
+    private fun whenStill(action: () -> Unit) {
+        if (isFinishing || isDestroyed) return
+        val since = android.os.SystemClock.uptimeMillis() - lastKeyAt
+        if (since >= STILL_WAIT) action() else main.postDelayed({ whenStill(action) }, STILL_WAIT - since)
     }
 
     /** Where you are, then the main action and three small glass controls. */
     private fun addWatch(m: Meta, stack: LinearLayout) {
+        watchState = watchKey(m)
         val target = playTarget(m)
         // What Play would play: its sources asked for now, so Play (and Preview) start without the add-ons' wait.
         target?.first?.let { Sources.prefetch(this, key, type, it) }
@@ -372,12 +433,7 @@ class DetailsActivity : Screen() {
             addView(infoButton)
         }
         stack.addView(actionRow2, wrap().apply { topMargin = dp(12) })
-        // The title's details arrive in two or three steps, each redrawing this block: the remote stays on the
-        // control it was on (Trailer, a cast name, ⓘ) rather than snapping back to Play each time.
-        playButton.post {
-            if (guideOpen || infoOpen || similarOpen) return@post
-            (keepFocus?.let { key -> keyed(hero, key) } ?: lead).requestFocus()
-        }
+        leadControl = lead
     }
 
     private fun keyed(root: View, key: String): View? {
@@ -875,7 +931,7 @@ class DetailsActivity : Screen() {
             leftMargin = dp(PAD); rightMargin = dp(PAD); bottomMargin = dp(38)
         })
         root.addView(similarOverlay, FrameLayout.LayoutParams(-1, -1))
-        showHero(meta)
+        if (hero.childCount > 0) addMoreHint() // the hint under the block; the block itself, and the remote on it, stay
     }
 
     private fun showSimilar() {
@@ -931,6 +987,7 @@ class DetailsActivity : Screen() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
+            lastKeyAt = event.eventTime
             if (guideOpen) {
                 val focused = currentFocus
                 if (focused in seasonButtons.values) when (event.keyCode) {
@@ -984,5 +1041,7 @@ class DetailsActivity : Screen() {
         const val AIRS_ALPHA = 0.65f // an episode not out yet sits back in the list
         const val ORB = 36 // dp, the small frosted circles under the disc
         const val SEASON_WAIT = 300L // ms on a season chip before its episodes show (Home's pages switch the same way)
+        const val STILL_WAIT = 400L // ms since the remote's last press before the hero may be rebuilt under it
+        const val MORE_HINT = "more-hint" // the tag of the "▾ Episodes" / "▾ More like this" line
     }
 }

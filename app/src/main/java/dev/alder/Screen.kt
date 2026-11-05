@@ -456,6 +456,12 @@ abstract class Screen : Activity() {
     // mid-animation value it happened to have when OK went down.
     private val focusScale = java.util.WeakHashMap<View, Float>()
 
+    /** A control handed focus back after its line was rebuilt: at its focused size now, not growing into it again. */
+    protected fun View.settleFocus() {
+        val s = focusScale[this] ?: return
+        animate().scaleX(s).scaleY(s).setDuration(0).start()
+    }
+
     // ---------- trailer box ----------
 
     private var trailerOverlay: FrameLayout? = null

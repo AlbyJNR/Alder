@@ -522,6 +522,8 @@ private const val SPOT_SECONDS = 60
 
 class Meta(json: JSONObject) {
     val id: String = json.getString("id")
+    /** The add-on's answer, as a number: the same details again (the saved copy, then the fresh one) redraw nothing. */
+    val stamp: Int = json.toString().hashCode()
     val type: String = json.optString("type")
     val name: String = json.optString("name")
     val poster = json.text("poster")

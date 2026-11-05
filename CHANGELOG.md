@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.29.0
+Put changes that are not released under `## 1.30.0
+
+- The title page no longer stops under the remote. Before, the page drew its block of controls again each time a detail came (the saved details, the fresh ones, the library item, the age rating, Rotten Tomatoes, More like this). Each time, the remote lost its place for a moment and the control grew again. Now the facts line and the critics' line refill where they are, and the controls stay.
+- Details that are the same as the saved copy draw nothing. A library item that changes nothing on the screen draws nothing.
+- When the block must be drawn again, it waits until the remote has rested, and the remote returns to the same control at its focused size.
+
+## 1.29.0
 
 - Pages open faster and do less behind the scenes. A row fetched within the hour is drawn at once, with nothing read or asked. Content fills its rows in waves: the first five at once, three more as you scroll or every two seconds.
 - The Roger Ebert and Rotten Tomatoes rows are kept as one small file each, so a cold start reads one file instead of replaying every lookup. A title's Rotten Tomatoes scores are kept as a few hundred bytes for a week, not as the pages they came from.
