@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.25.0
+Put changes that are not released under `## 1.26.0
+
+- Every title page shows Rotten Tomatoes: the critics' and audience percentages beside the IMDb rating, and the critics' one-line consensus under the description. The information page gives the Tomatometer, the Popcornmeter and the full consensus. Settings › Title page › Rotten Tomatoes turns it off.
+- The country line on the IMDb page is gone: the lists changed little from one country to another. IMDb's lists follow the TV's country, as before.
+
+## 1.25.0
 
 - Two Rotten Tomatoes rows: Certified Fresh in cinemas on Movies, Popular TV on Rotten Tomatoes on TV, and both at the end of the IMDb page. The card shows the Tomatometer; the title line adds the audience score, the year and the IMDb rating.
 - Rotten Tomatoes names each title; IMDb supplies its poster and page. A title IMDb cannot find by name is left out.

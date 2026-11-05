@@ -398,9 +398,6 @@ internal fun imdbListQuery(list: ImdbList, today: String, region: String = "GB")
     return JSONObject().put("query", "query CAS_$region{$body}").toString()
 }
 
-/** The countries the IMDb page can look from: ISO code to the chip's name. The streaming rows follow the choice most. */
-val IMDB_COUNTRIES = listOf("GB" to "UK", "US" to "US", "IE" to "Ireland", "CA" to "Canada", "AU" to "Australia", "IN" to "India", "DE" to "Germany", "FR" to "France")
-
 private val imdbListCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ImdbPick>>>()
 
 /** One of IMDb's lists, fresh, for the TV's [country] (ISO): an hour in memory, kept on disk for the next cold start ([savedImdbList]). Blocks. */

@@ -113,8 +113,6 @@ class MainActivity : Screen() {
     private lateinit var header: FrameLayout
     private lateinit var genreStrip: HorizontalScrollView
     private val genreChips = mutableMapOf<String?, TextView>()
-    private val countryChips = mutableMapOf<String, TextView>() // the IMDb page's, by ISO code
-    private val imdbReloads = mutableListOf<() -> Unit>() // each IMDb row on the page, asked again after a country change
     private val listFilterChips = mutableMapOf<ListFilter, TextView>()
     private val listSortChips = mutableMapOf<ListSort, TextView>()
     private var lastListChip: TextView? = null
@@ -531,7 +529,7 @@ class MainActivity : Screen() {
             }
             return true
         }
-        if (event.action == KeyEvent.ACTION_DOWN && (page.isCatalog || page == Page.LIBRARY || page == Page.IMDB) && mode == Mode.BROWSE) {
+        if (event.action == KeyEvent.ACTION_DOWN && (page.isCatalog || page == Page.LIBRARY) && mode == Mode.BROWSE) {
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && header.hasFocus()) {
                 topChip()?.requestFocus()?.let { if (it) return true }
                 if (page.isCatalog && genreStrip.visibility != View.VISIBLE && firstRow()?.focusFirst() == true) return true
@@ -1067,7 +1065,6 @@ class MainActivity : Screen() {
             jumpTo = null
             genreStrip.removeAllViews()
             genreChips.clear()
-            countryChips.clear()
         }
         val switched = p != page
         page = p
@@ -1092,13 +1089,11 @@ class MainActivity : Screen() {
         content.removeAllViews()
         rows.forEach { r -> r.cards.forEach { it.unload() } }
         rows.clear()
-        imdbReloads.clear()
         genreStrip.animate().cancel()
         genreStrip.alpha = 1f
-        genreStrip.visibility = if (p.isCatalog) View.INVISIBLE else if (grid || p == Page.IMDB) View.VISIBLE else View.GONE
+        genreStrip.visibility = if (p.isCatalog) View.INVISIBLE else if (grid) View.VISIBLE else View.GONE
         if (grid) showListChips()
-        else if (p == Page.IMDB) showCountryChips()
-        else if (!p.isCatalog) { genreStrip.removeAllViews(); genreChips.clear(); countryChips.clear() }
+        else if (!p.isCatalog) { genreStrip.removeAllViews(); genreChips.clear() }
         cardCaption.visibility = View.GONE
         nextRowHint.visibility = View.GONE
         main.removeCallbacks(hideTrack)
@@ -1478,45 +1473,14 @@ class MainActivity : Screen() {
         if (hadFocus) (genreChips[focusedGenre] ?: genreChips[null])?.requestFocus()
     }
 
-    /** The chip the page's top line returns to: Library's last filter, a catalog page's genre, the IMDb page's country. */
+    /** The chip the page's top line returns to: Library's last filter, or a catalog page's genre. */
     private fun topChip(): TextView? = when (page) {
         Page.LIBRARY -> lastListChip ?: listFilterChips[listFilter]
-        Page.IMDB -> countryChips[imdbCountry()]
         else -> genreChips[genre]
     }
 
-    /** The country the IMDb page looks from: the one chosen on its chips, else the TV's own when IMDb knows it, else the UK. */
-    private fun imdbCountry(): String =
-        Settings.imdbCountry(this).ifEmpty { Locale.getDefault().country }.takeIf { c -> IMDB_COUNTRIES.any { it.first == c } } ?: "GB"
-
-    /**
-     * The IMDb page's top line: one chip per country, the dot on the one in use. OK on another keeps it and asks each
-     * row again from there, in place: a row whose list is the same (the Top 250, the charts) does not so much as blink,
-     * the streaming rows swap to that country's catalogue. The TV and Films pages' IMDb rows follow the same choice.
-     */
-    private fun showCountryChips() {
-        genreStrip.removeAllViews()
-        genreChips.clear()
-        countryChips.clear()
-        val line = LinearLayout(this).apply {
-            clipChildren = false
-            setPadding(dp(EDGE), dp(2), dp(PAD), dp(2))
-        }
-        val current = imdbCountry()
-        IMDB_COUNTRIES.forEach { (code, label) ->
-            val control = chip(label, code == current).apply {
-                setOnClickListener {
-                    if (imdbCountry() == code) return@setOnClickListener
-                    Settings.setImdbCountry(this@MainActivity, code)
-                    countryChips.forEach { (c, v) -> v.select(IMDB_COUNTRIES.first { it.first == c }.second, c == code) }
-                    imdbReloads.toList().forEach { it() }
-                }
-            }
-            countryChips[code] = control
-            line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
-        }
-        genreStrip.addView(line)
-    }
+    /** The country IMDb's lists are asked from: the TV's own, else the UK. (A choice of countries was tried and dropped: it changed little.) */
+    private fun imdbCountry(): String = Locale.getDefault().country.ifEmpty { "GB" }
 
     private fun markChip(rowTitle: String) {
         val open = rowTitle.takeIf { it in genreChips }
@@ -2169,24 +2133,12 @@ class MainActivity : Screen() {
             val items = picks.map { imdbItem(it, list, today) }
             slot.addView(row(list.title, items.take(START), later(items)).view)
         }
-        // Each load is for one country: a slow answer from the last one, arriving after a switch, is dropped; the disk
-        // copy only fills in until today's answer is here. A list empty in the new country takes its row away.
-        var want = ""
-        var live = false
-        fun load() {
-            val country = imdbCountry().also { want = it }
-            live = false
-            background({ savedImdbList(list, today, country) }) { r -> if (want == country && !live) r.getOrNull()?.let(::show) }
-            background({ imdbList(list, today, country) }) { r ->
-                if (want == country && g == generation) {
-                    live = true
-                    r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
-                    r.getOrNull()?.let { if (it.isEmpty() && shownIds.isNotEmpty()) { shownIds = emptyList(); clear() } else show(it) }
-                }
-            }
+        val country = imdbCountry()
+        background({ savedImdbList(list, today, country) }) { r -> r.getOrNull()?.let(::show) }
+        background({ imdbList(list, today, country) }) { r ->
+            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
+            r.getOrNull()?.let(::show)
         }
-        load()
-        imdbReloads += ::load
     }
 
     private fun imdbItem(pk: ImdbPick, list: ImdbList, today: String): Item {

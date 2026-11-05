@@ -141,6 +141,36 @@ class MetaTest {
         assertEquals("tt0316219", imdbTitleFor("Manhood", null, found, IMDB_KINDS_FILM)) // no year: the first IMDb lists
     }
 
+    @Test fun rottenTomatoesTitlePagesParseAndSearchMatches() {
+        val search = """<search-page-media-row release-year="2015" tomatometer-score=""><a href="https://www.rottentomatoes.com/m/carface" slot="title"> Carface </a></search-page-media-row>
+            <search-page-media-row release-year="2026" tomatometer-score="78"><a href="https://www.rottentomatoes.com/m/clayface" slot="title"> Clayface </a></search-page-media-row>
+            <search-page-media-row endyear="" releaseyear="" startyear="2022" tomatometerscore="97"><a href="https://www.rottentomatoes.com/tv/slow_horses" slot="title">Slow Horses</a></search-page-media-row>
+            <search-page-media-row release-year="1997" tomatometer-score="80"><a href="https://www.rottentomatoes.com/m/slow_horses_1997" slot="title">Slow Horses</a></search-page-media-row>"""
+        assertEquals("https://www.rottentomatoes.com/m/clayface", rtSearchMatch(search, "Clayface", 2026, tv = false))
+        assertEquals("https://www.rottentomatoes.com/m/clayface", rtSearchMatch(search, "clayface!", 2025, tv = false))
+        assertEquals(null, rtSearchMatch(search, "Clayface", 2019, tv = false))
+        assertEquals(null, rtSearchMatch(search, "Clayface", 2026, tv = true))
+        assertEquals("https://www.rottentomatoes.com/tv/slow_horses", rtSearchMatch(search, "Slow Horses", 2022, tv = true))
+        assertEquals("https://www.rottentomatoes.com/m/slow_horses_1997", rtSearchMatch(search, "Slow Horses", null, tv = false))
+        val page = """<html><script id="media-scorecard-json" data-json="mediaScorecard" type="application/json">
+            {"audienceScore":{"certified":true,"scorePercent":"94%","title":"Popcornmeter"},"criticsScore":{"averageRating":"6.60","certified":true,"scorePercent":"78%","title":"Tomatometer"}}
+            </script><div id="critics-consensus" class="consensus"><rt-text context="heading">Critics Consensus</rt-text>
+            <p>Carving out a unique identity, <em>Clayface</em> takes time to get going &amp; then delivers.</p><a href="/m/clayface/reviews">Read</a></div></html>"""
+        val rt = parseRtScores(page, "https://www.rottentomatoes.com/m/clayface")!!
+        assertEquals(78 to 94, rt.critics to rt.audience)
+        assertTrue(rt.criticsCertified && rt.audienceCertified)
+        assertEquals("Carving out a unique identity, Clayface takes time to get going & then delivers.", rt.consensus)
+        val bare = parseRtScores("""<script id="media-scorecard-json" type="application/json">{"criticsScore":{"scorePercent":"--"}}</script>""", "u")!!
+        assertEquals(null, bare.critics)
+        assertEquals(null, bare.consensus)
+        assertEquals(null, parseRtScores("<html></html>", "u"))
+        assertEquals("https://www.rottentomatoes.com/search?search=Slow%20Horses", rtSearchUrl("Slow Horses"))
+        val series = """<a href="/tv/slow_horses/s01">1</a> <a href="/tv/slow_horses/s05">5</a> <a href="/tv/slow_horses/s06">6</a> <a href="/tv/other/s09">x</a> <a href="/tv/slow_horses/s05">5 again</a>"""
+        assertEquals(listOf(6, 5, 1), rtSeasonUrls(series, "https://www.rottentomatoes.com/tv/slow_horses").map { it.first })
+        assertEquals("https://www.rottentomatoes.com/tv/slow_horses/s06", rtSeasonUrls(series, "https://www.rottentomatoes.com/tv/slow_horses")[0].second)
+        assertEquals(5, rt.withConsensus("Fine.", 5).season)
+    }
+
     @Test fun rottenTomatoesListsParse() {
         val json = JSONObject("""{"title":"Best Certified Fresh Movies in Theaters","grid":{"list":[
             {"title":"Clayface","type":"Movie","criticsScore":{"certified":true,"score":"78","sentiment":"positive"},"audienceScore":{"score":"94"},

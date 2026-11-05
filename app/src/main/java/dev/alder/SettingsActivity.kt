@@ -91,9 +91,6 @@ object Settings {
     fun hiddenRows(c: Context): Set<String> = runCatching { org.json.JSONArray(prefs(c).getString(profileKey(c, "hiddenRows"), "[]")).strings().toSet() }.getOrDefault(emptySet())
     fun setHiddenRows(c: Context, rows: Set<String>) = prefs(c).edit().putString(profileKey(c, "hiddenRows"), org.json.JSONArray(rows.toList()).toString()).apply()
     /** The viewer's own order of a page's rows, by row name (hold OK › Move row up/down); rows not named follow, in their own order. */
-    /** Settings kept from the IMDb page's country chips: an ISO code from IMDB_COUNTRIES, or "" for the TV's own. */
-    fun imdbCountry(c: Context): String = prefs(c).getString("imdbCountry", "") ?: ""
-    fun setImdbCountry(c: Context, code: String) = prefs(c).edit().putString("imdbCountry", code).apply()
     fun rowOrder(c: Context, page: String): List<String> = runCatching { org.json.JSONArray(prefs(c).getString(profileKey(c, "rowOrder:$page"), "[]")).strings() }.getOrDefault(emptyList())
     fun setRowOrder(c: Context, page: String, order: List<String>) = prefs(c).edit().putString(profileKey(c, "rowOrder:$page"), org.json.JSONArray(order).toString()).apply()
     /** A source that keeps stalling: the player switches to a lighter one by itself ("auto"), or asks first ("ask"). */
@@ -195,6 +192,7 @@ class SettingsActivity : Screen() {
         Choice(TITLE_DIRECTOR, "Director", "The director under the cast, for films.", onOff),
         Choice(TRAILER_ART, "Art behind the trailer", "Keeps the title's art, dimmed, behind the trailer box. Off plays the trailer over black.", onOff),
         Choice(TITLE_RATING, "Content rating", "The age rating (PG, 15, TV-MA) beside the year, when it is known.", onOff),
+        Choice(TITLE_TOMATOES, "Rotten Tomatoes", "The critics' and audience scores beside the IMDb rating, and the critics' one-line consensus under the description, when Rotten Tomatoes has the title.", onOff),
         Choice("blurThumbnails", "Blur unwatched episodes", "Pictures of episodes you have not watched are blurred in the episode guide, against spoilers.", listOf(false to "Off", true to "On")),
     )
     private val pictureAndSound = listOf(
@@ -713,6 +711,7 @@ class SettingsActivity : Screen() {
         const val TITLE_DIRECTOR = "titleDirector"
         const val TRAILER_ART = "trailerArt"
         const val TITLE_RATING = "titleRating"
+        const val TITLE_TOMATOES = "titleTomatoes"
         const val TRAILER_PLAYER = "trailerPlayer" // "browser", "app" or "box"; unset: the box, except on Fire TV (Silk), where the box draws no picture
         val PRESETS = listOf(
             "Add-on's order" to mapOf("release" to "", "hdrPref" to "", "maxHeight" to 0, "maxSizeGb" to 0),

@@ -82,6 +82,8 @@ class DetailsActivity : Screen() {
     private var similarRequested = false
     private var certificate: String? = null // the age rating, from the add-on or IMDb
     private var certificateRequested = false
+    private var tomatoes: RtScores? = null // Rotten Tomatoes' meters and consensus, when it has the title
+    private var tomatoesRequested = false
     private var tickers = emptyMap<String, () -> Unit>() // each episode row's words, redrawn when a tick changes
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -127,6 +129,15 @@ class DetailsActivity : Screen() {
                 background({ imdbCertificate(m.imdbId) }) { r ->
                     val found = r.getOrNull() ?: return@background
                     certificate = found
+                    if (!guideOpen && !infoOpen && !similarOpen) showHero(meta)
+                }
+            }
+            // Rotten Tomatoes' two meters and the critics' consensus, by the title's name and year; drawn in once they come.
+            if (!tomatoesRequested && m.name.isNotBlank() && Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)) {
+                tomatoesRequested = true
+                val year = m.year?.take(4)?.toIntOrNull()
+                background({ rtScores(m.name, year, type == "series") }) { r ->
+                    tomatoes = r.getOrNull() ?: return@background
                     if (!guideOpen && !infoOpen && !similarOpen) showHero(meta)
                 }
             }
@@ -214,10 +225,28 @@ class DetailsActivity : Screen() {
                 })
                 factRow.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
             }
+            // Rotten Tomatoes after IMDb, the same way: its badge, then critics and audience as percentages.
+            tomatoes?.takeIf { it.critics != null || it.audience != null }?.let { rt ->
+                factRow.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
+                factRow.addView(text("RT", 9f, bold = true, color = BASE).apply {
+                    setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
+                })
+                val meters = listOfNotNull(rt.critics?.let { "$it% critics" }, rt.audience?.let { "$it% audience" }).joinToString(DOT)
+                factRow.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+            }
             stack.addView(factRow, wrap().apply { topMargin = dp(12) })
             m.description?.takeIf { it.isNotBlank() }?.let {
                 stack.addView(text(it, BODY, color = TEXT).onArt().apply {
                     maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
+            }
+            // The critics' consensus, one line in their words under the plot: what the meters mean, in a sentence.
+            tomatoes?.takeIf { it.consensus != null }?.let { rt ->
+                val line = rt.consensus!!
+                stack.addView(LinearLayout(this).apply {
+                    gravity = Gravity.TOP
+                    addView(caps(rt.season?.let { "Critics · S$it" } ?: "Critics", TEXT_3).onArt(), wrap().apply { marginEnd = dp(8); topMargin = dp(3) })
+                    addView(text(line, SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
                 }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
             }
             // The leads, one quiet line, each a name the remote can select to find more of their work; the full
@@ -724,13 +753,19 @@ class DetailsActivity : Screen() {
                 intArrayOf(0xC9000808.toInt(), 0x99000808.toInt(), 0x00000000))
         }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 3 / 5, -1))
         val facts = listOfNotNull(certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }, m.year, m.runtime,
-            m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "IMDb $it" }).joinToString(DOT)
+            m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "IMDb $it" },
+            tomatoes?.critics?.let { "Tomatometer $it%" + if (tomatoes?.criticsCertified == true) " (Certified Fresh)" else "" },
+            tomatoes?.audience?.let { "Popcornmeter $it%" }).joinToString(DOT)
         val story = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             isFocusable = true // takes the remote, so Up and Down scroll a long story
             addView(column(Gravity.START).apply {
                 m.description?.takeIf { it.isNotBlank() }?.let {
                     addView(text(it, BODY, color = TEXT).onArt())
+                }
+                tomatoes?.consensus?.let {
+                    addView(caps(tomatoes?.season?.let { s -> "Critics consensus · Season $s" } ?: "Critics consensus", TEXT_2).onArt(), wrap().apply { topMargin = dp(18) })
+                    addView(text(it, BODY).onArt(), wrap().apply { topMargin = dp(6) })
                 }
                 if (m.cast.isNotEmpty()) {
                     addView(caps("Cast", TEXT_2).onArt(), wrap().apply { topMargin = dp(18) })
