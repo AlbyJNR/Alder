@@ -15,6 +15,11 @@ Put changes that are not released under `## Unreleased`. Before each release, re
 
 ## Unreleased
 
+## 1.14.0
+
+- **Coming soon.** TV and Movies start with a row of what IMDb lists as coming soon in your country, with the date. Select a title to see its page; **Trailer** is the first button there. Turn the row off in **Settings → Profile → Coming soon**, or hold OK on a title and select **Hide row**.
+- A title that is not out yet says **In cinemas** or **From** and the day on its page.
+
 ## 1.13.0
 
 - **Play starts at once.** When you rest on a title on Home, or open its page, CAS asks the add-ons for its sources in the background. Play and Preview then start without the wait.

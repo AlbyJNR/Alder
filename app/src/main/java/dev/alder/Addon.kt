@@ -233,6 +233,56 @@ internal fun imdbCertificate(imdbId: String): String? {
     }.onFailure { android.util.Log.w("CAS", "IMDb certificate for $imdbId failed: $it") }.getOrNull()
 }
 
+// ---------- coming soon ----------
+
+/** A title IMDb lists as coming soon: out on [date] (ISO yyyy-mm-dd) in the viewer's country. */
+class Upcoming(val id: String, val name: String, val poster: String?, val date: String, val genres: List<String>, val hasTrailer: Boolean)
+
+private val comingSoonCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<Upcoming>>>()
+
+private fun comingSoonQuery(kind: String, from: String) = JSONObject().put("query",
+    "{comingSoon(first:40,comingSoonType:$kind,releasingOnOrAfter:\"$from\"){edges{node{id titleText{text} releaseDate{day month year} primaryImage{url} genres{genres{text}} primaryVideos(first:1){edges{node{id}}}}}}}").toString()
+
+/**
+ * IMDb's coming-soon list for films ([kind] "MOVIE") or series ("TV") in [country] (ISO code), from [from] (ISO date),
+ * through the same service the trailers come from. Six hours in memory, and kept on disk for the next cold start
+ * ([savedComingSoon]). Blocks: run it off the main thread.
+ */
+internal fun imdbComingSoon(kind: String, country: String, from: String): List<Upcoming> {
+    val k = "$kind/$country/$from"
+    comingSoonCache[k]?.takeIf { System.currentTimeMillis() - it.first < 6 * 3600_000L }?.let { return it.second }
+    val raw = Http.post("https://api.graphql.imdb.com/", comingSoonQuery(kind, from), keep = true, timeoutMs = 12_000,
+        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to country))
+    return parseImdbComingSoon(JSONObject(raw)).also { comingSoonCache[k] = System.currentTimeMillis() to it }
+}
+
+/** Last time's list from disk, or null; no network. */
+internal fun savedComingSoon(kind: String, from: String): List<Upcoming>? =
+    Http.savedAnswer("https://api.graphql.imdb.com/", comingSoonQuery(kind, from))?.let { runCatching { parseImdbComingSoon(JSONObject(it)) }.getOrNull() }
+
+/** The titles in IMDb's coming-soon answer, in its order; posters asked for at card size rather than full size. */
+internal fun parseImdbComingSoon(json: JSONObject): List<Upcoming> =
+    json.optJSONObject("data")?.optJSONObject("comingSoon")?.optJSONArray("edges").objects().mapNotNull { edge ->
+        val node = edge.optJSONObject("node") ?: return@mapNotNull null
+        val id = node.text("id")?.takeIf { it.startsWith("tt") } ?: return@mapNotNull null
+        val name = node.optJSONObject("titleText")?.text("text") ?: return@mapNotNull null
+        val d = node.optJSONObject("releaseDate") ?: return@mapNotNull null
+        if (d.optInt("year") == 0 || d.optInt("month") == 0 || d.optInt("day") == 0) return@mapNotNull null
+        val poster = node.optJSONObject("primaryImage")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX360_.jpg")
+        val genres = node.optJSONObject("genres")?.optJSONArray("genres").objects().mapNotNull { it.text("text") }
+        val trailer = node.optJSONObject("primaryVideos")?.optJSONArray("edges").objects().isNotEmpty()
+        Upcoming(id, name, poster, "%04d-%02d-%02d".format(d.optInt("year"), d.optInt("month"), d.optInt("day")), genres, trailer)
+    }
+
+/** "20 Nov", or "20 Nov 2027" when not this year, from an ISO date; null when it isn't one. */
+internal fun shortDay(date: String, today: String): String? {
+    if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return null
+    val f = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false; timeZone = java.util.TimeZone.getTimeZone("UTC") }
+    val parsed = runCatching { f.parse(date) }.getOrNull() ?: return null
+    val pattern = if (date.take(4) == today.take(4)) "d MMM" else "d MMM yyyy"
+    return java.text.SimpleDateFormat(pattern, Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(parsed)
+}
+
 /** The rating text in IMDb's answer, or null when there is none (unrated, or an id IMDb doesn't know). */
 internal fun parseImdbCertificate(json: JSONObject): String? =
     json.optJSONObject("data")?.optJSONObject("title")?.optJSONObject("certificate")?.text("rating")?.trim()?.takeIf { it.isNotEmpty() && it.length <= 8 }
@@ -271,6 +321,8 @@ class Meta(json: JSONObject) {
     val description = json.text("description")
     val year = json.text("releaseInfo")?.trimEnd('–', '-', ' ') // "2026–" (still running) reads as 2026 everywhere
     val runtime = json.text("runtime")?.let(::runtime)
+    /** The release day (ISO), when the add-on gives one: a title not out yet says so on its page. */
+    val released = json.text("released")
     val rating = json.text("imdbRating")
     val genres = json.optJSONArray("genres").strings().take(3)
     /** The IMDb id, from the id itself or the add-on's `imdb_id` field (an add-on may number titles its own way). */

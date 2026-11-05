@@ -31,13 +31,13 @@ internal fun episodeDate(value: String?): String? {
  * "Airs 7 Nov" for an episode released after [now] (both ISO text in UTC, as Stremio and the add-ons write them), with
  * the year when it isn't this one; null once it has aired, or without a date. Text compares as time in this format.
  */
-internal fun airs(released: String?, now: String = Library.now()): String? {
+internal fun airs(released: String?, now: String = Library.now(), word: String = "Airs"): String? {
     val day = released?.take(10)?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) } ?: return null
     if (released <= now) return null
     val source = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false; timeZone = TimeZone.getTimeZone("UTC") }
     val parsed = runCatching { source.parse(day) }.getOrNull() ?: return null
     val pattern = if (day.take(4) == now.take(4)) "d MMM" else "d MMM yyyy"
-    return "Airs " + SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(parsed)
+    return "$word " + SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(parsed)
 }
 
 // A title stays in place over its art; episodes and related titles open over the same scene.
@@ -281,8 +281,10 @@ class DetailsActivity : Screen() {
         val remaining = if (resumeAt > 0 && duration > resumeAt) runtime("${(duration - resumeAt) / 60_000} min") + " left" else null
         // The next episode isn't out yet (Stremio queues it as soon as the last one ends): say when, and Play waits.
         val unaired = airs(episode?.released)
-        val where = listOfNotNull(episode?.let { "S${it.season} E${it.episode}" }, episode?.title?.takeIf { it.isNotBlank() }, remaining ?: unaired).joinToString(DOT)
-        if (where.isNotEmpty() && (resumeAt > 0 || unaired != null)) stack.addView(text(where, SMALL, bold = true).onArt().apply {
+        // Not released yet (a coming-soon title): the day, and the trailer leads the line of buttons.
+        val comingOut = if (item == null || resumeAt == 0L) airs(m.released, word = if (type == "movie") "In cinemas" else "From") else null
+        val where = listOfNotNull(episode?.let { "S${it.season} E${it.episode}" }, episode?.title?.takeIf { it.isNotBlank() }, remaining ?: unaired ?: comingOut).joinToString(DOT)
+        if (where.isNotEmpty() && (resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text(where, SMALL, bold = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         }.marginTop(16))
         if (remaining != null) stack.addView(progressBar(resumeAt.toFloat() / duration), LinearLayout.LayoutParams(dp(240), dp(3)).apply { topMargin = dp(8) })
@@ -318,10 +320,12 @@ class DetailsActivity : Screen() {
         // out of a line the text block's width can't hold (a series with a resume point had seven controls).
         // The worded actions on one line at one height (Play white, the others glass), the three small round
         // controls on a quieter line beneath: two kinds of thing, two lines, nothing bunched.
+        val lead = if (comingOut != null && trailer != null) trailer else playButton
         actionRow1 = LinearLayout(this).apply {
             clipChildren = false
+            if (lead === trailer) addView(trailer, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(10) })
             addView(playButton, wrap().apply { marginEnd = dp(10) })
-            listOfNotNull(trailer, preview, recap).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
+            listOfNotNull(trailer.takeIf { lead !== trailer }, preview, recap).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
         }
         stack.addView(actionRow1, wrap().apply { topMargin = dp(16) })
         actionRow2 = LinearLayout(this).apply {
@@ -335,7 +339,7 @@ class DetailsActivity : Screen() {
         // control it was on (Trailer, a cast name, ⓘ) rather than snapping back to Play each time.
         playButton.post {
             if (guideOpen || infoOpen || similarOpen) return@post
-            (keepFocus?.let { key -> keyed(hero, key) } ?: playButton).requestFocus()
+            (keepFocus?.let { key -> keyed(hero, key) } ?: lead).requestFocus()
         }
     }
 

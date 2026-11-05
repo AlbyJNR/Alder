@@ -227,6 +227,7 @@ class MainActivity : Screen() {
         val stoppedAt: Long? = null,
         val addedAt: String? = null,
         val finished: Boolean = false,
+        val note: String? = null, // leads the title line: "In cinemas 20 Nov" on a coming-soon title
         newEpisodes: Int = 0, // new episodes out (NewEpisodes), for the mark on the card and the hero line
     ) {
         var newCount = newEpisodes
@@ -941,7 +942,7 @@ class MainActivity : Screen() {
         // A show in progress describes its next episode, so the line names that episode rather than the show.
         val code = item.left?.split(DOT)?.firstOrNull { it.startsWith("S") && " E" in it }
         heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
-            else listOfNotNull(year, genre, length)).joinToString(DOT)
+            else listOfNotNull(item.note, year, genre, length)).joinToString(DOT)
         val rating = meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ")
         heroRating.visibility = if (rating.isNullOrBlank()) View.GONE else View.VISIBLE
         heroScore.visibility = heroRating.visibility
@@ -1201,6 +1202,29 @@ class MainActivity : Screen() {
             if (p.isCatalog && genreNames.isEmpty()) {
                 showGenreChips(emptyList())
                 genreStrip.visibility = View.VISIBLE
+            }
+            // IMDb's coming-soon list for the page, in the TV's country: a row of its own above the catalogs, each title's
+            // page (and so its trailer) a press away. Last time's list first, from disk; today's replaces it when it differs.
+            if (p.isCatalog && !profile.kids && Settings.comingSoon(this) && "${p.label}|$COMING_SOON" !in hiddenSeen.orEmpty()) {
+                val slot = slot()
+                val kind = if (p == Page.MOVIES) "MOVIE" else "TV"
+                val country = java.util.Locale.getDefault().country.ifEmpty { "GB" }
+                val from = comingSoonFrom()
+                var shownIds = emptyList<String>()
+                fun showUpcoming(list: List<Upcoming>) {
+                    val ids = list.map { it.id }
+                    if (g != generation || list.isEmpty() || ids == shownIds) return
+                    shownIds = ids
+                    rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
+                    slot.removeAllViews()
+                    val items = list.map { upcomingItem(it, p) }
+                    slot.addView(row(COMING_SOON, items.take(START), later(items)).view)
+                }
+                background({ savedComingSoon(kind, from) }) { r -> r.getOrNull()?.let(::showUpcoming) }
+                background({ imdbComingSoon(kind, country, from) }) { r ->
+                    r.exceptionOrNull()?.let { android.util.Log.w("CAS", "coming soon ($kind) failed: $it") }
+                    r.getOrNull()?.let(::showUpcoming)
+                }
             }
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
@@ -2006,6 +2030,22 @@ class MainActivity : Screen() {
         m.genres.take(2).joinToString(", ").ifEmpty { null }, m.year, m.rating?.let { "IMDb $it" },
     )
 
+    /** Monday of this week, ISO: the coming-soon list is asked from there, so one kept answer serves the whole week. */
+    private fun comingSoonFrom(): String = java.time.LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString()
+
+    private fun upcomingItem(u: Upcoming, p: Page): Item {
+        val today = java.time.LocalDate.now().toString()
+        val day = shortDay(u.date, today)
+        val note = when {
+            day == null -> null
+            u.date <= today -> "Out now"
+            p == Page.MOVIES -> "In cinemas $day"
+            else -> "From $day"
+        }
+        return Item(u.id, if (p == Page.MOVIES) "movie" else "series", u.name, u.poster, null, Images.logoFor(u.id), "",
+            listOfNotNull(u.genres.take(2).joinToString(", ").ifEmpty { null }), null, 0f, resume = false, left = null, note = note)
+    }
+
     private fun metaItem(m: Meta) = Item(
         m.id, m.type, m.name, m.poster, m.background, m.logo ?: Images.logoFor(m.id), m.description ?: "", facts(m),
         null, 0f, resume = false, left = null,
@@ -2186,6 +2226,7 @@ class MainActivity : Screen() {
         const val FIRST = 10 // cards per row loaded before it's scrolled sideways (a screenful, the one past the edge, one more)
         const val CINEMA_MAX = 8
         const val IDLE = 5 * 60_000L // ms without a key before the cinema takes over (the TV's own screensaver: 10 min)
+        const val COMING_SOON = "Coming soon"
         const val SOURCES_AHEAD_WAIT = 1_500L // resting on a title this long fetches its sources ahead
         const val ADDON_RECHECK = 5 * 60_000L // ms between asking Stremio for the add-on list again on coming back to the front
         const val WARM_FIRST = 3 // titles at the top of Shows and Movies readied (details, art, logo) while Home is open
