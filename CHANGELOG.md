@@ -11,7 +11,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.18.1
+Put changes that are not released under `## 1.18.2
+
+- The rail no longer opens. It stays a slim column of glyphs whether or not the remote is on it; Alan found the glyphs say enough and the panel too broad. The profile entry is your initial in a small disc; OK on it still opens the profile menu.
+
+## 1.18.1
 
 - The rail closes again as the remote leaves it. It had stayed open, words and all, over the rows (Alan's photo).
 - The open panel now reads as one: a shade falls from the left over the page behind it, so the words no longer fight the hero's title and synopsis, and the words' column is one width whichever entry is lit.

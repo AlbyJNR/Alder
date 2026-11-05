@@ -359,12 +359,6 @@ class MainActivity : Screen() {
             addView(genreStrip, FrameLayout.LayoutParams(-1, dp(44), Gravity.TOP).apply {
                 topMargin = dp(22) // level with the wordmark: no top bar above it now
             })
-            railScrim = View(this@MainActivity).apply {
-                alpha = 0f
-                background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                    intArrayOf(withAlpha(BASE, 0xF4), withAlpha(BASE, 0xC8), withAlpha(BASE, 0x5A)))
-            }
-            addView(railScrim, FrameLayout.LayoutParams(-1, -1))
             wordmark = brand().apply { alpha = 0f }
             addView(wordmark, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(26); rightMargin = dp(PAD) })
             addView(header().apply { alpha = 0f }, FrameLayout.LayoutParams(-2, -1, Gravity.START)) // fades in if the page wants it
@@ -611,28 +605,23 @@ class MainActivity : Screen() {
 
     private lateinit var nav: LinearLayout // the capsule of entries
     private lateinit var profileEntry: View
+    private lateinit var profileAvatar: TextView // the initial in its disc
     private val railIcons = mutableMapOf<View, ImageView>()
-    private val railLabels = mutableMapOf<View, View>()
-    private var railOpen = false
-    private lateinit var railScrim: View // darkens the page from the left while the panel is open
 
-    /** One rail entry: a glyph, and its word once the rail is open. Focus lights the whole row. */
-    private fun entry(icon: Int, label: String): LinearLayout = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL
+    /** One rail entry: a glyph in a round cell, named for the screen reader. Focus lights the cell. */
+    private fun entry(icon: Int, label: String): FrameLayout = FrameLayout(this).apply {
         isFocusable = true
         contentDescription = label
         val glyph = ImageView(context).apply { setImageResource(icon); setPadding(dp(9), dp(9), dp(9), dp(9)) }
-        addView(glyph, LinearLayout.LayoutParams(dp(RAIL_ICON), dp(RAIL_ICON)))
-        val word = text(label, BODY, bold = true).apply { visibility = View.GONE; setPadding(dp(2), 0, dp(18), 0) }
-        addView(word, LinearLayout.LayoutParams(dp(RAIL_WORDS), -2))
+        addView(glyph, FrameLayout.LayoutParams(dp(RAIL_ICON), dp(RAIL_ICON)))
         railIcons[this] = glyph
-        railLabels[this] = word
+        setOnFocusChangeListener { _, _ -> styleNav() }
     }
 
     /**
-     * Netflix's rail (2026): a slim column of glyphs on the left, which opens into a panel of words as the remote
-     * comes across to it. Your profile first, then Search and the pages. The open page is lit, the focused entry
-     * white; the rows behind step back while the panel is open.
+     * Netflix's rail (2026), as Alan wants it: a slim column of glyphs on the left and nothing more. No panel of
+     * words opens; the glyphs say enough. Your profile first, then Search and the pages. The open page is lit, the
+     * focused entry white.
      */
     private fun header(): View {
         header = object : FrameLayout(this) {
@@ -647,25 +636,19 @@ class MainActivity : Screen() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(6), dp(6), dp(6), dp(6))
             background = rounded(0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
-            layoutTransition = android.animation.LayoutTransition().apply { enableTransitionType(android.animation.LayoutTransition.CHANGING) }
         }
         fun <V : View> V.inNav() = apply { nav.addView(this, LinearLayout.LayoutParams(-2, dp(RAIL_ICON)).apply { if (nav.childCount > 0) topMargin = dp(NAV_GAP) }) }
 
-        // The profile: the avatar, and open, the name over "Switch profile". OK opens the small menu (switch, settings).
-        profileEntry = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL
+        // The profile: your initial in a small disc. OK opens the small menu (switch profile, settings).
+        profileEntry = FrameLayout(this).apply {
             isFocusable = true
-            contentDescription = "Profile"
-            val avatar = text(profile.name.take(1).uppercase(), SMALL, bold = true, color = TUNGSTEN).apply {
+            contentDescription = "Profile: ${profile.name}"
+            profileAvatar = text(profile.name.take(1).uppercase(), SMALL, bold = true, color = TUNGSTEN).apply {
                 gravity = Gravity.CENTER
                 background = rounded(0x33FFFFFF, 14)
             }
-            addView(FrameLayout(context).apply { addView(avatar, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER)) },
-                LinearLayout.LayoutParams(dp(RAIL_ICON), dp(RAIL_ICON)))
-            val words = column(Gravity.START, text(profile.name, BODY, bold = true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(150) },
-                text("Switch profile", SMALL, color = TEXT_2)).apply { visibility = View.GONE; setPadding(dp(2), 0, dp(18), 0) }
-            addView(words, LinearLayout.LayoutParams(dp(RAIL_WORDS), -2))
-            railLabels[this] = words
+            addView(profileAvatar, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
+            setOnFocusChangeListener { _, _ -> styleNav() }
             setOnClickListener { profileMenu() }
         }.inNav()
         nav.addView(View(this).apply { setBackgroundColor(GLASS_EDGE) }, LinearLayout.LayoutParams(-1, dp(1)).apply { setMargins(dp(10), dp(8), dp(10), dp(8) - dp(NAV_GAP)) })
@@ -677,6 +660,7 @@ class MainActivity : Screen() {
         Page.entries.filter { it != Page.LIVE && (!profile.kids || it == Page.HOME) }.forEach { p ->
             navItems[p] = entry(p.icon, p.label).apply {
                 setOnFocusChangeListener { _, has ->
+                    styleNav()
                     main.removeCallbacks(switchPage)
                     if (has && p != page) { pending = p; main.postDelayed(switchPage, SWITCH_WAIT) }
                 }
@@ -692,27 +676,10 @@ class MainActivity : Screen() {
             }.inNav()
         }
         header.addView(nav, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(RAIL_X) })
-        // An entry's own focus listener fires while its parents still count as focused, so whether the rail holds the
-        // remote is read from the window once the move is complete.
-        header.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            private val watch = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
-                val inside = now != null && isInside(now, header)
-                if (inside != railOpen) setRailOpen(inside) else if (inside) styleNav() // the lit pill follows the remote
-            }
-            override fun onViewAttachedToWindow(v: View) = v.viewTreeObserver.addOnGlobalFocusChangeListener(watch)
-            override fun onViewDetachedFromWindow(v: View) = v.viewTreeObserver.removeOnGlobalFocusChangeListener(watch)
-        })
         styleNav()
         return header
     }
 
-    /** The panel opens: words beside the glyphs, and a shade from the left that puts the page behind it. */
-    private fun setRailOpen(open: Boolean) {
-        if (open == railOpen) return
-        railOpen = open
-        railScrim.animate().alpha(if (open) 1f else 0f).setDuration(if (open) 220 else 180).start()
-        styleNav()
-    }
 
     private var pending = Page.HOME
     private var jump = false // OK on a page's name: go down into its rows once they're in
@@ -726,10 +693,9 @@ class MainActivity : Screen() {
         }
     }
 
-    /** The focused entry on white, the open page lit; the words only while the rail is open, the rows shaded behind it. */
+    /** The focused entry on white, the open page lit. */
     private fun styleNav() {
         if (!::nav.isInitialized) return
-        val open = railOpen
         val entries = navItems.map { (p, v) -> v to p } + listOfNotNull(search?.let { it to null }, profileEntry to null)
         entries.forEach { (item, p) ->
             val focused = item.isFocused
@@ -741,11 +707,7 @@ class MainActivity : Screen() {
             }
             val colour = if (focused) BASE else if (current) TEXT else TEXT_2
             railIcons[item]?.setColorFilter(colour)
-            railLabels[item]?.let { word ->
-                word.visibility = if (open) View.VISIBLE else View.GONE
-                (word as? TextView)?.setTextColor(colour)
-                (word as? LinearLayout)?.let { col -> (0 until col.childCount).forEach { i -> (col.getChildAt(i) as? TextView)?.setTextColor(if (focused) BASE else if (i == 0) TEXT else TEXT_2) } }
-            }
+            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) 0x1F000000 else 0x33FFFFFF, 14) }
         }
     }
 
@@ -2268,7 +2230,6 @@ class MainActivity : Screen() {
         const val RAIL_X = 16 // dp from the screen's edge to the rail
         const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
         const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
-        const val RAIL_WORDS = 150 // dp, the words' column once the panel is open: one width whichever entry is lit
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
         const val LOGO_W = 360 // the cinema's title logo
