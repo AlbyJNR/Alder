@@ -100,7 +100,7 @@ internal fun catalogAnswerKey(page: String, title: String, genre: String?, sourc
 class MainActivity : Screen() {
     private enum class Page(val label: String, val icon: Int) {
         HOME("Home", R.drawable.ic_home), SHOWS("TV", R.drawable.ic_tv), MOVIES("Movies", R.drawable.ic_movie),
-        IMDB("Content", R.drawable.ic_star), LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
+        IMDB("Content", R.drawable.ic_star), FOREIGN("Foreign", R.drawable.ic_globe), LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
     }
     private enum class Mode { CINEMA, BROWSE }
     private enum class ListFilter { ALL, MOVIES, SHOWS }
@@ -113,6 +113,7 @@ class MainActivity : Screen() {
     private lateinit var header: FrameLayout
     private lateinit var genreStrip: HorizontalScrollView
     private val genreChips = mutableMapOf<String?, TextView>()
+    private val countryChips = mutableMapOf<String, TextView>() // the Foreign page's, by ISO code
     private val listFilterChips = mutableMapOf<ListFilter, TextView>()
     private val listSortChips = mutableMapOf<ListSort, TextView>()
     private var lastListChip: TextView? = null
@@ -533,7 +534,7 @@ class MainActivity : Screen() {
             }
             return true
         }
-        if (event.action == KeyEvent.ACTION_DOWN && (page.isCatalog || page == Page.LIBRARY) && mode == Mode.BROWSE) {
+        if (event.action == KeyEvent.ACTION_DOWN && (page.isCatalog || page == Page.LIBRARY || page == Page.FOREIGN) && mode == Mode.BROWSE) {
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && header.hasFocus()) {
                 topChip()?.requestFocus()?.let { if (it) return true }
                 if (page.isCatalog && genreStrip.visibility != View.VISIBLE && firstRow()?.focusFirst() == true) return true
@@ -592,7 +593,7 @@ class MainActivity : Screen() {
     }
 
     private fun dimHome(on: Boolean) {
-        if ((page != Page.HOME && !page.isCatalog && page != Page.LIBRARY && page != Page.IMDB) || mode != Mode.BROWSE || homeDimmed == on) return
+        if ((page != Page.HOME && !page.isCatalog && page != Page.LIBRARY && page != Page.IMDB && page != Page.FOREIGN) || mode != Mode.BROWSE || homeDimmed == on) return
         homeDimmed = on
         val alpha = if (on) 0.3f else 1f
         header.animate().alpha(alpha).setDuration(400).start()
@@ -1116,6 +1117,7 @@ class MainActivity : Screen() {
             jumpTo = null
             genreStrip.removeAllViews()
             genreChips.clear()
+            countryChips.clear()
         }
         val switched = p != page
         page = p
@@ -1143,9 +1145,10 @@ class MainActivity : Screen() {
         rows.clear()
         genreStrip.animate().cancel()
         genreStrip.alpha = 1f
-        genreStrip.visibility = if (p.isCatalog) View.INVISIBLE else if (grid) View.VISIBLE else View.GONE
+        genreStrip.visibility = if (p.isCatalog) View.INVISIBLE else if (grid || p == Page.FOREIGN) View.VISIBLE else View.GONE
         if (grid) showListChips()
-        else if (!p.isCatalog) { genreStrip.removeAllViews(); genreChips.clear() }
+        else if (p == Page.FOREIGN) showCountryChips()
+        else if (!p.isCatalog) { genreStrip.removeAllViews(); genreChips.clear(); countryChips.clear() }
         cardCaption.visibility = View.GONE
         nextRowHint.visibility = View.GONE
         main.removeCallbacks(hideTrack)
@@ -1248,6 +1251,7 @@ class MainActivity : Screen() {
         }
         if (p == Page.LIBRARY) return
         if (p == Page.IMDB) return buildImdb(g)
+        if (p == Page.FOREIGN) return buildWebRows(webRows(Page.FOREIGN), g)
 
         var built = false
         var builtFrom: List<String>? = null // the add-ons the rows came from, to tell when Stremio's fresh list differs
@@ -1518,14 +1522,48 @@ class MainActivity : Screen() {
         if (hadFocus) (genreChips[focusedGenre] ?: genreChips[null])?.requestFocus()
     }
 
-    /** The chip the page's top line returns to: Library's last filter, or a catalog page's genre. */
+    /** The chip the page's top line returns to: Library's last filter, a catalog page's genre, the Foreign page's country. */
     private fun topChip(): TextView? = when (page) {
         Page.LIBRARY -> lastListChip ?: listFilterChips[listFilter]
+        Page.FOREIGN -> countryChips[foreignCountry()]
         else -> genreChips[genre]
     }
 
     /** The country IMDb's lists are asked from: the TV's own, else the UK. (A choice of countries was tried and dropped: it changed little.) */
     private fun imdbCountry(): String = Locale.getDefault().country.ifEmpty { "GB" }
+
+    /** The country the Foreign page shows: the one chosen on its chips, kept across visits; the United States to begin with. */
+    private fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> JW_COUNTRIES.any { it.code == c } } ?: "US"
+
+    /**
+     * The Foreign page's top line: one chip per country, alphabetical, the dot on the one in use. OK on another keeps
+     * it and rebuilds the page's rows for that country (its services differ: Stan in Australia, Canal+ in France),
+     * with the remote staying on the chip it pressed.
+     */
+    private fun showCountryChips() {
+        val hadFocus = genreStrip.hasFocus()
+        genreStrip.removeAllViews()
+        genreChips.clear()
+        countryChips.clear()
+        val line = LinearLayout(this).apply {
+            clipChildren = false
+            setPadding(dp(EDGE), dp(2), dp(PAD), dp(2))
+        }
+        val current = foreignCountry()
+        JW_COUNTRIES.forEach { c ->
+            val control = chip(c.label, c.code == current).apply {
+                setOnClickListener {
+                    if (foreignCountry() == c.code) { firstRow()?.focusFirst(); return@setOnClickListener }
+                    Settings.setForeignCountry(this@MainActivity, c.code)
+                    showPage(Page.FOREIGN)
+                }
+            }
+            countryChips[c.code] = control
+            line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
+        }
+        genreStrip.addView(line)
+        if (hadFocus) countryChips[current]?.requestFocus()
+    }
 
     private fun markChip(rowTitle: String) {
         val open = rowTitle.takeIf { it in genreChips }
@@ -2188,6 +2226,9 @@ class MainActivity : Screen() {
         return when (p) {
             Page.MOVIES -> listOf(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
             Page.SHOWS -> listOf(rt(RtList.POPULAR_TV), imdb(ImdbList.NEW_SERIES), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
+            // Foreign: the chosen country's services in its own order, each as ten films then ten series.
+            Page.FOREIGN -> jwCountry(foreignCountry())?.services.orEmpty().flatMap { s -> listOf(JwList(s, false), JwList(s, true)) }
+                .map { l -> l.title to { slot: LinearLayout, g: Int -> jwRow(slot, l, g) } }
             Page.IMDB -> listOf(ImdbList.TRENDING, ImdbList.ANTICIPATED, ImdbList.THIS_MONTH, ImdbList.POPULAR, ImdbList.RECENT).map(::imdb) +
                 ebert + rt(RtList.FRESH_IN_CINEMAS) + rt(RtList.POPULAR_TV) +
                 listOf(ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK).map(::imdb) +
@@ -2244,6 +2285,18 @@ class MainActivity : Screen() {
             saved = { c -> savedEbertReviews(c)?.map { ebertItem(it, today) } }) { c -> ebertReviews(c).map { ebertItem(it, today) } }
     }
 
+    /** A service's ten in the Foreign page's country, as a poster row numbered from one. */
+    private fun jwRow(slot: LinearLayout, list: JwList, g: Int) =
+        fetchedRow(slot, list.title, g, country = foreignCountry(), cached = { c -> cachedJwList(list, c)?.map(::jwItem) },
+            saved = { c -> savedJwList(list, c)?.map(::jwItem) }) { c -> jwList(list, c).map(::jwItem) }
+
+    private fun jwItem(t: JwTitle): Item {
+        val pk = t.title
+        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
+        return Item(pk.id, pk.type, pk.name, pk.poster ?: t.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+            null, 0f, resume = false, left = null, note = "No. ${t.rank}", released = pk.date)
+    }
+
     /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */
     private fun rtRow(slot: LinearLayout, list: RtList, g: Int) =
         fetchedRow(slot, list.title, g, cached = { c -> cachedRtList(list, c)?.map(::rtItem) }, saved = { c -> savedRtList(list, c)?.map(::rtItem) }) { c -> rtList(list, c).map(::rtItem) }
@@ -2253,7 +2306,7 @@ class MainActivity : Screen() {
      * or asked; otherwise the one file the last run kept ([saved]) fills it, and [fetch] runs live behind it. Each
      * answer replaces the row only when its titles differ from those shown.
      */
-    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, cached: (String) -> List<Item>?, saved: (String) -> List<Item>?, fetch: (String) -> List<Item>) {
+    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, country: String = imdbCountry(), cached: (String) -> List<Item>?, saved: (String) -> List<Item>?, fetch: (String) -> List<Item>) {
         var shownIds = emptyList<String>()
         fun show(items: List<Item>) {
             val ids = items.map { it.id }
@@ -2263,7 +2316,6 @@ class MainActivity : Screen() {
             slot.removeAllViews()
             slot.addView(row(title, items.take(START), later(items)).view)
         }
-        val country = imdbCountry()
         cached(country)?.let { show(it); return }
         background({ saved(country) }) { r -> r.getOrNull()?.let(::show) }
         background({ fetch(country) }) { r ->

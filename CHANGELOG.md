@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.30.0
+Put changes that are not released under `## 1.31.0
+
+- A new Foreign page, with a globe in the rail: what is popular on each streaming service in another country. Select a country on the chips at the top (Argentina, Australia, Brazil, France, Italy, Japan, Spain, United States) and the rows change to that country. CAS keeps your choice.
+- Each service has two rows, its ten most popular films and its ten most popular series, with the rank on each card. The big services come first, then the country's own: Stan and BINGE in Australia, Globoplay in Brazil, Canal+ in France, Now TV and RaiPlay in Italy, U-NEXT in Japan, Movistar Plus+ in Spain, Hulu and Peacock in the United States.
+- The data comes from JustWatch's public catalogue. IMDb gives the poster, the plot, the rating and the genres, as on the other rows. A row is kept for an hour in memory and for the next start on disk.
+
+## 1.30.0
 
 - The title page no longer stops under the remote. Before, the page drew its block of controls again each time a detail came (the saved details, the fresh ones, the library item, the age rating, Rotten Tomatoes, More like this). Each time, the remote lost its place for a moment and the control grew again. Now the facts line and the critics' line refill where they are, and the controls stay.
 - Details that are the same as the saved copy draw nothing. A library item that changes nothing on the screen draws nothing.

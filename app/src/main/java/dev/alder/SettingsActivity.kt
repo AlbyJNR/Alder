@@ -36,6 +36,9 @@ object Settings {
     fun profileKey(c: Context, key: String) = "$key@${Profiles.active(c)?.id}"
     /** Settings › Title page: each extra on a title's page is on unless turned off. Keys: TITLE_* in SettingsActivity. */
     fun titlePage(c: Context, key: String) = prefs(c).getBoolean(key, true)
+    /** The Foreign page's country, by ISO code (JW_COUNTRIES); the last one chosen on its chips. */
+    fun foreignCountry(c: Context): String = prefs(c).getString("foreignCountry", null) ?: "US"
+    fun setForeignCountry(c: Context, code: String) = prefs(c).edit().putString("foreignCountry", code).apply()
     /** Settings › Picture & sound › Screensaver: Home's cinema after IDLE without a key. */
     fun homeCinema(c: Context) = prefs(c).getBoolean("homeCinema", true)
     /** Where a trailer plays: "browser" (Silk or whatever browser), "app" (the YouTube app) or "box". Fire TV's engine plays sound but no picture in the box, however the window is arranged, so Fire TV starts on Silk. */
