@@ -1570,7 +1570,9 @@ class MainActivity : Screen() {
         // Held in one of the viewer's own rows: that list can be edited from here, not only in Settings › Lists.
         val inList = rows.firstOrNull { r -> r.listId != null && r.cards.any { it.item === item } }?.listId?.let { id -> Lists.all(this).firstOrNull { it.id == id } }
         val redraw = { refreshLibrary?.invoke() ?: Unit }
-        val listOwn = inList?.let { l -> listOf(
+        val listOwn = inList?.let { l -> listOfNotNull(
+            // Held on a title further along the row: brings it to the front, where the remote lands first.
+            if (l.items.firstOrNull()?.id == item.id) null else "Move to the front" to { Lists.toFront(this, l.id, item.id); redraw() },
             "Remove from ${l.name}" to { Lists.toggle(this, l.id, Lists.Entry(item.id, item.type, item.name, item.poster)); redraw() },
             "Rename ${l.name}…" to { askName("Rename ${l.name}", l.name) { name -> Lists.rename(this, l.id, name); redraw() } },
             "Delete ${l.name}…" to { choose("Delete ${l.name}?", listOf("Keep", "Delete"), "The titles stay in your library; only the list goes.") { if (it == 1) { Lists.remove(this, l.id); redraw() } } },

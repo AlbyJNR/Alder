@@ -13,6 +13,10 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
 
+## 1.16.0
+
+- **Move to the front.** Hold OK on a title in one of your lists on Home and select **Move to the front**. The title becomes the first card of the row.
+
 ## 1.15.1
 
 - The rows around the row under the remote now step back correctly. In 1.15.0 they did not change on Fire TV.

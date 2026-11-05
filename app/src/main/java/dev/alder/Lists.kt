@@ -54,6 +54,16 @@ object Lists {
         return !had
     }
 
+    /** Puts [entryId] first in list [id]: the row's leftmost card, where the remote lands. */
+    fun toFront(c: Context, id: String, entryId: String) {
+        val lists = all(c)
+        val list = lists.firstOrNull { it.id == id } ?: return
+        val at = list.items.indexOfFirst { it.id == entryId }
+        if (at <= 0) return
+        list.items.add(0, list.items.removeAt(at))
+        save(c, lists)
+    }
+
     /** Changes with every edit: Home compares it to know whether its rows need redrawing. */
     fun signature(c: Context): String = prefs(c).getString(key(c), "").orEmpty().hashCode().toString()
 }
