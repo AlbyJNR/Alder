@@ -192,7 +192,7 @@ class SettingsActivity : Screen() {
         Choice(TITLE_DIRECTOR, "Director", "The director under the cast, for films.", onOff),
         Choice(TRAILER_ART, "Art behind the trailer", "Keeps the title's art, dimmed, behind the trailer box. Off plays the trailer over black.", onOff),
         Choice(TITLE_RATING, "Content rating", "The age rating (PG, 15, TV-MA) beside the year, when it is known.", onOff),
-        Choice(TITLE_TOMATOES, "Rotten Tomatoes", "The critics' (C) and audience (A) percentages beside the IMDb rating, and the critics' one-line consensus under the description, when Rotten Tomatoes has the title.", onOff),
+        Choice(TITLE_TOMATOES, "Rotten Tomatoes", "The critics' (C) and audience (A) percentages beside the IMDb rating, on the title page and under a title's name on Home, TV, Movies and Content, and the critics' one-line consensus on the title page.", onOff),
         Choice("blurThumbnails", "Blur unwatched episodes", "Pictures of episodes you have not watched are blurred in the episode guide, against spoilers.", listOf(false to "Off", true to "On")),
     )
     private val pictureAndSound = listOf(

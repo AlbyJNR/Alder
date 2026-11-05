@@ -208,6 +208,10 @@ class MainActivity : Screen() {
     private lateinit var heroFacts: TextView
     private lateinit var heroRating: TextView
     private lateinit var heroScore: TextView
+    private lateinit var heroRt: TextView // Rotten Tomatoes' badge and "C78% A94%", after IMDb's
+    private lateinit var heroRtScore: TextView
+    private val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
+    private val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
     private var heroBottom = 0 // px from the screen's foot to the hero block, for a poster row
     private var wideRow = false // the row the remote is in has wide cards (Continue Watching): the hero sits lower
     private lateinit var heroAbout: TextView
@@ -904,6 +908,10 @@ class MainActivity : Screen() {
         // A small tag, as tall as the letters: SMALL's leading and font padding made it a block twice the mock's.
         heroRating = imdbTag().apply { visibility = View.GONE }
         heroScore = text("", SMALL, color = TEXT_2).onArt().apply { visibility = View.GONE }
+        heroRt = text("RT", 9f, bold = true, color = BASE).apply {
+            setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3); visibility = View.GONE
+        }
+        heroRtScore = text("", SMALL, color = TEXT_2).onArt().apply { visibility = View.GONE }
         heroAdded = text("", SMALL, color = TEXT_3).onArt().apply { visibility = View.GONE }
         heroAbout = text("", BODY, color = TEXT).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         heroResume = pill("Resume", R.drawable.ic_play).apply {
@@ -924,6 +932,8 @@ class MainActivity : Screen() {
                 addView(heroFacts)
                 addView(heroRating, wrap().apply { marginStart = dp(10) })
                 addView(heroScore, wrap().apply { marginStart = dp(6) })
+                addView(heroRt, wrap().apply { marginStart = dp(10) })
+                addView(heroRtScore, wrap().apply { marginStart = dp(6) })
                 addView(heroAdded, wrap().apply { marginStart = dp(6) })
             }.marginTop(8),
             heroAbout.marginTop(8),
@@ -941,6 +951,48 @@ class MainActivity : Screen() {
             }
         }
         return browseInfo
+    }
+
+    /**
+     * The focused title's scores on the hero line: IMDb's rating from the card or its details, else asked of IMDb;
+     * Rotten Tomatoes' C and A from the card (its own rows carry them) or from the lookup [scoresAhead] made. Both
+     * are drawn at once when known, so moving along a row shows them without a wait the second time.
+     */
+    private fun showScores(item: Item) {
+        val meta = metas[item.id]
+        val rating = meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ") ?: heroImdbRatings[item.id]
+        heroRating.visibility = if (rating.isNullOrBlank()) View.GONE else View.VISIBLE
+        heroScore.visibility = heroRating.visibility
+        heroScore.text = rating
+        val rt = item.facts.firstOrNull { it.matches(Regex("[CA]\\d+%.*")) }
+            ?: heroRtScores[item.id]?.let { s -> listOfNotNull(s.critics?.let { "C$it%" }, s.audience?.let { "A$it%" }).joinToString(" ").ifEmpty { null } }
+        heroRt.visibility = if (rt == null) View.GONE else View.VISIBLE
+        heroRtScore.visibility = heroRt.visibility
+        heroRtScore.text = rt
+    }
+
+    /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
+    private val scoresAhead = Runnable {
+        val item = heroItem ?: return@Runnable
+        if (mode != Mode.BROWSE) return@Runnable
+        val tomatoes = Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)
+        val hasRt = item.facts.any { it.matches(Regex("[CA]\\d+%.*")) } || item.id in heroRtScores
+        if (tomatoes && !hasRt) {
+            heroRtScores[item.id] = null // asked once; replaced when it answers
+            val year = metas[item.id]?.year?.take(4)?.toIntOrNull() ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }?.take(4)?.toIntOrNull()
+            background({ rtScores(item.name, year, item.type == "series") }) { r ->
+                heroRtScores[item.id] = r.getOrNull()
+                if (heroItem === item && mode == Mode.BROWSE) showScores(item)
+            }
+        }
+        val rated = metas[item.id]?.rating != null || item.facts.any { it.startsWith("IMDb") } || item.id in heroImdbRatings
+        if (!rated && item.id.startsWith("tt")) {
+            heroImdbRatings[item.id] = null
+            background({ imdbRating(item.id.substringBefore(':')) }) { r ->
+                heroImdbRatings[item.id] = r.getOrNull()
+                if (heroItem === item && mode == Mode.BROWSE) showScores(item)
+            }
+        }
     }
 
     /** The focused title: its art across the screen, and logo, facts (and time left) and description top left. */
@@ -975,10 +1027,9 @@ class MainActivity : Screen() {
         val code = item.left?.split(DOT)?.firstOrNull { it.startsWith("S") && " E" in it }
         heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
             else listOfNotNull(item.note, year, genre, length)).joinToString(DOT)
-        val rating = meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ")
-        heroRating.visibility = if (rating.isNullOrBlank()) View.GONE else View.VISIBLE
-        heroScore.visibility = heroRating.visibility
-        heroScore.text = rating
+        showScores(item)
+        main.removeCallbacks(scoresAhead)
+        main.postDelayed(scoresAhead, SCORES_WAIT)
         // Leads with a dot only when facts or a rating sit before it (a title with no details yet showed "· Added").
         val lead = if (heroFacts.text.isEmpty() && heroRating.visibility == View.GONE) "" else "·  "
         heroAdded.text = item.addedAt?.let { "${lead}Added ${addedAgo(it)}" } ?: ""
@@ -2418,3 +2469,4 @@ class MainActivity : Screen() {
 }
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
+private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none

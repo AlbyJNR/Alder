@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.27.0
+Put changes that are not released under `## 1.28.0
+
+- Scores on every page: the line under a title's name on Home, TV, Movies, Content and Library shows IMDb and Rotten Tomatoes (C critics, A audience) for the title under the remote. Rotten Tomatoes is asked a moment after you stop on a title and the answer is kept, so a title you pass again shows it at once.
+- A card whose add-on gives no IMDb rating gets it from IMDb the same way.
+
+## 1.27.0
 
 - The IMDb page is now Content, with its rows in a set order: the trailer lists (with Most anticipated this month), Roger Ebert, Certified Fresh in cinemas, Popular TV on Rotten Tomatoes, the Popular on… streaming rows, the charts, and the two Top 250 lists at the bottom.
 - Movies opens with Roger Ebert, Certified Fresh in cinemas, Top box office, Most popular films and Top 250 films. TV opens with Popular TV on Rotten Tomatoes, New series this month, Most popular TV and Top 250 TV. Your own catalogs follow.

@@ -218,6 +218,19 @@ internal fun imdbTrailerStreams(imdbId: String): List<Stream> {
 }
 
 private val imdbCertificateCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+private val imdbRatingCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+/** IMDb's rating for a title ("7.4"), for a card whose add-on gave none; null when IMDb has none either. */
+internal fun imdbRating(imdbId: String): String? {
+    if (!imdbId.startsWith("tt")) return null
+    imdbRatingCache[imdbId]?.let { return it }
+    return runCatching {
+        val query = JSONObject().put("query", "{title(id:\"$imdbId\"){ratingsSummary{aggregateRating}}}").toString()
+        val raw = Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
+        JSONObject(raw).optJSONObject("data")?.optJSONObject("title")?.optJSONObject("ratingsSummary")?.optDouble("aggregateRating", 0.0)
+            ?.takeIf { it > 0 }?.let { "%.1f".format(Locale.US, it) }?.also { imdbRatingCache[imdbId] = it }
+    }.onFailure { android.util.Log.w("CAS", "IMDb rating for $imdbId failed: $it") }.getOrNull()
+}
 
 /**
  * The title's age rating from IMDb's own service ("PG-13", "TV-MA", "15"), through the same query IMDb's site makes.
