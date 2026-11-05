@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.26.0
+Put changes that are not released under `## 1.27.0
+
+- The IMDb page is now Content, with its rows in a set order: the trailer lists (with Most anticipated this month), Roger Ebert, Certified Fresh in cinemas, Popular TV on Rotten Tomatoes, the Popular on… streaming rows, the charts, and the two Top 250 lists at the bottom.
+- Movies opens with Roger Ebert, Certified Fresh in cinemas, Top box office, Most popular films and Top 250 films. TV opens with Popular TV on Rotten Tomatoes, New series this month, Most popular TV and Top 250 TV. Your own catalogs follow.
+- Rotten Tomatoes scores read C78% A94% (critics, audience) on the title page and on the Rotten Tomatoes rows' cards.
+
+## 1.26.0
 
 - Every title page shows Rotten Tomatoes: the critics' and audience percentages beside the IMDb rating, and the critics' one-line consensus under the description. The information page gives the Tomatometer, the Popcornmeter and the full consensus. Settings › Title page › Rotten Tomatoes turns it off.
 - The country line on the IMDb page is gone: the lists changed little from one country to another. IMDb's lists follow the TV's country, as before.

@@ -225,13 +225,13 @@ class DetailsActivity : Screen() {
                 })
                 factRow.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
             }
-            // Rotten Tomatoes after IMDb, the same way: its badge, then critics and audience as percentages.
+            // Rotten Tomatoes after IMDb, the same way: its badge, then C for critics and A for audience, as percentages.
             tomatoes?.takeIf { it.critics != null || it.audience != null }?.let { rt ->
                 factRow.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
                 factRow.addView(text("RT", 9f, bold = true, color = BASE).apply {
                     setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
                 })
-                val meters = listOfNotNull(rt.critics?.let { "$it% critics" }, rt.audience?.let { "$it% audience" }).joinToString(DOT)
+                val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ")
                 factRow.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
             }
             stack.addView(factRow, wrap().apply { topMargin = dp(12) })

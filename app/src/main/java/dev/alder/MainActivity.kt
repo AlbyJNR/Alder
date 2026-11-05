@@ -100,7 +100,7 @@ internal fun catalogAnswerKey(page: String, title: String, genre: String?, sourc
 class MainActivity : Screen() {
     private enum class Page(val label: String, val icon: Int) {
         HOME("Home", R.drawable.ic_home), SHOWS("TV", R.drawable.ic_tv), MOVIES("Movies", R.drawable.ic_movie),
-        IMDB("IMDb", R.drawable.ic_star), LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
+        IMDB("Content", R.drawable.ic_star), LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
     }
     private enum class Mode { CINEMA, BROWSE }
     private enum class ListFilter { ALL, MOVIES, SHOWS }
@@ -968,7 +968,7 @@ class MainActivity : Screen() {
         }
         val meta = metas[item.id]
         val year = meta?.year ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }
-        val genre = meta?.genres?.firstOrNull() ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == false && !it.startsWith("IMDb") }?.substringBefore(",")
+        val genre = meta?.genres?.firstOrNull() ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == false && !it.startsWith("IMDb") && '%' !in it }?.substringBefore(",")
         val length = if (item.type == "series") meta?.videos?.map { it.season }?.filter { it > 0 }?.distinct()?.size?.takeIf { it > 0 }?.let(::seasons)
             else meta?.runtime
         // A show in progress describes its next episode, so the line names that episode rather than the show.
@@ -1044,7 +1044,7 @@ class MainActivity : Screen() {
     /** "Series · 2022 · Crime": the kind, the year and the first genre, nothing that needs reading twice. */
     private fun facts(item: Item): String {
         val year = item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }
-        val genre = item.facts.firstOrNull { it.firstOrNull()?.isDigit() == false && !it.startsWith("IMDb") }?.substringBefore(",")
+        val genre = item.facts.firstOrNull { it.firstOrNull()?.isDigit() == false && !it.startsWith("IMDb") && '%' !in it }?.substringBefore(",")
         return listOfNotNull(if (item.type == "series") "Series" else "Movie", year, genre).joinToString(DOT)
     }
 
@@ -1236,14 +1236,9 @@ class MainActivity : Screen() {
                 showGenreChips(emptyList())
                 genreStrip.visibility = View.VISIBLE
             }
-            // IMDb's rows for the page above the catalogs: new series and the most popular TV on TV, the most popular films
-            // and the weekend box office on Movies. The IMDb page has them too; here they sit where the eye starts.
+            // The page's rows from the web above the catalogs (see webRows); the Content page has them all.
             if (p.isCatalog && !profile.kids) {
-                val wanted = if (p == Page.MOVIES) listOf(ImdbList.HOT_MOVIES, ImdbList.BOX_OFFICE) else listOf(ImdbList.NEW_SERIES, ImdbList.HOT_TV)
-                wanted.filter { "${p.label}|${it.title}" !in hiddenSeen.orEmpty() }.forEach { imdbRow(slot(), it, g) }
-                if (p == Page.MOVIES && "${p.label}|$EBERT_ROW" !in hiddenSeen.orEmpty()) ebertRow(slot(), g)
-                val rt = if (p == Page.MOVIES) RtList.FRESH_IN_CINEMAS else RtList.POPULAR_TV
-                if ("${p.label}|${rt.title}" !in hiddenSeen.orEmpty()) rtRow(slot(), rt, g)
+                webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }.forEach { it.second(slot(), g) }
             }
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
@@ -2111,10 +2106,29 @@ class MainActivity : Screen() {
      * most popular films and TV), numbered. The hero adds when a title is out; OK opens the title page as anywhere,
      * where Trailer plays the trailer IMDb listed. Last time's lists first, from disk; today's replace them.
      */
-    private fun buildImdb(g: Int) {
-        ImdbList.entries.forEach { imdbRow(slot(), it, g) }
-        ebertRow(slot(), g)
-        RtList.entries.forEach { rtRow(slot(), it, g) }
+    private fun buildImdb(g: Int) = webRows(Page.IMDB).forEach { it.second(slot(), g) }
+
+    /**
+     * The rows read from the web, by page and in order (Alan's, 2026-11-05): title to builder. Movies opens with
+     * RogerEbert.com's reviews and Rotten Tomatoes' Certified Fresh, then IMDb's box office, popular films and Top 250.
+     * TV opens with Rotten Tomatoes' popular series, then IMDb's new series, popular TV and Top 250. Content has
+     * everything: the trailer lists (with this month's most anticipated), the reviews and Rotten Tomatoes, what's
+     * popular on each streaming service, the charts, and the two Top 250s at the bottom.
+     */
+    private fun webRows(p: Page): List<Pair<String, (LinearLayout, Int) -> Unit>> {
+        fun imdb(l: ImdbList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> imdbRow(s, l, g) }
+        fun rt(l: RtList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> rtRow(s, l, g) }
+        val ebert: Pair<String, (LinearLayout, Int) -> Unit> = EBERT_ROW to { s, g -> ebertRow(s, g) }
+        return when (p) {
+            Page.MOVIES -> listOf(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
+            Page.SHOWS -> listOf(rt(RtList.POPULAR_TV), imdb(ImdbList.NEW_SERIES), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
+            Page.IMDB -> listOf(ImdbList.TRENDING, ImdbList.ANTICIPATED, ImdbList.THIS_MONTH, ImdbList.POPULAR, ImdbList.RECENT).map(::imdb) +
+                ebert + rt(RtList.FRESH_IN_CINEMAS) + rt(RtList.POPULAR_TV) +
+                listOf(ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK).map(::imdb) +
+                listOf(ImdbList.BOX_OFFICE, ImdbList.HOT_MOVIES, ImdbList.HOT_TV, ImdbList.NEW_SERIES).map(::imdb) +
+                listOf(ImdbList.TOP_MOVIES, ImdbList.TOP_TV).map(::imdb)
+            else -> emptyList()
+        }
     }
 
     /** One of IMDb's lists as a row in [slot]: last time's from disk at once, today's in its place when it differs. */
@@ -2191,9 +2205,10 @@ class MainActivity : Screen() {
     private fun rtItem(t: RtTitle): Item {
         val pk = t.title
         val rt = t.rt
-        val critics = rt.critics?.let { "Tomatometer $it%" + if (rt.certified) ", Certified Fresh" else "" }
-        val facts = listOfNotNull(critics, rt.audience?.let { "Audience $it%" }, pk.year, pk.rating?.let { "IMDb $it" })
-        val note = rt.critics?.let { if (rt.certified) "Certified Fresh $it%" else "Critics $it%" }
+        // Scores the short way Alan asked for: C for critics, A for audience.
+        val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ").ifEmpty { null }
+        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, meters, "Certified Fresh".takeIf { rt.certified }, pk.rating?.let { "IMDb $it" })
+        val note = meters
         return Item(pk.id, pk.type, pk.name, pk.poster ?: rt.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
             null, 0f, resume = false, left = null, note = note, released = pk.date)
     }
