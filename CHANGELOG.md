@@ -11,7 +11,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.20.0
+Put changes that are not released under `## 1.20.1
+
+- A trailer card on the IMDb page opens the title page, as TV and Film cards do, rather than playing in a box over the rows (Alan's call): Play, Trailer, cast, director, My List and your lists are all there. Its Trailer button plays the trailer the card showed. The page says when the title is out ("In cinemas 6 Nov") from IMDb's date when the add-on has none, and offers no Preview for a title that isn't out yet.
+
+## 1.20.0
 
 - An IMDb page in the rail, between Movies and Library, with IMDb's own lists as rows. First the four from imdb.com/trailers: Trending trailers, Most anticipated, Popular trailers and New trailers, as wide cards of each trailer's still with its length in the corner. OK plays the trailer in the box; hold OK offers the title page and your lists. Then IMDb's charts: Top 250 films, Top 250 TV, Most popular films and Most popular TV, as numbered posters that open the title page as anywhere.
 - Last time's lists show at once from disk; today's replace them when they differ. Not shown to a Kids profile.

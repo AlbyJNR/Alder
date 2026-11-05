@@ -47,6 +47,8 @@ class DetailsActivity : Screen() {
     private val name by lazy { intent.getStringExtra("name") ?: "" }
     private val poster by lazy { intent.getStringExtra("poster") }
     private val initialArt by lazy { intent.getStringExtra("background") }
+    private val listedTrailer by lazy { intent.getStringExtra("trailer") } // IMDb's video id from the IMDb page: Trailer plays this one
+    private val listedRelease by lazy { intent.getStringExtra("released") } // IMDb's release date, when the add-on has none
 
     private lateinit var key: String
     override val backdrop get() = heroArt
@@ -286,7 +288,7 @@ class DetailsActivity : Screen() {
         // The next episode isn't out yet (Stremio queues it as soon as the last one ends): say when, and Play waits.
         val unaired = airs(episode?.released)
         // Not released yet (a coming-soon title): the day, and the trailer leads the line of buttons.
-        val comingOut = if (item == null || resumeAt == 0L) airs(m.released, word = if (type == "movie") "In cinemas" else "From") else null
+        val comingOut = if (item == null || resumeAt == 0L) airs(m.released ?: listedRelease, word = if (type == "movie") "In cinemas" else "From") else null
         val where = listOfNotNull(episode?.let { "S${it.season} E${it.episode}" }, episode?.title?.takeIf { it.isNotBlank() }, remaining ?: unaired ?: comingOut).joinToString(DOT)
         if (where.isNotEmpty() && (resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text(where, SMALL, bold = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
@@ -312,12 +314,13 @@ class DetailsActivity : Screen() {
         val ytId = m.trailers.firstOrNull()
         val trailer = if (Settings.titlePage(this, SettingsActivity.TITLE_TRAILER))
             glassButton("Trailer") {
-                showTrailerClip(m.name, { m.trailerFiles + (m.imdbId?.let(::imdbTrailerStreams) ?: emptyList()) }) {
+                showTrailerClip(m.name, { (listedTrailer?.let(::imdbVideoStreams) ?: emptyList()) + m.trailerFiles + (m.imdbId?.let(::imdbTrailerStreams) ?: emptyList()) }) {
                     if (ytId != null) showTrailer(ytId, m.name)
                     else choose("Trailer unavailable", listOf("OK"), "No trailer was found for this title.") {}
                 }
             } else null
-        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW))
+        // No Preview for a title that isn't out: there is nothing to preview, and the trailer leads instead.
+        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW) && comingOut == null)
             glassButton("Preview") { if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) } else null
         val recap = if (type == "series" && Settings.titlePage(this, SettingsActivity.TITLE_RECAP) && Profiles.active(this)?.kids != true)
             glassButton("Recap") { openRecap(m, episode?.season ?: selectedSeason) } else null

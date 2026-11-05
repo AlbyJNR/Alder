@@ -239,7 +239,8 @@ class MainActivity : Screen() {
         val note: String? = null, // leads the title line: "In cinemas 20 Nov" on a coming-soon title
         newEpisodes: Int = 0, // new episodes out (NewEpisodes), for the mark on the card and the hero line
         val corner: String? = null, // a wide card's corner label ("2:14" on a trailer) in place of the time left
-        val play: (() -> Unit)? = null, // OK does this (plays the trailer) instead of opening the title page
+        val trailerId: String? = null, // IMDb's video id for the trailer this card shows: the title page's Trailer plays it
+        val released: String? = null, // ISO release date IMDb gave, for the title page when the add-on has none
     ) {
         var newCount = newEpisodes
         val newEpisode get() = newCount > 0
@@ -1614,7 +1615,7 @@ class MainActivity : Screen() {
                     if (it == 1) { Settings.setHiddenRows(this, Settings.hiddenRows(this) + "${page.label}|${r.title}"); showPage(page) }
                 }
             }) } ?: emptyList()
-        val own = listOwn + (if (item.play != null) listOf("Title page" to { openDetails(item) }) else emptyList()) + when {
+        val own = listOwn + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
@@ -1959,7 +1960,7 @@ class MainActivity : Screen() {
                         showHero(item)
                     } else main.post { if (!view.hasFocus()) pendingUpdate?.let { pendingUpdate = null; it() } }
                 }
-                setOnClickListener { item.play?.invoke() ?: openDetails(item) }
+                setOnClickListener { openDetails(item) }
                 // Hold OK: the title's own options first (My List, Continue Watching), then the viewer's lists.
                 setOnLongClickListener { holdMenu(item); true }
             }
@@ -2072,9 +2073,9 @@ class MainActivity : Screen() {
 
     /**
      * The IMDb page: IMDb's own lists, each a row. The four from imdb.com/trailers first (trending, most anticipated,
-     * popular, newest), as wide cards of the trailer's still: OK plays the trailer in the box, hold OK offers the
-     * title page. Then its charts (Top 250 films and TV, most popular films and TV) as posters, numbered, OK opening
-     * the title page as anywhere. Last time's lists first, from disk; today's replace them when they differ.
+     * popular, newest), as wide cards of the trailer's still, then its charts (Top 250 films and TV, most popular
+     * films and TV) as numbered posters. OK opens the title page as anywhere, where Trailer plays the trailer the
+     * card showed. Last time's lists first, from disk; today's replace them when they differ.
      */
     private fun buildImdb(g: Int) {
         val today = java.time.LocalDate.now().toString()
@@ -2105,20 +2106,11 @@ class MainActivity : Screen() {
             else -> null
         }
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
-        val trailer = pk.trailerId?.takeIf { list.trailers }
-        lateinit var item: Item
-        item = Item(pk.id, pk.type, pk.name, pk.poster, if (list.trailers) pk.still else null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+        return Item(pk.id, pk.type, pk.name, pk.poster, if (list.trailers) pk.still else null, Images.logoFor(pk.id), pk.plot ?: "", facts,
             null, 0f, resume = false, left = null, note = note,
             corner = pk.seconds?.takeIf { list.trailers }?.let { "%d:%02d".format(it / 60, it % 60) },
-            play = trailer?.let { id -> { playImdbTrailer(item, id) } })
-        return item
+            trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
     }
-
-    /** The trailer in the box, its files asked for now (they are signed for a few hours); the title page is a hold away. */
-    private fun playImdbTrailer(item: Item, videoId: String) =
-        showTrailerClip(item.name, { imdbVideoStreams(videoId) }) {
-            choose("Trailer unavailable", listOf("Title page", "OK"), "IMDb couldn't play this trailer right now.") { if (it == 0) openDetails(item) }
-        }
 
     private fun upcomingItem(u: Upcoming, p: Page): Item {
         val today = java.time.LocalDate.now().toString()
@@ -2178,7 +2170,8 @@ class MainActivity : Screen() {
     private fun openDetails(item: Item) {
         startActivity(Intent(this, DetailsActivity::class.java)
             .putExtra("type", item.type).putExtra("id", item.id).putExtra("name", item.name)
-            .putExtra("poster", item.poster).putExtra("background", item.art).putExtra("videoId", item.videoId))
+            .putExtra("poster", item.poster).putExtra("background", item.art).putExtra("videoId", item.videoId)
+            .putExtra("trailer", item.trailerId).putExtra("released", item.released))
     }
 
     // ---------- vertical movement ----------
