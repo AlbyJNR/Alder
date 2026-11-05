@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.18.0
+Put changes that are not released under `## 1.18.1
+
+- The rail closes again as the remote leaves it. It had stayed open, words and all, over the rows (Alan's photo).
+- The open panel now reads as one: a shade falls from the left over the page behind it, so the words no longer fight the hero's title and synopsis, and the words' column is one width whichever entry is lit.
+
+## 1.18.0
 
 - The pages have moved to a rail on the left of Home, as Netflix's new television layout has them: a slim column of glyphs that opens into a panel of words as the remote comes across to it. Your profile sits first (with "Switch profile" under your name once open), then Search, Home, TV, Movies and Library. The open page is lit; the rows step back while the panel is open.
 - Left from the first card of a row, or from the first chip, opens the rail on the page you're on; Right goes back to where the remote was. Back from the rows still goes to the chips, then the rail.
