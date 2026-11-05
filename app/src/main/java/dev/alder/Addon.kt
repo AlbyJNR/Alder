@@ -341,12 +341,21 @@ class ImdbPick(
     val id: String, val name: String, val type: String, val poster: String?, val year: String?, val plot: String?,
     val genres: List<String>, val rating: String?, val rank: Int?, val date: String?,
     val trailerId: String?, val still: String?, val seconds: Int?,
+    val gross: String? = null, // the box office chart: "$42.1M weekend"
 )
 
-/** IMDb's lists on the IMDb page, in the order they sit down it: the trailer lists from imdb.com/trailers, then its charts. */
-enum class ImdbList(val title: String, val trailers: Boolean) {
+/**
+ * IMDb's lists on the IMDb page, in the order they first sit down it (the viewer can move them): the trailer lists
+ * from imdb.com/trailers, the weekend box office (Box Office Mojo's chart, as IMDb carries it), what's on TV and
+ * streaming in the TV's country (new series this month, then what's popular on each service), then IMDb's charts.
+ * [provider] is IMDb's watch-provider id for the streaming rows.
+ */
+enum class ImdbList(val title: String, val trailers: Boolean = false, val provider: String? = null) {
     TRENDING("Trending trailers", true), ANTICIPATED("Most anticipated", true), POPULAR("Popular trailers", true), RECENT("New trailers", true),
-    TOP_MOVIES("Top 250 films", false), TOP_TV("Top 250 TV", false), HOT_MOVIES("Most popular films", false), HOT_TV("Most popular TV", false);
+    BOX_OFFICE("Top box office"), NEW_SERIES("New series this month"),
+    ON_NETFLIX("Popular on Netflix", provider = "netflix"), ON_PRIME("Popular on Prime Video", provider = "prime_video"),
+    ON_DISNEY("Popular on Disney+", provider = "disneyplus"), ON_APPLE("Popular on Apple TV+", provider = "appletv"),
+    TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV");
 }
 
 private const val IMDB_TITLE_FIELDS = "id titleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}"
@@ -365,18 +374,29 @@ internal fun imdbListQuery(list: ImdbList, today: String): String {
         ImdbList.TOP_TV -> "titleChartRankings(first:$IMDB_LIST_SIZE,input:{rankingsChartType:TOP_250_TV}){edges{node{item{$IMDB_TITLE_FIELDS}}}}"
         ImdbList.HOT_MOVIES -> "chartTitles(first:$IMDB_LIST_SIZE,chart:{chartType:MOST_POPULAR_MOVIES}){edges{currentRank node{$IMDB_TITLE_FIELDS}}}"
         ImdbList.HOT_TV -> "chartTitles(first:$IMDB_LIST_SIZE,chart:{chartType:MOST_POPULAR_TV_SHOWS}){edges{currentRank node{$IMDB_TITLE_FIELDS}}}"
+        ImdbList.BOX_OFFICE -> "boxOfficeWeekendChart(limit:$IMDB_LIST_SIZE){entries{title{$IMDB_TITLE_FIELDS}weekendGross{total{amount currency}}}}"
+        ImdbList.NEW_SERIES -> {
+            val month = java.time.YearMonth.from(java.time.LocalDate.parse(today))
+            "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{releaseDateConstraint:{releaseDateRange:{start:\"${month.atDay(1)}\",end:\"${month.atEndOfMonth()}\"}}," +
+                "titleTypeConstraint:{anyTitleTypeIds:[\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
+        }
+        // What people are watching on the service in the TV's country (the country rides in a header): titles it
+        // streams on the subscription, not its rentals, popularity first.
+        ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE ->
+            "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{watchOptionsConstraint:{anyWatchProviderIds:[\"amzn1.imdb.w2w.provider.${list.provider}\"],hasWatchOptionTypes:[SUBSCRIPTION]}," +
+                "titleTypeConstraint:{anyTitleTypeIds:[\"movie\",\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
     }
     return JSONObject().put("query", "{$body}").toString()
 }
 
 private val imdbListCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ImdbPick>>>()
 
-/** One of IMDb's lists, fresh: an hour in memory, kept on disk for the next cold start ([savedImdbList]). Blocks. */
-internal fun imdbList(list: ImdbList, today: String): List<ImdbPick> {
-    val k = "$list/$today"
+/** One of IMDb's lists, fresh, for the TV's [country] (ISO): an hour in memory, kept on disk for the next cold start ([savedImdbList]). Blocks. */
+internal fun imdbList(list: ImdbList, today: String, country: String): List<ImdbPick> {
+    val k = "$list/$today/$country"
     imdbListCache[k]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.let { return it.second }
     val raw = Http.post("https://api.graphql.imdb.com/", imdbListQuery(list, today), keep = true, timeoutMs = 15_000,
-        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
+        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to country))
     return parseImdbList(list, JSONObject(raw)).also { imdbListCache[k] = System.currentTimeMillis() to it }
 }
 
@@ -387,7 +407,7 @@ internal fun savedImdbList(list: ImdbList, today: String): List<ImdbPick>? =
 /** The titles in IMDb's answer to [list], in its order; charts numbered from one, trailer lists only where a trailer exists. */
 internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
     val data = json.optJSONObject("data") ?: return emptyList()
-    fun title(t: JSONObject, clip: JSONObject?, rank: Int?): ImdbPick? {
+    fun title(t: JSONObject, clip: JSONObject?, rank: Int?, gross: String? = null): ImdbPick? {
         val id = t.text("id")?.takeIf { it.startsWith("tt") } ?: return null
         val name = t.optJSONObject("titleText")?.text("text") ?: return null
         val kind = t.optJSONObject("titleType")?.text("id").orEmpty()
@@ -404,8 +424,11 @@ internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
             rating, rank, date,
             clip?.text("id"), clip?.optJSONObject("thumbnail")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX640_.jpg"),
             clip?.optJSONObject("runtime")?.optInt("value", 0)?.takeIf { it > 0 },
+            gross,
         )
     }
+    fun searched() = data.optJSONObject("advancedTitleSearch")?.optJSONArray("edges").objects()
+        .mapNotNull { e -> e.optJSONObject("node")?.optJSONObject("title")?.let { title(it, null, null) } }
     return when (list) {
         ImdbList.TRENDING -> data.optJSONObject("trendingTitles")?.optJSONArray("titles").objects().mapNotNull { t -> t.optJSONObject("latestTrailer")?.let { title(t, it, null) } }
         ImdbList.ANTICIPATED, ImdbList.POPULAR -> data.optJSONObject("popularTitles")?.optJSONArray("titles").objects().mapNotNull { t -> t.optJSONObject("latestTrailer")?.let { title(t, it, null) } }
@@ -414,7 +437,21 @@ internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
             .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.optJSONObject("item")?.let { title(it, null, i + 1) } }
         ImdbList.HOT_MOVIES, ImdbList.HOT_TV -> data.optJSONObject("chartTitles")?.optJSONArray("edges").objects()
             .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.let { title(it, null, e.optInt("currentRank", 0).takeIf { r -> r > 0 } ?: (i + 1)) } }
+        ImdbList.BOX_OFFICE -> data.optJSONObject("boxOfficeWeekendChart")?.optJSONArray("entries").objects()
+            .mapIndexedNotNull { i, e -> e.optJSONObject("title")?.let { title(it, null, i + 1, e.optJSONObject("weekendGross")?.optJSONObject("total")?.let(::money)?.let { "$it weekend" }) } }
+        ImdbList.NEW_SERIES, ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE -> searched()
     }.distinctBy { it.id }
+}
+
+/** "$42.1M" or "$860K" from IMDb's money ({amount, currency}); null when there is none. Dollars are the box office's own unit. */
+internal fun money(total: JSONObject): String? {
+    val amount = total.optDouble("amount", 0.0).takeIf { it > 0 } ?: return null
+    val sign = when (total.text("currency")) { "USD", null -> "$"; "GBP" -> "£"; "EUR" -> "€"; else -> total.text("currency") + " " }
+    return when {
+        amount >= 1e9 -> "%s%.1fB".format(Locale.US, sign, amount / 1e9)
+        amount >= 1e6 -> "%s%.1fM".format(Locale.US, sign, amount / 1e6)
+        else -> "%s%.0fK".format(Locale.US, sign, amount / 1e3)
+    }
 }
 
 private const val IMDB_LIST_SIZE = 50

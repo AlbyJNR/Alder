@@ -90,6 +90,9 @@ object Settings {
     /** Rows the viewer hid (hold OK on a title → Hide row), as "<page>|<row name>", per profile. */
     fun hiddenRows(c: Context): Set<String> = runCatching { org.json.JSONArray(prefs(c).getString(profileKey(c, "hiddenRows"), "[]")).strings().toSet() }.getOrDefault(emptySet())
     fun setHiddenRows(c: Context, rows: Set<String>) = prefs(c).edit().putString(profileKey(c, "hiddenRows"), org.json.JSONArray(rows.toList()).toString()).apply()
+    /** The viewer's own order of a page's rows, by row name (hold OK › Move row up/down); rows not named follow, in their own order. */
+    fun rowOrder(c: Context, page: String): List<String> = runCatching { org.json.JSONArray(prefs(c).getString(profileKey(c, "rowOrder:$page"), "[]")).strings() }.getOrDefault(emptyList())
+    fun setRowOrder(c: Context, page: String, order: List<String>) = prefs(c).edit().putString(profileKey(c, "rowOrder:$page"), org.json.JSONArray(order).toString()).apply()
     /** A source that keeps stalling: the player switches to a lighter one by itself ("auto"), or asks first ("ask"). */
     fun stallSwitch(c: Context): String = prefs(c).getString("stallSwitch", "auto") ?: "auto"
     /** New versions installed by CAS itself while the TV sits on the screensaver, with nothing to press. */

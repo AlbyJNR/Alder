@@ -113,7 +113,23 @@ class MetaTest {
         assertEquals("tt4" to "vi9", r.id to r.trailerId)
     }
 
+    @Test fun imdbBoxOfficeAndSearchListsParse() {
+        val box = JSONObject("""{"data":{"boxOfficeWeekendChart":{"weekendStartDate":"2026-10-30","entries":[
+            {"title":{"id":"tt1","titleText":{"text":"You Can See Everything"},"titleType":{"id":"movie"}},"weekendGross":{"total":{"amount":42134567,"currency":"USD"}}},
+            {"title":{"id":"tt2","titleText":{"text":"Clayface"},"titleType":{"id":"movie"}},"weekendGross":{"total":{"amount":860000,"currency":"USD"}}}
+        ]}}}""")
+        val picks = parseImdbList(ImdbList.BOX_OFFICE, box)
+        assertEquals(listOf(1, 2), picks.map { it.rank })
+        assertEquals(listOf("$42.1M weekend", "$860K weekend"), picks.map { it.gross })
+        val search = JSONObject("""{"data":{"advancedTitleSearch":{"edges":[{"node":{"title":{"id":"tt3","titleText":{"text":"Slow Horses"},"titleType":{"id":"tvSeries"},"releaseYear":{"year":2022}}}}]}}}""")
+        assertEquals("tt3", parseImdbList(ImdbList.ON_APPLE, search)[0].id)
+        assertEquals("series", parseImdbList(ImdbList.NEW_SERIES, search)[0].type)
+    }
+
     @Test fun imdbListQueriesNameTheirRootsAndDates() {
+        assertTrue(imdbListQuery(ImdbList.NEW_SERIES, "2026-11-05").contains("start:\\\"2026-11-01\\\",end:\\\"2026-11-30\\\""))
+        assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05").contains("amzn1.imdb.w2w.provider.netflix"))
+        assertTrue(imdbListQuery(ImdbList.BOX_OFFICE, "2026-11-05").contains("boxOfficeWeekendChart"))
         assertTrue(imdbListQuery(ImdbList.ANTICIPATED, "2026-11-05").contains("start:\\\"2026-11-05\\\",end:\\\"2027-02-03\\\""))
         assertTrue(imdbListQuery(ImdbList.TOP_TV, "2026-11-05").contains("rankingsChartType:TOP_250_TV"))
         assertTrue(imdbListQuery(ImdbList.HOT_MOVIES, "2026-11-05").contains("MOST_POPULAR_MOVIES"))

@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.20.2
+Put changes that are not released under `## 1.21.0
+
+- Six more rows on the IMDb page, between the trailers and the charts: Top box office (the weekend chart Box Office Mojo publishes, as IMDb carries it, with each film's weekend gross), New series this month, and what's popular on Netflix, Prime Video, Disney+ and Apple TV+ in the TV's country, on the subscription rather than to rent. IMDb's "What's on TV" page itself is editorial and can't be read from a TV, so these are its parts, live.
+- Move row up / Move row down: hold OK on any title and the row it sits in can move up or down the page. The order is kept for that page and profile. New rows join at the bottom.
+
+## 1.20.2
 
 - The IMDb page is in the TV and Films style throughout: all eight lists as poster rows under the hero, the trailer lists included, with "In cinemas 6 Nov" in the hero line for a title not yet out. Preview stays on every title page, unreleased or not (Alan: trending titles often have files already).
 

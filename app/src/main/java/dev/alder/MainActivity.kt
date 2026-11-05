@@ -1615,7 +1615,13 @@ class MainActivity : Screen() {
                     if (it == 1) { Settings.setHiddenRows(this, Settings.hiddenRows(this) + "${page.label}|${r.title}"); showPage(page) }
                 }
             }) } ?: emptyList()
-        val own = listOwn + when {
+        // The row can move up or down the page from here; the order is kept for this page and profile.
+        val slotOf = rows.firstOrNull { r -> r.cards.any { it.item === item } }?.view?.parent as? View
+        val moves = slotOf?.takeIf { it.parent === content && (it.tag as? String)?.startsWith("row:") == true }?.let { s ->
+            val at = rowSlots().indexOf(s)
+            listOfNotNull(if (at > 0) "Move row up" to { moveRow(s, -1) } else null, if (at in 0 until rowSlots().lastIndex) "Move row down" to { moveRow(s, 1) } else null)
+        } ?: emptyList()
+        val own = listOwn + moves + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
@@ -1672,6 +1678,8 @@ class MainActivity : Screen() {
     private fun row(title: String, items: List<Item>, more: ((Int) -> List<Item>)? = null, wide: Boolean = false, grid: Boolean = false, listId: String? = null): Row = Row(title, items, more, wide, grid, listId).also {
         rows += it
         main.post(::updateImages)
+        // Its slot (the page's direct child holding it) is named for the row, so the viewer's order can place it.
+        if (title.isNotEmpty()) main.post { (it.view.parent as? View)?.takeIf { s -> s.parent === content }?.let { s -> s.tag = "row:$title"; arrangeRows() } }
         if (!focusedSomething && mode == Mode.BROWSE) {
             // Rows answer in any order: give slower ones above a moment, then start at the top row, not the quickest.
             main.removeCallbacks(focusTop)
@@ -1681,6 +1689,42 @@ class MainActivity : Screen() {
         // above as soon as the top rows are in (they answer within a few tens of ms of each other).
         if (header.hasFocus()) { main.removeCallbacks(heroTop); main.postDelayed(heroTop, 150) }
         main.post(::updateNextRow)
+    }
+
+    /** The page's row slots, named, top to bottom as they stand. */
+    private fun rowSlots(): List<View> = (0 until content.childCount).map { content.getChildAt(it) }.filter { (it.tag as? String)?.startsWith("row:") == true }
+    private fun slotTitle(slot: View) = (slot.tag as String).removePrefix("row:")
+
+    /**
+     * The viewer's order of this page's rows (hold OK › Move row up/down), applied to the slots on screen: the rows
+     * named in it in that order, any others after in their own order. The slots keep the positions the page gave
+     * them; only which slot sits where changes, and the remote stays on its title.
+     */
+    private fun arrangeRows() {
+        val order = Settings.rowOrder(this, page.label)
+        if (order.isEmpty()) return
+        val slots = rowSlots()
+        if (slots.size < 2) return
+        val natural = slots.withIndex().associate { (i, v) -> v to i }
+        val sorted = slots.sortedWith(compareBy({ v -> order.indexOf(slotTitle(v)).let { if (it < 0) Int.MAX_VALUE else it } }, { natural.getValue(it) }))
+        if (sorted == slots) return
+        val focused = currentFocus
+        val positions = slots.map { content.indexOfChild(it) }.sorted()
+        slots.forEach { content.removeView(it) }
+        positions.forEachIndexed { i, at -> content.addView(sorted[i], at) }
+        if (focused != null && focused.isAttachedToWindow) { focused.requestFocus(); snapTo(focused) }
+        main.post(::updateNextRow)
+    }
+
+    /** Moves the row in [slot] one place up ([delta] -1) or down (+1) and keeps that order for this page and profile. */
+    private fun moveRow(slot: View, delta: Int) {
+        val titles = rowSlots().map(::slotTitle).toMutableList()
+        val at = titles.indexOf(slotTitle(slot))
+        val to = at + delta
+        if (at < 0 || to !in titles.indices) return
+        titles[at] = titles[to].also { titles[to] = titles[at] }
+        Settings.setRowOrder(this, page.label, titles)
+        arrangeRows()
     }
 
     private val nextRowCheck = Runnable { updateNextRow() }
@@ -2079,6 +2123,7 @@ class MainActivity : Screen() {
      */
     private fun buildImdb(g: Int) {
         val today = java.time.LocalDate.now().toString()
+        val country = java.util.Locale.getDefault().country.ifEmpty { "GB" }
         ImdbList.entries.forEach { list ->
             val slot = slot()
             var shownIds = emptyList<String>()
@@ -2092,7 +2137,7 @@ class MainActivity : Screen() {
                 slot.addView(row(list.title, items.take(START), later(items)).view)
             }
             background({ savedImdbList(list, today) }) { r -> r.getOrNull()?.let(::show) }
-            background({ imdbList(list, today) }) { r ->
+            background({ imdbList(list, today, country) }) { r ->
                 r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
                 r.getOrNull()?.let(::show)
             }
@@ -2105,7 +2150,7 @@ class MainActivity : Screen() {
             pk.date != null && pk.date > today -> shortDay(pk.date, today)?.let { if (pk.type == "movie") "In cinemas $it" else "From $it" }
             else -> null
         }
-        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
+        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" }, pk.gross)
         return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
             null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
     }
