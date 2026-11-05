@@ -2,12 +2,39 @@ package dev.alder
 
 import java.io.File
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
+import okhttp3.Cache
+import okhttp3.CacheControl
+import okhttp3.ConnectionPool
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
-/** Plain HTTP for Stremio's API, addons and images. Every call blocks, so run them off the main thread. */
+/**
+ * Plain HTTP for Stremio's API, addons and images, on OkHttp: one pool of open connections shared by every thread
+ * (Android's own client kept five per process), HTTP/2 where a host speaks it (one connection carries a title page's
+ * burst of add-on requests side by side), and a disk cache for pictures. Every call blocks, so run them off the main thread.
+ */
 object Http {
+    private const val DEFAULT_TIMEOUT = 20_000
+    private const val PICTURE_CACHE = 250L * 1024 * 1024
+
+    @Volatile private var client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(DEFAULT_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
+        .connectionPool(ConnectionPool(16, 5, TimeUnit.MINUTES)) // pictures load many at a time from a few hosts
+        .build()
+
+    /** Set once at start: the disk cache for pictures lives under [cacheDir]. */
+    fun init(cacheDir: File) {
+        if (client.cache != null) return
+        client = client.newBuilder().cache(Cache(File(cacheDir, "okhttp"), PICTURE_CACHE)).build()
+        // The cache the platform client kept before 1.17.0: its pictures are fetched again once, into the new one.
+        Thread({ runCatching { File(cacheDir, "http").deleteRecursively() } }, "old-cache").apply { isDaemon = true }.start()
+    }
+
     /**
      * Answers kept on disk (title details, catalogs, the library, the addon list), so a screen can draw from last time
      * at once and refresh behind it, as Netflix and NuvioTV do. Set once at start; null keeps nothing.
@@ -74,27 +101,24 @@ object Http {
         }
     }
 
-    // No disconnect(): a response read to the end and closed hands its connection back for the next request to the same
-    // host. Disconnecting threw it away, so every picture paid a fresh TCP and TLS handshake first.
-    // [cache]: pictures only. The response cache kept an addon's 404 and, revalidated with a 304, served it forever
-    // (AIOMetadata's movie search); answers have their own copy in [saved].
-    private fun request(url: String, json: String?, cache: Boolean, timeoutMs: Int = 20_000, headers: Map<String, String> = emptyMap()): Pair<Int, ByteArray> {
-        val c = URL(url).openConnection() as HttpURLConnection
-        c.useCaches = cache
-        // Not Android's "Dalvik/2.1.0": some add-ons behind Cloudflare answer that with a challenge page.
-        c.setRequestProperty("User-Agent", userAgent)
-        headers.forEach { (name, value) -> c.setRequestProperty(name, value) }
-        c.connectTimeout = minOf(10_000, timeoutMs)
-        c.readTimeout = timeoutMs
-        if (json != null) {
-            c.requestMethod = "POST"
-            c.doOutput = true
-            c.setRequestProperty("Content-Type", "application/json")
-            c.outputStream.use { it.write(json.toByteArray()) }
-        }
-        // Stremio's API puts its JSON error in the body of a failed response too, so read it either way.
-        val code = c.responseCode
-        val stream = (if (code < 400) c.inputStream else c.errorStream) ?: throw IOException("HTTP $code")
-        return code to stream.use { it.readBytes() }
+    private val jsonType = "application/json".toMediaType()
+
+    // [cache]: pictures only. A response cache once kept an addon's 404 and, revalidated with a 304, served it forever
+    // (AIOMetadata's movie search); answers are never stored here and have their own copy in [saved].
+    private fun request(url: String, json: String?, cache: Boolean, timeoutMs: Int = DEFAULT_TIMEOUT, headers: Map<String, String> = emptyMap()): Pair<Int, ByteArray> {
+        val request = Request.Builder().url(url)
+            // Not Android's "Dalvik/2.1.0": some add-ons behind Cloudflare answer that with a challenge page.
+            .header("User-Agent", userAgent)
+            .apply {
+                headers.forEach { (name, value) -> header(name, value) }
+                if (!cache) cacheControl(CacheControl.Builder().noStore().build())
+                if (json != null) post(json.toRequestBody(jsonType))
+            }.build()
+        // A longer or shorter wait shares the pool and cache; only the timeouts differ.
+        val with = if (timeoutMs == DEFAULT_TIMEOUT) client else client.newBuilder()
+            .connectTimeout(minOf(10_000, timeoutMs).toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS).build()
+        // Stremio's API puts its JSON error in the body of a failed response too, so the body is read either way.
+        return with.newCall(request).execute().use { r -> r.code to (r.body?.bytes() ?: throw IOException("HTTP ${r.code}")) }
     }
 }

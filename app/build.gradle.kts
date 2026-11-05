@@ -13,8 +13,8 @@ android {
         applicationId = "uk.albyjnr.cas"
         minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "1.16.1"
+        versionCode = 36
+        versionName = "1.17.0"
         // TVs are ARM; the x86 builds of ffmpeg's native code would only add size.
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
     }
@@ -76,6 +76,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3") // live and sports addons stream HLS
     implementation("androidx.media3:media3-ui:$media3")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0") // one connection pool, HTTP/2, the picture cache
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1") // installs baseline-prof.txt on TVs without Play
     // Software audio for what TVs can't decode themselves (DTS, TrueHD), so those files still have sound.
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:$media3+1")
     testImplementation("junit:junit:4.13.2")

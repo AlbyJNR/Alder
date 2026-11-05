@@ -13,6 +13,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
 
+## 1.17.0
+
+- **Faster start, smoother rows.** CAS now tells the TV which code to prepare when it installs, so the first screen and the first rows come sooner. Nothing changes on the screen.
+- **Quicker title pages and sources.** CAS now keeps its connections to Stremio and the add-ons open and sends their requests side by side. Pages that ask many add-ons at once load sooner on slow Wi-Fi.
+- **Icons in the top bar.** Home, TV, Movies and Library are glyphs, as Search was. The open page is lit; the focused one is white.
+- The first frame after you open CAS is its own dark colour, not the device's.
+
 ## 1.16.1
 
 - **Seasons follow the remote.** In the episode list, move to a season and its episodes show. Before, you had to press OK.

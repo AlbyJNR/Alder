@@ -98,7 +98,10 @@ internal fun catalogAnswerKey(page: String, title: String, genre: String?, sourc
 //    where you are and Resume, moving on to the next every ADVANCE. OK resumes; any other key returns to where you were.
 //    The TV's own screensaver takes over later (10 min on the test TV), so nothing stays still for hours.
 class MainActivity : Screen() {
-    private enum class Page(val label: String) { HOME("Home"), SHOWS("TV"), MOVIES("Movies"), LIVE("Live"), LIBRARY("Library") }
+    private enum class Page(val label: String, val icon: Int) {
+        HOME("Home", R.drawable.ic_home), SHOWS("TV", R.drawable.ic_tv), MOVIES("Movies", R.drawable.ic_movie),
+        LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
+    }
     private enum class Mode { CINEMA, BROWSE }
     private enum class ListFilter { ALL, MOVIES, SHOWS }
     private enum class ListSort { RECENT, NAME, UNWATCHED, NEW }
@@ -113,7 +116,7 @@ class MainActivity : Screen() {
     private val listFilterChips = mutableMapOf<ListFilter, TextView>()
     private val listSortChips = mutableMapOf<ListSort, TextView>()
     private var lastListChip: TextView? = null
-    private val navItems = mutableMapOf<Page, TextView>()
+    private val navItems = mutableMapOf<Page, ImageView>()
     private var page = Page.HOME
     private val Page.isCatalog get() = this == Page.SHOWS || this == Page.MOVIES
     private var mode = Mode.BROWSE
@@ -630,13 +633,14 @@ class MainActivity : Screen() {
             setPadding(dp(13), dp(7), dp(13), dp(7))
             setOnFocusChangeListener { _, _ -> styleNav() }
             setOnClickListener { startActivity(Intent(this@MainActivity, SearchActivity::class.java)) }
-        }.inNav(width = dp(44), height = -1)
-        // A page opens as soon as the remote rests on its name. OK on Shows or Movies goes to its genres.
+        }.inNav(width = dp(NAV_W), height = dp(NAV_H))
+        // Every page a glyph in the capsule, as Search already was: the open page lit, the focused one on white.
+        // A page opens as soon as the remote rests on its glyph. OK on Shows or Movies goes to its genres.
         Page.entries.filter { it != Page.LIVE && (!profile.kids || it == Page.HOME) }.forEach { p ->
-            navItems[p] = text(p.label, BODY).apply {
-                gravity = Gravity.CENTER
-                compoundDrawablePadding = dp(2)
-                setPadding(dp(14), dp(7), dp(14), dp(7))
+            navItems[p] = ImageView(this).apply {
+                setImageResource(p.icon)
+                contentDescription = p.label
+                setPadding(dp(13), dp(7), dp(13), dp(7))
                 setOnFocusChangeListener { _, has ->
                     styleNav()
                     main.removeCallbacks(switchPage)
@@ -651,7 +655,7 @@ class MainActivity : Screen() {
                         else -> firstRow()?.focusFirst()
                     }
                 }
-            }.inNav()
+            }.inNav(width = dp(NAV_W), height = dp(NAV_H))
         }
         nav.background = rounded(0xCC18191D.toInt(), NAV_R + 4)
         header.addView(brand(), FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
@@ -684,9 +688,7 @@ class MainActivity : Screen() {
                 p == page -> rounded(0x33FFFFFF, NAV_R)
                 else -> null
             }
-            item.setTextColor(if (focused) BASE else if (p == page) TEXT else TEXT_2)
-            item.text = p.label
-            item.setCompoundDrawablesRelative(null, null, null, null)
+            item.setColorFilter(if (focused) BASE else if (p == page) TEXT else TEXT_2)
         }
         search?.let {
             it.background = if (it.isFocused) rounded(TEXT, NAV_R) else null
@@ -2209,6 +2211,8 @@ class MainActivity : Screen() {
         const val INFO_W = 360 // the cinema's line
         const val NAV_R = 18 // dp: the top bar's pills
         const val NAV_GAP = 4 // dp between them
+        const val NAV_W = 44 // dp, a glyph's pill
+        const val NAV_H = 34
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
         const val LOGO_W = 360 // the cinema's title logo

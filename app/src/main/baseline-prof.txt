@@ -1,0 +1,14 @@
+# Baseline profile: what ART pre-compiles at install instead of interpreting until the JIT catches up.
+# Every class of CAS is hot, started early and used after start (H, S, P): the app is small, and the start, Home's rows
+# and the title page touch most of it within seconds. Media3 is hot once the player opens, not at start.
+HSPLdev/alder/**;->**(**)**
+Ldev/alder/**;
+HPLandroidx/media3/common/**;->**(**)**
+HPLandroidx/media3/exoplayer/**;->**(**)**
+HPLandroidx/media3/datasource/**;->**(**)**
+HPLandroidx/media3/extractor/**;->**(**)**
+Landroidx/media3/**;
+HSPLokhttp3/**;->**(**)**
+Lokhttp3/**;
+HSPLokio/**;->**(**)**
+Lokio/**;

@@ -4,5 +4,7 @@
     <style name="CAS" parent="@android:style/Theme.DeviceDefault.NoActionBar">
         <item name="android:spotShadowAlpha">0.9</item>
         <item name="android:ambientShadowAlpha">0</item>
+        <!-- The frame Android shows before CAS draws anything is CAS's own near-black, so starting never flashes. -->
+        <item name="android:windowBackground">#FF08090B</item>
     </style>
 </resources>

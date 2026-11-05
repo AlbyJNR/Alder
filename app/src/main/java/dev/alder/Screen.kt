@@ -183,10 +183,8 @@ abstract class Screen : Activity() {
         if (Crash.unseen(this)) main.postDelayed({
             if (!isFinishing) android.widget.Toast.makeText(this, "CAS closed unexpectedly last time. Settings › About › Last crash has the details.", android.widget.Toast.LENGTH_LONG).show()
         }, 2_500)
-        // Pictures load many at a time from a few hosts: keep enough connections open to reuse (Android keeps 5).
-        System.setProperty("http.maxConnections", "16")
-        // Disk cache for pictures (and anything else whose server allows caching), and last time's answers.
-        android.net.http.HttpResponseCache.install(java.io.File(cacheDir, "http"), 250L * 1024 * 1024)
+        // The disk cache for pictures, and last time's answers.
+        Http.init(cacheDir)
         Http.saved = java.io.File(cacheDir, "answers")
         // ASCII only: a model name with other characters would make every request throw before it was sent.
         Http.userAgent = "CAS/${Updates.mine(this)} (Android ${android.os.Build.VERSION.RELEASE}; ${android.os.Build.MODEL})"
