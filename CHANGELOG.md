@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.22.1
+Put changes that are not released under `## 1.23.0
+
+- The IMDb page has a line of countries above its rows: UK, US, Ireland, Canada, Australia, India, Germany, France. Select one and each row asks IMDb again from that country, in its place. The Popular on… rows show that country's catalogue; the Top 250 and the charts do not move.
+- CAS keeps the country you select. The IMDb rows on TV and Movies follow it too. Before, the rows followed the TV's own country, with no way to change it.
+
+## 1.22.1
 
 - Popular on Peacock shows for everyone: Peacock streams only in the US, so that row is asked for there wherever the TV is. The other streaming rows still follow the TV's country.
 

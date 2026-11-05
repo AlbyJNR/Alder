@@ -365,7 +365,7 @@ private const val IMDB_TITLE_FIELDS = "id titleText{text}titleType{id}primaryIma
 private const val IMDB_CLIP_FIELDS = "id name{value}runtime{value}description{value}thumbnail{url}"
 
 /** The list's query, as imdb.com asks it ([today] ISO: the trailer lists split on the release date). */
-internal fun imdbListQuery(list: ImdbList, today: String): String {
+internal fun imdbListQuery(list: ImdbList, today: String, region: String = "GB"): String {
     val ahead = java.time.LocalDate.parse(today).plusDays(90).toString()
     val titleWithTrailer = "$IMDB_TITLE_FIELDS latestTrailer{$IMDB_CLIP_FIELDS}"
     val body = when (list) {
@@ -394,8 +394,12 @@ internal fun imdbListQuery(list: ImdbList, today: String): String {
             "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{watchOptionsConstraint:{anyWatchProviderIds:[\"amzn1.imdb.w2w.provider.${list.provider}\"],hasWatchOptionTypes:[SUBSCRIPTION]}," +
                 "titleTypeConstraint:{anyTitleTypeIds:[\"movie\",\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
     }
-    return JSONObject().put("query", "{$body}").toString()
+    // The country goes in the operation's name: IMDb ignores it, and the disk cache then keeps one answer per country.
+    return JSONObject().put("query", "query CAS_$region{$body}").toString()
 }
+
+/** The countries the IMDb page can look from: ISO code to the chip's name. The streaming rows follow the choice most. */
+val IMDB_COUNTRIES = listOf("GB" to "UK", "US" to "US", "IE" to "Ireland", "CA" to "Canada", "AU" to "Australia", "IN" to "India", "DE" to "Germany", "FR" to "France")
 
 private val imdbListCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ImdbPick>>>()
 
@@ -404,14 +408,14 @@ internal fun imdbList(list: ImdbList, today: String, country: String): List<Imdb
     val region = list.region ?: country
     val k = "$list/$today/$region"
     imdbListCache[k]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.let { return it.second }
-    val raw = Http.post("https://api.graphql.imdb.com/", imdbListQuery(list, today), keep = true, timeoutMs = 15_000,
+    val raw = Http.post("https://api.graphql.imdb.com/", imdbListQuery(list, today, region), keep = true, timeoutMs = 15_000,
         headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to region))
     return parseImdbList(list, JSONObject(raw)).also { imdbListCache[k] = System.currentTimeMillis() to it }
 }
 
 /** Last time's list from disk, or null; no network. */
-internal fun savedImdbList(list: ImdbList, today: String): List<ImdbPick>? =
-    Http.savedAnswer("https://api.graphql.imdb.com/", imdbListQuery(list, today))?.let { runCatching { parseImdbList(list, JSONObject(it)) }.getOrNull() }
+internal fun savedImdbList(list: ImdbList, today: String, country: String): List<ImdbPick>? =
+    Http.savedAnswer("https://api.graphql.imdb.com/", imdbListQuery(list, today, list.region ?: country))?.let { runCatching { parseImdbList(list, JSONObject(it)) }.getOrNull() }
 
 /** The titles in IMDb's answer to [list], in its order; charts numbered from one, trailer lists only where a trailer exists. */
 internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {

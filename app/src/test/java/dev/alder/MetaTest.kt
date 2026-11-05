@@ -136,6 +136,8 @@ class MetaTest {
         assertTrue(imdbListQuery(ImdbList.TOP_TV, "2026-11-05").contains("rankingsChartType:TOP_250_TV"))
         assertTrue(imdbListQuery(ImdbList.HOT_MOVIES, "2026-11-05").contains("MOST_POPULAR_MOVIES"))
         assertTrue(imdbListQuery(ImdbList.RECENT, "2026-11-05").contains("contentTypes:[TRAILER]"))
+        assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05", "US").startsWith("{\"query\":\"query CAS_US{"))
+        assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05", "US") != imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05", "GB"))
     }
 
     @Test fun imdbTrailerEmptyWhenNoVideos() {
