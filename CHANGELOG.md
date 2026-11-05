@@ -11,7 +11,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.20.1
+Put changes that are not released under `## 1.20.2
+
+- The IMDb page is in the TV and Films style throughout: all eight lists as poster rows under the hero, the trailer lists included, with "In cinemas 6 Nov" in the hero line for a title not yet out. Preview stays on every title page, unreleased or not (Alan: trending titles often have files already).
+
+## 1.20.1
 
 - A trailer card on the IMDb page opens the title page, as TV and Film cards do, rather than playing in a box over the rows (Alan's call): Play, Trailer, cast, director, My List and your lists are all there. Its Trailer button plays the trailer the card showed. The page says when the title is out ("In cinemas 6 Nov") from IMDb's date when the add-on has none, and offers no Preview for a title that isn't out yet.
 

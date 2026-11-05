@@ -2072,10 +2072,10 @@ class MainActivity : Screen() {
     private fun comingSoonFrom(): String = java.time.LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString()
 
     /**
-     * The IMDb page: IMDb's own lists, each a row. The four from imdb.com/trailers first (trending, most anticipated,
-     * popular, newest), as wide cards of the trailer's still, then its charts (Top 250 films and TV, most popular
-     * films and TV) as numbered posters. OK opens the title page as anywhere, where Trailer plays the trailer the
-     * card showed. Last time's lists first, from disk; today's replace them when they differ.
+     * The IMDb page, in the TV and Films style: IMDb's own lists as poster rows under the hero. The four from
+     * imdb.com/trailers first (trending, most anticipated, popular, newest), then its charts (Top 250 films and TV,
+     * most popular films and TV), numbered. The hero adds when a title is out; OK opens the title page as anywhere,
+     * where Trailer plays the trailer IMDb listed. Last time's lists first, from disk; today's replace them.
      */
     private fun buildImdb(g: Int) {
         val today = java.time.LocalDate.now().toString()
@@ -2089,7 +2089,7 @@ class MainActivity : Screen() {
                 rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
                 slot.removeAllViews()
                 val items = picks.map { imdbItem(it, list, today) }
-                slot.addView(row(list.title, items.take(START), later(items), wide = list.trailers).view)
+                slot.addView(row(list.title, items.take(START), later(items)).view)
             }
             background({ savedImdbList(list, today) }) { r -> r.getOrNull()?.let(::show) }
             background({ imdbList(list, today) }) { r ->
@@ -2106,10 +2106,8 @@ class MainActivity : Screen() {
             else -> null
         }
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
-        return Item(pk.id, pk.type, pk.name, pk.poster, if (list.trailers) pk.still else null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = note,
-            corner = pk.seconds?.takeIf { list.trailers }?.let { "%d:%02d".format(it / 60, it % 60) },
-            trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
+        return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+            null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
     }
 
     private fun upcomingItem(u: Upcoming, p: Page): Item {

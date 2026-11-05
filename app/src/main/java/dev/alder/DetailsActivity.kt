@@ -319,8 +319,7 @@ class DetailsActivity : Screen() {
                     else choose("Trailer unavailable", listOf("OK"), "No trailer was found for this title.") {}
                 }
             } else null
-        // No Preview for a title that isn't out: there is nothing to preview, and the trailer leads instead.
-        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW) && comingOut == null)
+        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW))
             glassButton("Preview") { if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) } else null
         val recap = if (type == "series" && Settings.titlePage(this, SettingsActivity.TITLE_RECAP) && Profiles.active(this)?.kids != true)
             glassButton("Recap") { openRecap(m, episode?.season ?: selectedSeason) } else null
