@@ -201,34 +201,41 @@ class MetaTest {
         assertEquals(null, RtScores.of(JSONObject("{}")))
     }
 
-    @Test fun justWatchListsParseAndTheirCountriesAreInOrder() {
-        val json = JSONObject("""{"data":{"popularTitles":{"edges":[
-            {"node":{"id":"ts470797","objectType":"SHOW","content":{"title":"Below","originalReleaseYear":2026,"externalIds":{"imdbId":"tt35934755"},"posterUrl":"/poster/355537039/{profile}/bajo-la-superficie-2026.{format}"}}},
-            {"node":{"id":"ts296046","objectType":"SHOW","content":{"title":"Lupin","originalReleaseYear":2021,"externalIds":{"imdbId":null},"posterUrl":null}}},
-            {"node":{"id":"ts1","objectType":"SHOW","content":{"originalReleaseYear":2020}}}
-        ]}}}""")
-        val picks = parseJwList(json)
-        assertEquals(listOf("Below", "Lupin"), picks.map { it.title })
-        assertEquals("tt35934755" to 2026, picks[0].imdbId to picks[0].year)
-        assertEquals("https://images.justwatch.com/poster/355537039/s332/bajo-la-superficie-2026.jpg", picks[0].poster)
-        assertEquals(null to null, picks[1].imdbId to picks[1].poster)
-        assertEquals(emptyList<JwPick>(), parseJwList(JSONObject("""{"errors":[{"message":"x"}]}""")))
-        // The request names the country, the service's short names and films or series, as the site's own does.
-        val list = JwList(JW_COUNTRIES.first { it.code == "US" }.services.first { it.name == "Prime Video" }, tv = true)
-        val query = JSONObject(jwQuery("US", list))
+    @Test fun justWatchCountriesParseFromOneRequest() {
+        val us = JW_COUNTRIES.first { it.code == "US" }
+        val json = JSONObject("""{"data":{"l_nfx_film":{"edges":[
+            {"node":{"objectType":"MOVIE","content":{"title":"Animals","originalReleaseYear":2026,"shortDescription":"A kidnapping.","externalIds":{"imdbId":"tt31049299"},
+             "posterUrl":"/poster/1/{profile}/animals.{format}","genres":[{"shortName":"act"},{"shortName":"eur"},{"shortName":"trl"}],"scoring":{"imdbScore":5.7}}}},
+            {"node":{"objectType":"MOVIE","content":{"title":"Lupin","originalReleaseYear":2021,"externalIds":{"imdbId":null},"posterUrl":null,"genres":[],"scoring":{}}}},
+            {"node":{"objectType":"MOVIE","content":{"originalReleaseYear":2020}}}
+        ]},"l_amp_tv":{"edges":[]}}}""")
+        val lists = parseJwCountry(json, us)
+        assertEquals(us.services.size * 2, lists.size) // every row has its place, empty or not
+        val films = lists.getValue("nfx/film")
+        assertEquals(listOf("Animals", "Lupin"), films.map { it.title })
+        assertEquals("tt31049299" to 2026, films[0].imdbId to films[0].year)
+        assertEquals(listOf("Action", "Thriller") to "5.7", films[0].genres to films[0].rating)
+        assertEquals("https://images.justwatch.com/poster/1/s332/animals.jpg", films[0].poster)
+        assertEquals(null to null, films[1].imdbId to films[1].rating)
+        assertEquals(emptyList<JwPick>(), lists.getValue("amp/tv"))
+        assertEquals(emptyMap<String, List<JwPick>>(), parseJwCountry(JSONObject("""{"errors":[{"message":"x"}]}"""), us))
+        // The one request names the country once and every row under its own field, with the service's short names.
+        val query = JSONObject(jwCountryQuery(us))
         assertEquals("US", query.getJSONObject("variables").getString("country"))
-        assertEquals("""["amp","prv"]""", query.getJSONObject("variables").getJSONObject("filter").getJSONArray("packages").toString())
-        assertEquals("""["SHOW"]""", query.getJSONObject("variables").getJSONObject("filter").getJSONArray("objectTypes").toString())
-        assertEquals("Top 10 TV on Prime Video" to "amp/tv", list.title to list.key)
+        val text = query.getString("query")
+        assertTrue(text.contains("l_amp_tv: popularTitles(country: \$country, first: 10, sortBy: POPULAR, filter: {packages: [\"amp\",\"prv\"], objectTypes: [SHOW]})"))
+        assertTrue(text.contains("l_nfx_film: popularTitles") && text.contains("objectTypes: [MOVIE]"))
+        assertEquals("Top 10 TV on Prime Video" to "amp/tv", JwList(us.services[1], tv = true).let { it.title to it.key })
         // The chips are alphabetical, each country once, and every country has its services.
         assertEquals(JW_COUNTRIES.map { it.label }.sorted(), JW_COUNTRIES.map { it.label })
         assertEquals(JW_COUNTRIES.size, JW_COUNTRIES.map { it.code }.distinct().size)
         assertTrue(JW_COUNTRIES.all { it.services.size >= 6 })
-        // A finished row survives the trip to disk and back with its ranks.
-        val title = imdbPickOf(JSONObject("""{"id":"tt35934755","name":"Below","type":"series","year":"2026","genres":["Drama"],"rating":"7.1"}"""))!!
-        val back = JwTitle.of(JwTitle(3, picks[0].poster, title).json())!!
-        assertEquals(3 to "Below", back.rank to back.title.name)
-        assertEquals(picks[0].poster, back.poster)
+        // A placed title has the card's shape and survives the trip to disk and back with its rank.
+        val placed = jwTitle(films[0], "tt31049299", 3)
+        assertEquals("movie" to 3, placed.title.type to placed.title.rank)
+        val back = JwTitle.of(placed.json())!!
+        assertEquals(3 to "Animals", back.rank to back.title.name)
+        assertEquals(listOf("Action", "Thriller"), back.title.genres)
     }
 
     @Test fun imdbBoxOfficeAndSearchListsParse() {

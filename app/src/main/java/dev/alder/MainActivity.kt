@@ -1251,7 +1251,12 @@ class MainActivity : Screen() {
         }
         if (p == Page.LIBRARY) return
         if (p == Page.IMDB) return buildImdb(g)
-        if (p == Page.FOREIGN) return buildWebRows(webRows(Page.FOREIGN), g)
+        if (p == Page.FOREIGN) {
+            buildWebRows(webRows(Page.FOREIGN), g)
+            // The other countries fetched behind this one (one small request each), so the chips switch at once.
+            main.postDelayed({ if (g == generation) jwFetchAhead(foreignCountry()) }, FOREIGN_AHEAD_WAIT)
+            return
+        }
 
         var built = false
         var builtFrom: List<String>? = null // the add-ons the rows came from, to tell when Stremio's fresh list differs
@@ -1535,10 +1540,19 @@ class MainActivity : Screen() {
     /** The country the Foreign page shows: the one chosen on its chips, kept across visits; the United States to begin with. */
     private fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> JW_COUNTRIES.any { it.code == c } } ?: "US"
 
+    private var pendingCountry = ""
+    // As the rail's pages: a country opens once the remote rests on its chip, so passing along the chips opens nothing.
+    private val countrySwitch = Runnable {
+        if (pendingCountry != foreignCountry() && countryChips[pendingCountry]?.isFocused == true) {
+            Settings.setForeignCountry(this, pendingCountry)
+            showPage(Page.FOREIGN)
+        }
+    }
+
     /**
-     * The Foreign page's top line: one chip per country, alphabetical, the dot on the one in use. OK on another keeps
-     * it and rebuilds the page's rows for that country (its services differ: Stan in Australia, Canal+ in France),
-     * with the remote staying on the chip it pressed.
+     * The Foreign page's top line: one chip per country, alphabetical, the dot on the one in use. Resting on another
+     * keeps it and rebuilds the page's rows for that country (its services differ: Stan in Australia, Canal+ in
+     * France), with the remote staying on that chip; OK goes down into the rows.
      */
     private fun showCountryChips() {
         val hadFocus = genreStrip.hasFocus()
@@ -1552,10 +1566,14 @@ class MainActivity : Screen() {
         val current = foreignCountry()
         JW_COUNTRIES.forEach { c ->
             val control = chip(c.label, c.code == current).apply {
+                setOnFocusChangeListener { _, has ->
+                    main.removeCallbacks(countrySwitch)
+                    if (has && c.code != foreignCountry()) { pendingCountry = c.code; main.postDelayed(countrySwitch, SWITCH_WAIT) }
+                }
                 setOnClickListener {
-                    if (foreignCountry() == c.code) { firstRow()?.focusFirst(); return@setOnClickListener }
-                    Settings.setForeignCountry(this@MainActivity, c.code)
-                    showPage(Page.FOREIGN)
+                    main.removeCallbacks(countrySwitch)
+                    if (foreignCountry() == c.code) firstRow()?.focusFirst()
+                    else { pendingCountry = c.code; countrySwitch.run() }
                 }
             }
             countryChips[c.code] = control
@@ -2505,6 +2523,7 @@ class MainActivity : Screen() {
         const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
+        const val FOREIGN_AHEAD_WAIT = 2500L // ms after the Foreign page opens before the other countries are fetched behind it
         const val LOGO_W = 360 // the cinema's title logo
         const val LOGO_H = 100
         const val RADIUS = 10

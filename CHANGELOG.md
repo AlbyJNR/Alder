@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.31.0
+Put changes that are not released under `## 1.32.0
+
+- Foreign: a country changes as soon as the remote rests on its chip. You do not press OK. OK on the country in use goes down to its rows.
+- Foreign is faster. One request brings a whole country, all of its rows, with the poster, the plot, the IMDb score and the genres. Before, each row made two requests. The other countries are fetched behind the page, so the next chip shows at once.
+- A country's rows are kept in one file for the next start.
+
+## 1.31.0
 
 - A new Foreign page, with a globe in the rail: what is popular on each streaming service in another country. Select a country on the chips at the top (Argentina, Australia, Brazil, France, Italy, Japan, Spain, United States) and the rows change to that country. CAS keeps your choice.
 - Each service has two rows, its ten most popular films and its ten most popular series, with the rank on each card. The big services come first, then the country's own: Stan and BINGE in Australia, Globoplay in Brazil, Canal+ in France, Now TV and RaiPlay in Italy, U-NEXT in Japan, Movistar Plus+ in Spain, Hulu and Peacock in the United States.
