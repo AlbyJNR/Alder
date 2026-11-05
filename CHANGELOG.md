@@ -11,7 +11,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.22.0
+Put changes that are not released under `## 1.22.1
+
+- Popular on Peacock shows for everyone: Peacock streams only in the US, so that row is asked for there wherever the TV is. The other streaming rows still follow the TV's country.
+
+## 1.22.0
 
 - TV opens with IMDb's New series this month and Most popular TV above your catalogs; Movies with Most popular films and Top box office. The Coming soon rows (and their setting) go: the IMDb page carries that and more.
 - The IMDb page adds Most anticipated this month (the month's releases, films and series, most awaited first, as imdb.com's page of that name) and Popular on HBO Max. A Popular on Peacock row appears where Peacock streams (the US); it stays away in the UK.

@@ -348,15 +348,16 @@ class ImdbPick(
  * IMDb's lists on the IMDb page, in the order they first sit down it (the viewer can move them): the trailer lists
  * from imdb.com/trailers, the weekend box office (Box Office Mojo's chart, as IMDb carries it), what's on TV and
  * streaming in the TV's country (new series this month, then what's popular on each service), then IMDb's charts.
- * [provider] is IMDb's watch-provider id for the streaming rows.
+ * [provider] is IMDb's watch-provider id for the streaming rows; [region] pins a row to one country, for a service
+ * that streams only there (Peacock, the US), so every viewer gets the same rows.
  */
-enum class ImdbList(val title: String, val trailers: Boolean = false, val provider: String? = null) {
+enum class ImdbList(val title: String, val trailers: Boolean = false, val provider: String? = null, val region: String? = null) {
     TRENDING("Trending trailers", true), ANTICIPATED("Most anticipated", true), THIS_MONTH("Most anticipated this month"),
     POPULAR("Popular trailers", true), RECENT("New trailers", true),
     BOX_OFFICE("Top box office"), NEW_SERIES("New series this month"),
     ON_NETFLIX("Popular on Netflix", provider = "netflix"), ON_PRIME("Popular on Prime Video", provider = "prime_video"),
     ON_DISNEY("Popular on Disney+", provider = "disneyplus"), ON_APPLE("Popular on Apple TV+", provider = "appletv"),
-    ON_MAX("Popular on HBO Max", provider = "hbo_max"), ON_PEACOCK("Popular on Peacock", provider = "peacock"),
+    ON_MAX("Popular on HBO Max", provider = "hbo_max"), ON_PEACOCK("Popular on Peacock", provider = "peacock", region = "US"),
     TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV");
 }
 
@@ -400,10 +401,11 @@ private val imdbListCache = java.util.concurrent.ConcurrentHashMap<String, Pair<
 
 /** One of IMDb's lists, fresh, for the TV's [country] (ISO): an hour in memory, kept on disk for the next cold start ([savedImdbList]). Blocks. */
 internal fun imdbList(list: ImdbList, today: String, country: String): List<ImdbPick> {
-    val k = "$list/$today/$country"
+    val region = list.region ?: country
+    val k = "$list/$today/$region"
     imdbListCache[k]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.let { return it.second }
     val raw = Http.post("https://api.graphql.imdb.com/", imdbListQuery(list, today), keep = true, timeoutMs = 15_000,
-        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to country))
+        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to region))
     return parseImdbList(list, JSONObject(raw)).also { imdbListCache[k] = System.currentTimeMillis() to it }
 }
 
