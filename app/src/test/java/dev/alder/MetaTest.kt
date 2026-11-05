@@ -131,11 +131,33 @@ class MetaTest {
         val found = JSONObject("""{"d":[{"id":"nm1","l":"Someone"},{"id":"tt0316219","l":"Manhood","y":2003,"qid":"movie"},
             {"id":"tt39637432","l":"Manhood","y":2026,"qid":"movie"},{"id":"tt1","l":"Manhood: The Series","y":2025,"qid":"tvSeries"}]}""")
         assertEquals("tt39637432", imdbTitleFor("Manhood", 2026, found))
-        assertEquals(null, imdbTitleFor("Manhood", 2010, found))
+        assertEquals("tt0316219", imdbTitleFor("Manhood", 2010, found)) // no Manhood of 2008–2010: the same name from another year (a re-release)
+        assertEquals(null, imdbTitleFor("Womanhood", 2010, found))
         assertEquals("tt1", imdbTitleFor("Manhood: the series", 2026, found))
         assertEquals("https://v3.sg.media-imdb.com/suggestion/x/the%20last%20temptation.json", imdbSuggestUrl("The Last Temptation"))
         assertEquals(EBERT_FEED, ebertFeedUrl(1))
         assertEquals("$EBERT_FEED?paged=3", ebertFeedUrl(3))
+        assertEquals("tt1", imdbTitleFor("Manhood", null, found, IMDB_KINDS_TV)) // no series of that exact name: the one that starts so
+        assertEquals("tt0316219", imdbTitleFor("Manhood", null, found, IMDB_KINDS_FILM)) // no year: the first IMDb lists
+    }
+
+    @Test fun rottenTomatoesListsParse() {
+        val json = JSONObject("""{"title":"Best Certified Fresh Movies in Theaters","grid":{"list":[
+            {"title":"Clayface","type":"Movie","criticsScore":{"certified":true,"score":"78","sentiment":"positive"},"audienceScore":{"score":"94"},
+             "posterUri":"https://resizing.flixster.com/x.jpg","releaseDateText":"Opened Oct 23, 2026"},
+            {"title":"Nocturne","type":"TvSeries","criticsScore":{"certified":false,"score":"85"},"audienceScore":{},"releaseDateText":"Latest Episode: Oct 30"},
+            {"type":"Movie"}
+        ]},"pageInfo":{"startCursor":"MA==","endCursor":"Mjk=","hasNextPage":true}}""")
+        val (picks, next) = parseRtList(json)
+        assertEquals(listOf("Clayface", "Nocturne"), picks.map { it.title })
+        assertEquals(78 to true, picks[0].critics to picks[0].certified)
+        assertEquals(94, picks[0].audience)
+        assertEquals(2026, picks[0].year)
+        assertEquals(null, picks[1].year)
+        assertEquals(null, picks[1].audience)
+        assertEquals("Mjk=", next)
+        assertEquals(null, parseRtList(JSONObject("""{"grid":{"list":[]},"pageInfo":{"endCursor":"Mjk=","hasNextPage":false}}""")).second)
+        assertEquals("https://www.rottentomatoes.com/cnapi/browse/tv_series_browse/sort:popular?after=Mjk=", rtListUrl(RtList.POPULAR_TV, "Mjk="))
     }
 
     @Test fun imdbBoxOfficeAndSearchListsParse() {

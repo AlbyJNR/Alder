@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.24.0
+Put changes that are not released under `## 1.25.0
+
+- Two Rotten Tomatoes rows: Certified Fresh in cinemas on Movies, Popular TV on Rotten Tomatoes on TV, and both at the end of the IMDb page. The card shows the Tomatometer; the title line adds the audience score, the year and the IMDb rating.
+- Rotten Tomatoes names each title; IMDb supplies its poster and page. A title IMDb cannot find by name is left out.
+
+## 1.24.0
 
 - Roger Ebert: new reviews, a row on Movies and at the end of the IMDb page: the newest thirty reviews on RogerEbert.com, as posters. The card shows the critic's name; the title line shows their one-line verdict, with the film's year and IMDb rating.
 - The site's star ratings are not in the feed it publishes, and its pages do not open for a TV app, so the row has no stars. Its Great Movies and Streaming pages have no feed, so they are not in CAS.

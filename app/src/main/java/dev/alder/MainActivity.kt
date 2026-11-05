@@ -1247,6 +1247,8 @@ class MainActivity : Screen() {
                 val wanted = if (p == Page.MOVIES) listOf(ImdbList.HOT_MOVIES, ImdbList.BOX_OFFICE) else listOf(ImdbList.NEW_SERIES, ImdbList.HOT_TV)
                 wanted.filter { "${p.label}|${it.title}" !in hiddenSeen.orEmpty() }.forEach { imdbRow(slot(), it, g) }
                 if (p == Page.MOVIES && "${p.label}|$EBERT_ROW" !in hiddenSeen.orEmpty()) ebertRow(slot(), g)
+                val rt = if (p == Page.MOVIES) RtList.FRESH_IN_CINEMAS else RtList.POPULAR_TV
+                if ("${p.label}|${rt.title}" !in hiddenSeen.orEmpty()) rtRow(slot(), rt, g)
             }
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
@@ -2148,6 +2150,7 @@ class MainActivity : Screen() {
     private fun buildImdb(g: Int) {
         ImdbList.entries.forEach { imdbRow(slot(), it, g) }
         ebertRow(slot(), g)
+        RtList.entries.forEach { rtRow(slot(), it, g) }
     }
 
     /** One of IMDb's lists as a row in [slot]: last time's from disk at once, today's in its place when it differs. */
@@ -2204,22 +2207,43 @@ class MainActivity : Screen() {
      */
     private fun ebertRow(slot: LinearLayout, g: Int) {
         val today = java.time.LocalDate.now().toString()
+        fetchedRow(slot, EBERT_ROW, g) { country, offline -> ebertReviews(country, offline).map { ebertItem(it, today) } }
+    }
+
+    /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */
+    private fun rtRow(slot: LinearLayout, list: RtList, g: Int) =
+        fetchedRow(slot, list.title, g) { country, offline -> rtList(list, country, offline).map(::rtItem) }
+
+    /**
+     * A row whose titles come from the web in the background: [fetch] runs twice, first from what the last run kept
+     * on disk (offline), then live; each answer replaces the row only when its titles differ from those shown.
+     */
+    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, fetch: (country: String, offline: Boolean) -> List<Item>) {
         var shownIds = emptyList<String>()
-        fun show(picks: List<EbertPick>) {
-            val ids = picks.map { it.title.id }
-            if (g != generation || picks.isEmpty() || ids == shownIds) return
+        fun show(items: List<Item>) {
+            val ids = items.map { it.id }
+            if (g != generation || items.isEmpty() || ids == shownIds) return
             shownIds = ids
             rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
             slot.removeAllViews()
-            val items = picks.map { ebertItem(it, today) }
-            slot.addView(row(EBERT_ROW, items.take(START), later(items)).view)
+            slot.addView(row(title, items.take(START), later(items)).view)
         }
         val country = imdbCountry()
-        background({ ebertReviews(country, offline = true) }) { r -> r.getOrNull()?.let(::show) }
-        background({ ebertReviews(country) }) { r ->
-            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "RogerEbert.com reviews failed: $it") }
+        background({ fetch(country, true) }) { r -> r.getOrNull()?.let(::show) }
+        background({ fetch(country, false) }) { r ->
+            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "$title failed: $it") }
             r.getOrNull()?.let(::show)
         }
+    }
+
+    private fun rtItem(t: RtTitle): Item {
+        val pk = t.title
+        val rt = t.rt
+        val critics = rt.critics?.let { "Tomatometer $it%" + if (rt.certified) ", Certified Fresh" else "" }
+        val facts = listOfNotNull(critics, rt.audience?.let { "Audience $it%" }, pk.year, pk.rating?.let { "IMDb $it" })
+        val note = rt.critics?.let { if (rt.certified) "Certified Fresh $it%" else "Critics $it%" }
+        return Item(pk.id, pk.type, pk.name, pk.poster ?: rt.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+            null, 0f, resume = false, left = null, note = note, released = pk.date)
     }
 
     private fun ebertItem(e: EbertPick, today: String): Item {

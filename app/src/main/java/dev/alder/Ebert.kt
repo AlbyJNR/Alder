@@ -1,9 +1,5 @@
 package dev.alder
 
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.URLEncoder
-
 /**
  * RogerEbert.com's reviews, from the feed the site publishes for readers (its pages themselves are closed to anything
  * but a browser). The feed names the film as the site does, the critic, a one-line verdict and the day; the star
@@ -40,48 +36,17 @@ internal fun plainText(raw: String): String = raw
     .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&nbsp;", " ")
     .replace(Regex("\\s+"), " ").trim()
 
-/**
- * The IMDb title a review is about, by name, from IMDb's search-box lookup: the same name (ignoring case and
- * punctuation) and a year in the review's year or the two before it wins; failing that the first film or series of
- * that year; a title of another year is not trusted. Null when IMDb offers nothing that fits.
- */
-internal fun imdbTitleFor(name: String, year: Int?, json: JSONObject): String? {
-    fun key(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
-    val wanted = key(name)
-    val titles = json.optJSONArray("d").objects().filter { it.text("qid") in setOf("movie", "tvSeries", "tvMiniSeries", "tvMovie") }
-    fun yearFits(t: JSONObject) = year == null || t.optInt("y", 0).let { it in (year - 2)..year }
-    return (titles.firstOrNull { key(it.text("l").orEmpty()) == wanted && yearFits(it) }
-        ?: titles.firstOrNull { yearFits(it) && key(it.text("l").orEmpty()).startsWith(wanted) })?.text("id")
-}
-
-internal fun imdbSuggestUrl(name: String) =
-    "https://v3.sg.media-imdb.com/suggestion/x/${URLEncoder.encode(name.lowercase().take(60), "UTF-8").replace("+", "%20")}.json"
-
 private val ebertCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<EbertPick>>>()
 
-/**
- * The newest reviews with their IMDb titles, posters and ratings; reviews IMDb cannot place are left out. [offline]
- * reads only what the last run kept on disk (the feed pages, each lookup, the one titles request), for the row to
- * show at once; the live run then replaces it. One request for all the titles' details, not one per review.
- */
+/** The newest reviews with their IMDb titles, posters and ratings; reviews IMDb cannot place are left out. */
 internal fun ebertReviews(country: String, offline: Boolean = false): List<EbertPick> {
     if (!offline) ebertCache[country]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.let { return it.second }
-    val headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to country)
-    fun fetch(url: String, json: String? = null): String? =
-        if (offline) Http.savedAnswer(url, json)
-        else if (json == null) Http.get(url, keep = true, timeoutMs = 15_000)
-        else Http.post(url, json, keep = true, timeoutMs = 15_000, headers = headers)
+    val source = Source(country, offline)
     val reviews = (1..EBERT_PAGES).flatMap { p ->
-        runCatching { fetch(ebertFeedUrl(p))?.let(::parseEbertFeed) }.getOrElse { if (p == 1) throw it else null } ?: emptyList()
+        runCatching { source.text(ebertFeedUrl(p))?.let(::parseEbertFeed) }.getOrElse { if (p == 1) throw it else null } ?: emptyList()
     }
-    val found = reviews.mapNotNull { r ->
-        runCatching { fetch(imdbSuggestUrl(r.title))?.let { imdbTitleFor(r.title, r.year, JSONObject(it)) } }.getOrNull()?.let { r to it }
-    }
-    val ids = found.map { it.second }.distinct()
-    if (ids.isEmpty()) return emptyList()
-    val query = JSONObject().put("query", "query CAS_$country{titles(ids:${JSONArray(ids)}){$IMDB_TITLE_FIELDS}}").toString()
-    val titles = fetch("https://api.graphql.imdb.com/", query)?.let { JSONObject(it).optJSONObject("data")?.optJSONArray("titles").objects() }
-        ?.mapNotNull { imdbPick(it) }?.associateBy { it.id } ?: return emptyList()
+    val found = reviews.mapNotNull { r -> source.imdbId(r.title, r.year, IMDB_KINDS_ANY)?.let { r to it } }
+    val titles = source.imdbTitles(found.map { it.second })
     return found.mapNotNull { (r, id) -> titles[id]?.let { EbertPick(r, it) } }.distinctBy { it.title.id }
-        .also { if (!offline) ebertCache[country] = System.currentTimeMillis() to it }
+        .also { if (!offline && it.isNotEmpty()) ebertCache[country] = System.currentTimeMillis() to it }
 }
