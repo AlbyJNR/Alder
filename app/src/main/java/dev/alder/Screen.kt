@@ -140,7 +140,7 @@ internal fun filmTint(pixels: IntArray): Int {
         else -> (r - g) / (max - min) + 4
     } * 60
     // A little richer than the picture averages to (averaging dulls), capped so no room is garish.
-    sat = (sat * 1.35).coerceIn(0.0, 0.55)
+    sat = (sat * 1.5).coerceIn(0.0, 0.6)
     return hsl(hue, sat, TINT_LIGHTNESS)
 }
 
@@ -157,10 +157,17 @@ internal fun hsl(hue: Double, sat: Double, light: Double): Int {
     return (0xFF shl 24) or (ch(r1) shl 16) or (ch(g1) shl 8) or ch(b1)
 }
 
+/** [a] moved [t] of the way (0..1) to [b], channel by channel; alpha from [a]. */
+internal fun mix(a: Int, b: Int, t: Double): Int {
+    fun ch(shift: Int) = Math.round((a ushr shift and 255) + ((b ushr shift and 255) - (a ushr shift and 255)) * t).toInt()
+    return (a and 0xFF000000.toInt()) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+}
+
 /** [color] at [alpha] (0..255): the shades are one colour at many strengths. */
 internal fun withAlpha(color: Int, alpha: Int) = (alpha shl 24) or (color and 0xFFFFFF)
 
-internal const val TINT_LIGHTNESS = 0.085 // deep: a wall the art and white words sit on, not a colour of its own
+// Deep, but a colour a TV can show: at 0.085 the wall read as black from the sofa; the art and white words sit on it.
+internal const val TINT_LIGHTNESS = 0.15
 
 /** What every screen shares: the signed-in account, background work, and the few view helpers the plain UI uses. */
 abstract class Screen : Activity() {
@@ -290,7 +297,8 @@ abstract class Screen : Activity() {
     private fun shade(orientation: GradientDrawable.Orientation, alphas: IntArray) =
         GradientDrawable(orientation, IntArray(alphas.size) { withAlpha(tint, alphas[it]) }).also { tintedShades += it to alphas }
 
-    private fun leftShadeAlphas(bright: Boolean) = if (bright) intArrayOf(0xF7, 0xE0, 0x80, 0x00) else intArrayOf(0xEB, 0x00, 0x00)
+    // The text column sits on the wall (dense to about half the screen), the art stays sharp on the right.
+    private fun leftShadeAlphas(bright: Boolean) = if (bright) intArrayOf(0xF7, 0xD8, 0x70, 0x00) else intArrayOf(0xF2, 0xA8, 0x28, 0x00)
 
     /** Moves every shade to [color] over a moment, so a tint arriving after the art doesn't snap. */
     private fun setTint(color: Int) {
@@ -971,7 +979,7 @@ abstract class Screen : Activity() {
 
     // Focus by light: a column's rows under the remote at full brightness, the others stepped back.
     private val lightLevels = java.util.WeakHashMap<View, Float>()
-    private val lightAnimators = java.util.WeakHashMap<View, android.animation.ValueAnimator>()
+    private val restAlpha = java.util.WeakHashMap<View, Float>() // a row's parts as they were before the first dimming
 
     /**
      * How Apple's lyrics page shows where you are: the line under the remote is bright and sharp and the lines
@@ -998,26 +1006,18 @@ abstract class Screen : Activity() {
     }
 
     /**
-     * Draws the view at [level] of its brightness (1 = as it is) through a colour filter on a hardware layer: its
-     * words and glass dim together and what is transparent stays transparent, unlike a lower alpha, which rows
-     * already use for their own reasons (an unaired episode, an SD source).
+     * Shows a row at [level] of its brightness (1 = as it is) by fading what is in it: its words and marks, not the
+     * row itself, whose own alpha rows use for their own reasons (an unaired episode, an SD source) and whose
+     * background is the focus pill. A child's own alpha is kept and scaled, and restored when the row is lit again.
      */
     private fun View.light(level: Float) {
         val from = lightLevels[this] ?: 1f
         if (from == level) return
         lightLevels[this] = level
-        lightAnimators.remove(this)?.cancel()
-        val paint = Paint()
-        fun apply(l: Float) {
-            if (l >= 0.995f) { setLayerType(View.LAYER_TYPE_NONE, null); return }
-            paint.colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(floatArrayOf(
-                l, 0f, 0f, 0f, 0f, 0f, l, 0f, 0f, 0f, 0f, 0f, l, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
-            if (layerType != View.LAYER_TYPE_HARDWARE) setLayerType(View.LAYER_TYPE_HARDWARE, paint) else setLayerPaint(paint)
-        }
-        lightAnimators[this] = android.animation.ValueAnimator.ofFloat(from, level).apply {
-            duration = if (level < from) 180 else 120
-            addUpdateListener { apply(it.animatedValue as Float) }
-            start()
+        val parts = if (this is ViewGroup && childCount > 0) (0 until childCount).map { getChildAt(it) } else listOf(this)
+        for (part in parts) {
+            val rest = restAlpha.getOrPut(part) { part.alpha }
+            part.animate().alpha(rest * level).setDuration(if (level < from) 180 else 120).start()
         }
     }
 

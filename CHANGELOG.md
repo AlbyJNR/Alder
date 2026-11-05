@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
 
+## 1.15.1
+
+- The rows around the row under the remote now step back correctly. In 1.15.0 they did not change on Fire TV.
+- The colour around a title's art is lighter, so a TV can show it. The shade behind the title's words is denser.
+- In the player, the colour is half as strong, so it does not fight the picture.
+
 ## 1.15.0
 
 - **Each title brings its own colour.** The dark areas around a title's art on Home, on its page, on the sources page and in the player take the colour of the art. Before, they were always the same near-black.

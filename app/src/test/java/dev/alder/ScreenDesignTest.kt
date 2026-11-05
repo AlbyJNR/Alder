@@ -30,6 +30,7 @@ class ScreenDesignTest {
         assertEquals(0xFF0000FF.toInt(), hsl(240.0, 1.0, 0.5))
         assertEquals(0xFF808080.toInt(), hsl(0.0, 0.0, 0.5))
         assertEquals(0x80123456.toInt(), withAlpha(0xFF123456.toInt(), 0x80))
+        assertEquals(0xFF804020.toInt(), mix(0xFFFF8040.toInt(), 0xFF000000.toInt(), 0.5))
     }
 
     @Test fun shadeRespondsToBrightnessOnTheTextSide() {

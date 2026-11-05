@@ -141,8 +141,9 @@ class PlayerActivity : Screen() {
         next()
     }
 
-    // The title page's tint, so the controls' shades are this film's colour and not a fixed near-black.
-    private val room by lazy { intent.getIntExtra("tint", BASE) }
+    // The title page's tint, half way back to near-black: the shades lean to the film's colour without fighting
+    // whatever scene is paused under them (the poster's amber over a teal night street read as mud at full strength).
+    private val room by lazy { mix(intent.getIntExtra("tint", BASE), BASE, 0.5) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

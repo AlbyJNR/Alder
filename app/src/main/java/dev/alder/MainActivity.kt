@@ -176,11 +176,13 @@ class MainActivity : Screen() {
         val bright = pixels?.let { brightLeft(it, 16) } ?: false
         // The shades in the title's own colour ([filmTint]): each picture brings its room with it.
         val wall = pixels?.let(::filmTint) ?: BASE
+        // Dense behind the title's words (the left third), then letting go, so the art stays sharp on the right.
         val shade = Paint().apply {
-            shader = LinearGradient(0f, 0f, w * 0.55f, 0f,
-                withAlpha(wall, if (bright) 0xF7 else 0xEB), withAlpha(wall, 0), Shader.TileMode.CLAMP)
+            shader = LinearGradient(0f, 0f, w * 0.62f, 0f,
+                intArrayOf(withAlpha(wall, if (bright) 0xF7 else 0xF2), withAlpha(wall, if (bright) 0xD0 else 0xA0), withAlpha(wall, 0)),
+                floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
         }
-        canvas.drawRect(0f, 0f, w * 0.55f, h.toFloat(), shade)
+        canvas.drawRect(0f, 0f, w * 0.62f, h.toFloat(), shade)
         shade.shader = LinearGradient(0f, h.toFloat(), 0f, h * 0.55f, withAlpha(wall, 0xF7), withAlpha(wall, 0), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, h * 0.55f, w.toFloat(), h.toFloat(), shade)
         shade.shader = LinearGradient(0f, 0f, 0f, h * 0.14f, withAlpha(wall, 0x8C), withAlpha(wall, 0), Shader.TileMode.CLAMP)
