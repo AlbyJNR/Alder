@@ -116,7 +116,8 @@ class MainActivity : Screen() {
     private val listFilterChips = mutableMapOf<ListFilter, TextView>()
     private val listSortChips = mutableMapOf<ListSort, TextView>()
     private var lastListChip: TextView? = null
-    private val navItems = mutableMapOf<Page, ImageView>()
+    private val navItems = mutableMapOf<Page, View>()
+    private lateinit var wordmark: View // "CAS", top right, now that the rail holds the pages
     private var page = Page.HOME
     private val Page.isCatalog get() = this == Page.SHOWS || this == Page.MOVIES
     private var mode = Mode.BROWSE
@@ -134,7 +135,7 @@ class MainActivity : Screen() {
     private lateinit var listCount: TextView
     private lateinit var listHint: TextView
     private lateinit var heroAdded: TextView
-    private var search: ImageView? = null
+    private var search: View? = null
     private val rows = mutableListOf<Row>()
     private var focusedSomething = false
     private val metas = mutableMapOf<String, Meta>() // full details, fetched once per title
@@ -318,14 +319,14 @@ class MainActivity : Screen() {
             track = FrameLayout(context).apply { alpha = 0f }
             thumb = View(context).apply { background = rounded(0xB3FFFFFF.toInt(), 2) }
             track.addView(thumb, FrameLayout.LayoutParams(-1, dp(12)))
-            addView(track, FrameLayout.LayoutParams(dp(2), dp(CARD_H)).apply { leftMargin = dp(PAD) / 2; topMargin = rowTop + headingH + dp(ROW_TOP_ROOM) })
+            addView(track, FrameLayout.LayoutParams(dp(2), dp(CARD_H)).apply { leftMargin = dp(EDGE) - dp(14); topMargin = rowTop + headingH + dp(ROW_TOP_ROOM) })
             moreHint = ImageView(context).apply { setImageResource(R.drawable.ic_back); scaleX = -1f; alpha = 0f }
             addView(moreHint, FrameLayout.LayoutParams(dp(32), dp(32), Gravity.END).apply {
                 rightMargin = (dp(PAD) - dp(32)) / 2; topMargin = rowTop + headingH + dp(ROW_TOP_ROOM + CARD_H / 2 - 16)
             })
             cardCaption = caption("").apply { visibility = View.GONE }
             addView(cardCaption, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-                leftMargin = dp(PAD); bottomMargin = dp(CAPTION_BOTTOM)
+                leftMargin = dp(EDGE); bottomMargin = dp(CAPTION_BOTTOM)
             })
             nextRowHint = caps("").apply { visibility = View.GONE }
             addView(nextRowHint, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
@@ -333,7 +334,7 @@ class MainActivity : Screen() {
             })
             listCount = text("", SMALL, color = TEXT_3).apply { visibility = View.GONE }
             addView(listCount, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
-                leftMargin = dp(PAD); topMargin = dp(232)
+                leftMargin = dp(EDGE); topMargin = dp(232)
             })
             // On glass: it sits over the next row's posters.
             listHint = text("Hold OK for options", SMALL, color = TEXT_2).apply {
@@ -348,7 +349,7 @@ class MainActivity : Screen() {
             addView(browseInfo(), FrameLayout.LayoutParams(dp(HERO_W + 2 * FOCUS_ROOM), -2, Gravity.BOTTOM).apply {
                 heroBottom = screenH - rowTop + dp(HERO_GAP)
                 // Room inside the block for the focused Resume to grow into (it was cut flat on the left).
-                leftMargin = dp(PAD - FOCUS_ROOM); bottomMargin = heroBottom
+                leftMargin = dp(EDGE - FOCUS_ROOM); bottomMargin = heroBottom
             })
             addView(stage(), FrameLayout.LayoutParams(-1, -1))
             genreStrip = HorizontalScrollView(context).apply {
@@ -356,9 +357,11 @@ class MainActivity : Screen() {
                 visibility = View.GONE
             }
             addView(genreStrip, FrameLayout.LayoutParams(-1, dp(44), Gravity.TOP).apply {
-                topMargin = dp(HEADER_H + 6)
+                topMargin = dp(22) // level with the wordmark: no top bar above it now
             })
-            addView(header().apply { alpha = 0f }, FrameLayout.LayoutParams(-1, dp(HEADER_H))) // fades in if the page wants it
+            wordmark = brand().apply { alpha = 0f }
+            addView(wordmark, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(26); rightMargin = dp(PAD) })
+            addView(header().apply { alpha = 0f }, FrameLayout.LayoutParams(-2, -1, Gravity.START)) // fades in if the page wants it
         })
 
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, now ->
@@ -524,7 +527,7 @@ class MainActivity : Screen() {
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN && (page.isCatalog || page == Page.LIBRARY) && mode == Mode.BROWSE) {
-            if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && header.hasFocus()) {
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && header.hasFocus()) {
                 (if (page == Page.LIBRARY) lastListChip ?: listFilterChips[listFilter] else genreChips[genre])
                     ?.requestFocus()?.let { if (it) return true }
                 if (page.isCatalog && genreStrip.visibility != View.VISIBLE && firstRow()?.focusFirst() == true) return true
@@ -538,8 +541,14 @@ class MainActivity : Screen() {
                 } == true) {
                 (if (page == Page.LIBRARY) lastListChip ?: listFilterChips[listFilter] else genreChips[genre])
                     ?.requestFocus()?.let { if (it) return true }
-                if (page.isCatalog && genreStrip.visibility != View.VISIBLE && navItems[page]?.requestFocus() == true) return true
             }
+        }
+        // Left from the first card of a row, or the first chip, opens the rail on the page you're on: the focus
+        // search alone would land on whichever entry is nearest in height.
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT && event.action == KeyEvent.ACTION_DOWN && mode == Mode.BROWSE &&
+            (scroller.hasFocus() || genreStrip.hasFocus())) {
+            val next = currentFocus?.focusSearch(View.FOCUS_LEFT)
+            if (next == null || isInside(next, header)) { if (navItems[page]?.requestFocus() == true) return true }
         }
         if (event.action == KeyEvent.ACTION_DOWN && scroller.hasFocus() && mode == Mode.BROWSE &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
@@ -553,16 +562,18 @@ class MainActivity : Screen() {
                 }
             }
         }
-        // Up from Home's row goes to the top bar by hand: while the row slides after fast Right presses, the focus
-        // search measures the moving card and sometimes finds nothing above it.
+        // Up from the top row stays put: the rail is to the left, nothing is above.
         if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP && event.action == KeyEvent.ACTION_DOWN && page == Page.HOME &&
-            mode == Mode.BROWSE && currentFocus?.let { f -> firstRow()?.view?.let { isInside(f, it) } } == true) {
-            if (navItems[page]?.requestFocus() == true) return true
-        }
-        // Down from the top bar goes to the titles, past Resume (one Up from the cards), to where the remote last was.
-        if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && event.action == KeyEvent.ACTION_DOWN && header.hasFocus()) {
+            mode == Mode.BROWSE && currentFocus?.let { f -> firstRow()?.view?.let { isInside(f, it) } } == true) return true
+        // Right from the rail goes to the titles, past Resume (one Up from the cards), to where the remote last was.
+        if (event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && event.action == KeyEvent.ACTION_DOWN && header.hasFocus()) {
             val to = last?.takeIf { it.isAttachedToWindow && it.isShown } ?: firstRow()?.let { it.cards[it.selected] }
             if (to != null) { to.requestFocus(); return true }
+        }
+        // Up and Down stay on the rail (past its ends, the focus search would wander into the rows); Left has nowhere to go.
+        if (event.action == KeyEvent.ACTION_DOWN && header.hasFocus() && event.keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT)) {
+            val next = currentFocus?.focusSearch(when (event.keyCode) { KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP; KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN; else -> View.FOCUS_LEFT })
+            if (next == null || !isInside(next, header)) return true
         }
         return super.dispatchKeyEvent(event)
     }
@@ -572,6 +583,7 @@ class MainActivity : Screen() {
         homeDimmed = on
         val alpha = if (on) 0.3f else 1f
         header.animate().alpha(alpha).setDuration(400).start()
+        wordmark.animate().alpha(alpha).setDuration(400).start()
         scroller.animate().alpha(alpha).setDuration(400).start()
         browseInfo.animate().alpha(if (heroItem == null) 0f else alpha).setDuration(400).start()
         cardCaption.animate().alpha(alpha).setDuration(400).start()
@@ -589,58 +601,76 @@ class MainActivity : Screen() {
         finish()
     }
 
-    // ---------- top bar ----------
+    // ---------- the rail ----------
 
+    private lateinit var nav: LinearLayout // the capsule of entries
+    private lateinit var profileEntry: View
+    private val railIcons = mutableMapOf<View, ImageView>()
+    private val railLabels = mutableMapOf<View, View>()
+    private var railOpen = false
+
+    /** One rail entry: a glyph, and its word once the rail is open. Focus lights the whole row. */
+    private fun entry(icon: Int, label: String): LinearLayout = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        isFocusable = true
+        contentDescription = label
+        val glyph = ImageView(context).apply { setImageResource(icon); setPadding(dp(9), dp(9), dp(9), dp(9)) }
+        addView(glyph, LinearLayout.LayoutParams(dp(RAIL_ICON), dp(RAIL_ICON)))
+        val word = text(label, BODY, bold = true).apply { visibility = View.GONE; setPadding(dp(2), 0, dp(18), 0) }
+        addView(word, LinearLayout.LayoutParams(-2, -2))
+        railIcons[this] = glyph
+        railLabels[this] = word
+        setOnFocusChangeListener { _, _ -> styleNav() }
+    }
+
+    /**
+     * Netflix's rail (2026): a slim column of glyphs on the left, which opens into a panel of words as the remote
+     * comes across to it. Your profile first, then Search and the pages. The open page is lit, the focused entry
+     * white; the rows behind step back while the panel is open.
+     */
     private fun header(): View {
         header = object : FrameLayout(this) {
-            // Coming up from below, the remote lands on the page you're on.
+            // Coming across from the rows, the remote lands on the page you're on.
             override fun addFocusables(views: ArrayList<View>, direction: Int, focusableMode: Int) {
                 val current = navItems[page]
-                if (hasFocus() || direction != View.FOCUS_UP || current == null) super.addFocusables(views, direction, focusableMode)
+                if (hasFocus() || direction != View.FOCUS_LEFT || current == null) super.addFocusables(views, direction, focusableMode)
                 else views.add(current)
             }
-        }.apply { setPadding(dp(PAD), dp(18), dp(PAD), dp(6)) }
+        }
+        nav = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            background = rounded(0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
+            layoutTransition = android.animation.LayoutTransition().apply { enableTransitionType(android.animation.LayoutTransition.CHANGING) }
+        }
+        fun <V : View> V.inNav() = apply { nav.addView(this, LinearLayout.LayoutParams(-2, dp(RAIL_ICON)).apply { if (nav.childCount > 0) topMargin = dp(NAV_GAP) }) }
 
-        // The profile: a small round avatar on the margin. OK opens a small menu (switch profile, settings).
-        val avatar = text(profile.name.take(1).uppercase(), SMALL, bold = true, color = TUNGSTEN).apply {
-            gravity = Gravity.CENTER
-            contentDescription = "Profile"
-            val rest = glassOver(this, 20)
-            fun style(focused: Boolean) {
-                background = if (focused) glass(20, true) else rest
-                setTextColor(TUNGSTEN)
-                grow(focused).start()
-            }
-            style(false)
-            isFocusable = true
-            setOnFocusChangeListener { _, has -> style(has) }
-            setOnClickListener { profileMenu() }
-        }
-        // Every destination in one dark capsule, Search first as an icon (Left from Home), like Google TV's top bar.
-        val nav = LinearLayout(this).apply {
+        // The profile: the avatar, and open, the name over "Switch profile". OK opens the small menu (switch, settings).
+        profileEntry = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-        }
-        // A gap between pills, so the open page's and the focused one never touch.
-        fun <V : View> V.inNav(width: Int = -2, height: Int = -2) = apply {
             isFocusable = true
-            nav.addView(this, LinearLayout.LayoutParams(width, height).apply { if (nav.childCount > 0) marginStart = dp(NAV_GAP) })
-        }
-        // As tall as the words' pills (match parent), the glyph 18 dp inside it.
-        if (!profile.kids) search = ImageView(this).apply {
-            setImageResource(R.drawable.ic_search)
-            contentDescription = "Search"
-            setPadding(dp(13), dp(7), dp(13), dp(7))
+            contentDescription = "Profile"
+            val avatar = text(profile.name.take(1).uppercase(), SMALL, bold = true, color = TUNGSTEN).apply {
+                gravity = Gravity.CENTER
+                background = rounded(0x33FFFFFF, 14)
+            }
+            addView(FrameLayout(context).apply { addView(avatar, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER)) },
+                LinearLayout.LayoutParams(dp(RAIL_ICON), dp(RAIL_ICON)))
+            val words = column(Gravity.START, text(profile.name, BODY, bold = true).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(150) },
+                text("Switch profile", SMALL, color = TEXT_2)).apply { visibility = View.GONE; setPadding(dp(2), 0, dp(18), 0) }
+            addView(words, LinearLayout.LayoutParams(-2, -2))
+            railLabels[this] = words
             setOnFocusChangeListener { _, _ -> styleNav() }
+            setOnClickListener { profileMenu() }
+        }.inNav()
+        nav.addView(View(this).apply { setBackgroundColor(GLASS_EDGE) }, LinearLayout.LayoutParams(-1, dp(1)).apply { setMargins(dp(10), dp(8), dp(10), dp(8) - dp(NAV_GAP)) })
+
+        if (!profile.kids) search = entry(R.drawable.ic_search, "Search").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, SearchActivity::class.java)) }
-        }.inNav(width = dp(NAV_W), height = dp(NAV_H))
-        // Every page a glyph in the capsule, as Search already was: the open page lit, the focused one on white.
-        // A page opens as soon as the remote rests on its glyph. OK on Shows or Movies goes to its genres.
+        }.inNav()
+        // A page opens as soon as the remote rests on its entry. OK on TV or Movies goes to its genres.
         Page.entries.filter { it != Page.LIVE && (!profile.kids || it == Page.HOME) }.forEach { p ->
-            navItems[p] = ImageView(this).apply {
-                setImageResource(p.icon)
-                contentDescription = p.label
-                setPadding(dp(13), dp(7), dp(13), dp(7))
+            navItems[p] = entry(p.icon, p.label).apply {
                 setOnFocusChangeListener { _, has ->
                     styleNav()
                     main.removeCallbacks(switchPage)
@@ -655,12 +685,9 @@ class MainActivity : Screen() {
                         else -> firstRow()?.focusFirst()
                     }
                 }
-            }.inNav(width = dp(NAV_W), height = dp(NAV_H))
+            }.inNav()
         }
-        nav.background = rounded(0xCC18191D.toInt(), NAV_R + 4)
-        header.addView(brand(), FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
-        header.addView(nav, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
-        header.addView(avatar, FrameLayout.LayoutParams(dp(34), dp(34), Gravity.END or Gravity.CENTER_VERTICAL))
+        header.addView(nav, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(RAIL_X) })
         styleNav()
         return header
     }
@@ -677,22 +704,36 @@ class MainActivity : Screen() {
         }
     }
 
-    /**
-     * A lit pill follows the remote (as on Search); a tungsten dot marks the open page.
-     */
+    /** The focused entry on white, the open page lit; the words only while the rail is open, the rows shaded behind it. */
     private fun styleNav() {
-        navItems.forEach { (p, item) ->
+        if (!::nav.isInitialized) return
+        val open = header.hasFocus()
+        val entries = navItems.map { (p, v) -> v to p } + listOfNotNull(search?.let { it to null }, profileEntry to null)
+        entries.forEach { (item, p) ->
             val focused = item.isFocused
+            val current = p != null && p == page
             item.background = when {
-                focused -> rounded(TEXT, NAV_R)
-                p == page -> rounded(0x33FFFFFF, NAV_R)
+                focused -> rounded(TEXT, RAIL_ICON / 2)
+                current -> rounded(0x33FFFFFF, RAIL_ICON / 2)
                 else -> null
             }
-            item.setColorFilter(if (focused) BASE else if (p == page) TEXT else TEXT_2)
+            val colour = if (focused) BASE else if (current) TEXT else TEXT_2
+            railIcons[item]?.setColorFilter(colour)
+            railLabels[item]?.let { word ->
+                word.visibility = if (open) View.VISIBLE else View.GONE
+                (word as? TextView)?.setTextColor(colour)
+                (word as? LinearLayout)?.let { col -> (0 until col.childCount).forEach { i -> (col.getChildAt(i) as? TextView)?.setTextColor(if (focused) BASE else if (i == 0) TEXT else TEXT_2) } }
+            }
         }
-        search?.let {
-            it.background = if (it.isFocused) rounded(TEXT, NAV_R) else null
-            it.setColorFilter(if (it.isFocused) BASE else TEXT_2)
+        if (open != railOpen) {
+            railOpen = open
+            if (mode == Mode.BROWSE && !homeDimmed) {
+                val alpha = if (open) RAIL_SHADE else 1f
+                scroller.animate().alpha(alpha).setDuration(220).start()
+                if (heroItem != null) browseInfo.animate().alpha(alpha).setDuration(220).start()
+                genreStrip.animate().alpha(alpha).setDuration(220).start()
+                cardCaption.animate().alpha(alpha).setDuration(220).start()
+            }
         }
     }
 
@@ -749,6 +790,7 @@ class MainActivity : Screen() {
         val cinemaOn = mode == Mode.CINEMA
         val headerOn = !cinemaOn || header.hasFocus()
         header.animate().alpha(if (headerOn) 1f else 0f).setDuration(250).start()
+        wordmark.animate().alpha(if (headerOn) 1f else 0f).setDuration(250).start()
         topShade.animate().alpha(if (headerOn) 1f else 0f).setDuration(250).start()
         // Lighter in the cinema (only its few words sit low on the left), full while browsing under the cards.
         browseInfo.animate().alpha(if (cinemaOn || heroItem == null) 0f else 1f).setDuration(250).start()
@@ -996,7 +1038,7 @@ class MainActivity : Screen() {
     }
 
     private fun placeCaption() {
-        cardCaption.translationX = minOf(captionX, cardCaption.rootView.width - 2 * dp(PAD) - cardCaption.width).coerceAtLeast(0).toFloat()
+        cardCaption.translationX = minOf(captionX, cardCaption.rootView.width - dp(EDGE) - dp(PAD) - cardCaption.width).coerceAtLeast(0).toFloat()
         clearHint()
     }
 
@@ -1103,7 +1145,7 @@ class MainActivity : Screen() {
             if (failedShown || isFinishing || page != p) return
             failedShown = true
             val view = failed("Couldn't reach Stremio. Check the TV's connection.") { showPage(page) }
-            content.addView(view, 0, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(PAD) })
+            content.addView(view, 0, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(EDGE) })
             view.post { if (!focusedSomething && !header.hasFocus()) view.getChildAt(2).requestFocus() }
         }
 
@@ -1181,7 +1223,7 @@ class MainActivity : Screen() {
             // A Kids profile's Home is Continue and its own lists, nothing from the catalogs.
             if (profile.kids && p == Page.HOME) {
                 val note = text("Nothing here yet. A grown-up can hold OK on a title to put it in a list for you.", SMALL, color = TEXT_3)
-                    .apply { setPadding(dp(PAD), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+                    .apply { setPadding(dp(EDGE), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
                 content.addView(note)
                 homeEmptyNote = note
                 return
@@ -1198,7 +1240,7 @@ class MainActivity : Screen() {
                 // that row peeked into the caption band at the bottom of the screen.
                 val note = text(if (p == Page.HOME) "Picks for you appear here once Watchly is installed on this profile's Stremio account."
                     else "None of your add-ons has $what catalogs. Add one (AIOMetadata, Cinemeta) in Stremio.", SMALL, color = TEXT_3)
-                    .apply { setPadding(dp(PAD), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+                    .apply { setPadding(dp(EDGE), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
                 content.addView(note)
                 if (p == Page.HOME) homeEmptyNote = note
             }
@@ -1393,7 +1435,7 @@ class MainActivity : Screen() {
         listFilterChips.clear()
         listSortChips.clear()
         lastListChip = null
-        val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(PAD), dp(2), dp(PAD), dp(2)) }
+        val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(EDGE), dp(2), dp(PAD), dp(2)) }
         fun add(label: String, selected: Boolean, click: () -> Unit): TextView {
             val control = chip(label, selected).apply {
                 setOnFocusChangeListener { v, has ->
@@ -1445,7 +1487,7 @@ class MainActivity : Screen() {
         genreChips.clear()
         val line = LinearLayout(this).apply {
             clipChildren = false
-            setPadding(dp(PAD), dp(2), dp(PAD), dp(2))
+            setPadding(dp(EDGE), dp(2), dp(PAD), dp(2))
         }
         (listOf<String?>(null) + names).forEach { value ->
             val control = chip(value ?: "All", value == null).apply {
@@ -1549,7 +1591,7 @@ class MainActivity : Screen() {
             artBack.setImageDrawable(null)
             val message = if (all.isEmpty() && listFilter == ListFilter.ALL) "Titles you save with + appear here"
                 else "No ${if (listFilter == ListFilter.MOVIES) "movies" else if (listFilter == ListFilter.SHOWS) "shows" else "unwatched titles"} in My List"
-            slot.addView(text(message, BODY, color = TEXT_2).apply { setPadding(dp(PAD), dp(30), 0, 0) })
+            slot.addView(text(message, BODY, color = TEXT_2).apply { setPadding(dp(EDGE), dp(30), 0, 0) })
             return
         }
         val column = column(Gravity.START)
@@ -1712,7 +1754,7 @@ class MainActivity : Screen() {
         private var held = false // the remote's key is held down: the row glides instead of stepping
         val strip = LinearLayout(this@MainActivity).apply {
             // Room above and below for the focused card to grow into without being clipped.
-            setPadding(dp(PAD), dp(if (grid) LIST_TOP_ROOM else ROW_TOP_ROOM), dp(PAD), if (grid) dp(LIST_GAP) else dp(ROW_BOTTOM_ROOM))
+            setPadding(dp(EDGE), dp(if (grid) LIST_TOP_ROOM else ROW_TOP_ROOM), dp(PAD), if (grid) dp(LIST_GAP) else dp(ROW_BOTTOM_ROOM))
             clipToPadding = false
             cards.forEachIndexed { i, c -> addView(c, LinearLayout.LayoutParams(dp(cardW), dp(cardH)).apply { if (i > 0) marginStart = dp(if (grid) LIST_GAP else CARD_GAP) }) }
         }
@@ -1746,9 +1788,9 @@ class MainActivity : Screen() {
         // The row the remote is in has a bright title; the next one, peeking in below, is a quiet hint.
         // One line, always: the row band is measured for one, and a second would push the cards off the screen.
         private val heading = caps(title).onArt().apply {
-            setPadding(dp(PAD), 0, dp(PAD), 0)
+            setPadding(dp(EDGE), 0, dp(PAD), 0)
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-            maxWidth = dp(PAD + HERO_W) // a long "Because you watched…" stops at the hero's width
+            maxWidth = dp(EDGE + HERO_W) // a long "Because you watched…" stops at the hero's width
             alpha = QUIET
             if (grid) visibility = View.GONE
         }
@@ -1772,7 +1814,7 @@ class MainActivity : Screen() {
 
         private fun showVisibleCards() {
             val x = scroller.scrollX
-            cards.forEach { it.show(it.isFocused || (it.right - x > dp(PAD) && it.left - x < scroller.width)) }
+            cards.forEach { it.show(it.isFocused || (it.right - x > dp(EDGE) && it.left - x < scroller.width)) }
         }
 
         /**
@@ -1809,7 +1851,7 @@ class MainActivity : Screen() {
             val right = scroller.width - dp(PAD) / 2
             showVisibleCards()
             // The caption sits under the focused card, also where the row stops sliding near its end.
-            captionX = (cards[index].left - targetScroll - dp(PAD)).coerceAtLeast(0)
+            captionX = (cards[index].left - targetScroll - dp(EDGE)).coerceAtLeast(0)
             val beyond = cards.any { it.right - targetScroll > right }
             moreHint.animate().alpha(if (beyond && mode == Mode.BROWSE && page != Page.HOME && !page.isCatalog) 0.9f else 0f).setDuration(200).start()
             moreHint.translationY = if (wide) dp(CARD_H - WIDE_H + WIDE_H / 2 - CARD_H / 2).toFloat() else 0f
@@ -2211,8 +2253,10 @@ class MainActivity : Screen() {
         const val INFO_W = 360 // the cinema's line
         const val NAV_R = 18 // dp: the top bar's pills
         const val NAV_GAP = 4 // dp between them
-        const val NAV_W = 44 // dp, a glyph's pill
-        const val NAV_H = 34
+        const val RAIL_X = 16 // dp from the screen's edge to the rail
+        const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
+        const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
+        const val RAIL_SHADE = 0.35f // the rows' alpha while the rail is open over them
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
         const val LOGO_W = 360 // the cinema's title logo

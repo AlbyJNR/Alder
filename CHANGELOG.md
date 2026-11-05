@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
+Put changes that are not released under `## 1.18.0
+
+- The pages have moved to a rail on the left of Home, as Netflix's new television layout has them: a slim column of glyphs that opens into a panel of words as the remote comes across to it. Your profile sits first (with "Switch profile" under your name once open), then Search, Home, TV, Movies and Library. The open page is lit; the rows step back while the panel is open.
+- Left from the first card of a row, or from the first chip, opens the rail on the page you're on; Right goes back to where the remote was. Back from the rows still goes to the chips, then the rail.
+- The rows, the hero, captions and chips begin a little further in, clear of the rail. The CAS wordmark sits top right. Genre and list chips sit at the top of the page now that no bar is above them.
+
+## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
 
 ## 1.17.0
 
