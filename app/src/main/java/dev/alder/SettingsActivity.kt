@@ -37,8 +37,13 @@ object Settings {
     /** Settings › Title page: each extra on a title's page is on unless turned off. Keys: TITLE_* in SettingsActivity. */
     fun titlePage(c: Context, key: String) = prefs(c).getBoolean(key, true)
     /** The Foreign page's country, by ISO code (JW_COUNTRIES); the last one chosen on its chips. */
-    fun foreignCountry(c: Context): String = prefs(c).getString("foreignCountry", null) ?: "US"
-    fun setForeignCountry(c: Context, code: String) = prefs(c).edit().putString("foreignCountry", code).apply()
+    fun foreignCountry(c: Context): String = prefs(c).getString("foreignCountry", null) ?: "ALL"
+    /** Chosen: kept, and (a country, not the World) put first among the three most recent for the chips. */
+    fun setForeignCountry(c: Context, code: String) {
+        val recent = if (code == "ALL") foreignRecent(c) else (listOf(code) + foreignRecent(c).filter { it != code }).take(3)
+        prefs(c).edit().putString("foreignCountry", code).putString("foreignRecent", recent.joinToString(",")).apply()
+    }
+    fun foreignRecent(c: Context): List<String> = prefs(c).getString("foreignRecent", "").orEmpty().split(',').filter { it.isNotEmpty() }
     /** Settings › Picture & sound › Screensaver: Home's cinema after IDLE without a key. */
     fun homeCinema(c: Context) = prefs(c).getBoolean("homeCinema", true)
     /** Where a trailer plays: "browser" (Silk or whatever browser), "app" (the YouTube app) or "box". Fire TV's engine plays sound but no picture in the box, however the window is arranged, so Fire TV starts on Silk. */

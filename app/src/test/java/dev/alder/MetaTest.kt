@@ -204,7 +204,7 @@ class MetaTest {
     @Test fun justWatchCountriesParseFromOneRequest() {
         val us = JW_COUNTRIES.first { it.code == "US" }
         val json = JSONObject("""{"data":{"l_nfx_film":{"edges":[
-            {"node":{"objectType":"MOVIE","content":{"title":"Animals","originalReleaseYear":2026,"shortDescription":"A kidnapping.","externalIds":{"imdbId":"tt31049299"},
+            {"node":{"objectType":"MOVIE","content":{"title":"Animals","originalTitle":"Animales","productionCountries":["FR","US"],"originalReleaseYear":2026,"shortDescription":"A kidnapping.","externalIds":{"imdbId":"tt31049299"},
              "posterUrl":"/poster/1/{profile}/animals.{format}","genres":[{"shortName":"act"},{"shortName":"eur"},{"shortName":"trl"}],"scoring":{"imdbScore":5.7}}}},
             {"node":{"objectType":"MOVIE","content":{"title":"Lupin","originalReleaseYear":2021,"externalIds":{"imdbId":null},"posterUrl":null,"genres":[],"scoring":{}}}},
             {"node":{"objectType":"MOVIE","content":{"originalReleaseYear":2020}}}
@@ -217,6 +217,9 @@ class MetaTest {
         assertEquals(listOf("Action", "Thriller") to "5.7", films[0].genres to films[0].rating)
         assertEquals("https://images.justwatch.com/poster/1/s332/animals.jpg", films[0].poster)
         assertEquals(null to null, films[1].imdbId to films[1].rating)
+        assertEquals("Animales", films[0].original)
+        assertEquals(countryName("FR"), films[0].countries.first())
+        assertEquals("ZZ", countryName("ZZ"))
         assertEquals(emptyList<JwPick>(), lists.getValue("amp/tv"))
         assertEquals(emptyMap<String, List<JwPick>>(), parseJwCountry(JSONObject("""{"errors":[{"message":"x"}]}"""), us))
         // The one request names the country once and every row under its own field, with the service's short names.
@@ -240,18 +243,24 @@ class MetaTest {
         assertTrue(best.contains("""excludeGenreIds:["Reality-TV","""))
         assertEquals("Highest rated Italian TV", italy.bestTitle(true))
         val ranked = parseBest(JSONObject("""{"data":{"advancedTitleSearch":{"edges":[
-            {"node":{"title":{"id":"tt2049116","titleText":{"text":"Gomorrah"},"titleType":{"id":"tvSeries"},"releaseYear":{"year":2014},"ratingsSummary":{"aggregateRating":8.6},"genres":{"genres":[{"text":"Crime"},{"text":"Drama"}]}}}},
+            {"node":{"title":{"id":"tt2049116","titleText":{"text":"Gomorrah"},"originalTitleText":{"text":"Gomorra"},"titleType":{"id":"tvSeries"},"releaseYear":{"year":2014},"ratingsSummary":{"aggregateRating":8.6},"genres":{"genres":[{"text":"Crime"},{"text":"Drama"}]},
+             "countriesOfOrigin":{"countries":[{"text":"Italy"},{"text":"Germany"}]},"spokenLanguages":{"spokenLanguages":[{"text":"Neapolitan"},{"text":"Italian"}]}}}},
             {"node":{"title":{"id":"tt10278918","titleText":{"text":"My Brilliant Friend"},"titleType":{"id":"tvSeries"},"ratingsSummary":{"aggregateRating":8.6}}}},
             {"node":{"title":{"titleText":{"text":"nameless"}}}}
         ]}}}"""))
         assertEquals(listOf("Gomorrah" to 1, "My Brilliant Friend" to 2), ranked.map { it.name to it.rank })
         assertEquals("series" to "8.6", ranked[0].type to ranked[0].rating)
+        assertEquals("Gomorra", ranked[0].original)
+        assertEquals(listOf("Italy", "Germany") to listOf("Neapolitan", "Italian"), ranked[0].countries to ranked[0].languages)
+        assertEquals(null, ranked[1].original) // the same title in both: nothing to repeat
+        assertTrue(IMDB_TITLE_FIELDS.contains("originalTitleText{text}") && IMDB_TITLE_FIELDS.contains("spokenLanguages{spokenLanguages{text}}"))
         // A placed title has the card's shape and survives the trip to disk and back with its rank.
         val placed = jwTitle(films[0], "tt31049299", 3)
         assertEquals("movie" to 3, placed.title.type to placed.title.rank)
         val back = JwTitle.of(placed.json())!!
         assertEquals(3 to "Animals", back.rank to back.title.name)
         assertEquals(listOf("Action", "Thriller"), back.title.genres)
+        assertEquals("Animales" to films[0].countries, back.title.original to back.title.countries)
     }
 
     @Test fun imdbBoxOfficeAndSearchListsParse() {

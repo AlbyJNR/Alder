@@ -355,18 +355,23 @@ class ImdbPick(
     val genres: List<String>, val rating: String?, val rank: Int?, val date: String?,
     val trailerId: String?, val still: String?, val seconds: Int?,
     val gross: String? = null, // the box office chart: "$42.1M weekend"
+    val original: String? = null, // the title in its own language, when it differs ("Gomorra")
+    val countries: List<String> = emptyList(), // where it was made, IMDb's names ("Italy", "Germany")
+    val languages: List<String> = emptyList(), // spoken, IMDb's names, the primary first ("Neapolitan", "Italian")
 )
 
 /** The pick as JSON, for a finished row kept on disk; [imdbPickOf] reads it back. */
 internal fun ImdbPick.json(): JSONObject = JSONObject().put("id", id).put("name", name).put("type", type).put("poster", poster).put("year", year)
     .put("plot", plot).put("genres", JSONArray(genres)).put("rating", rating).put("rank", rank).put("date", date)
     .put("trailerId", trailerId).put("still", still).put("seconds", seconds).put("gross", gross)
+    .put("original", original).put("countries", JSONArray(countries)).put("languages", JSONArray(languages))
 internal fun imdbPickOf(j: JSONObject): ImdbPick? {
     val id = j.text("id") ?: return null
     val name = j.text("name") ?: return null
     return ImdbPick(id, name, j.text("type") ?: "movie", j.text("poster"), j.text("year"), j.text("plot"), j.optJSONArray("genres").strings(),
         j.text("rating"), j.optInt("rank", 0).takeIf { it > 0 }, j.text("date"), j.text("trailerId"), j.text("still"),
-        j.optInt("seconds", 0).takeIf { it > 0 }, j.text("gross"))
+        j.optInt("seconds", 0).takeIf { it > 0 }, j.text("gross"),
+        j.text("original"), j.optJSONArray("countries").strings(), j.optJSONArray("languages").strings())
 }
 
 /**
@@ -386,7 +391,7 @@ enum class ImdbList(val title: String, val trailers: Boolean = false, val provid
     TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV");
 }
 
-internal const val IMDB_TITLE_FIELDS = "id titleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}"
+internal const val IMDB_TITLE_FIELDS = "id titleText{text}originalTitleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}countriesOfOrigin{countries{text}}spokenLanguages{spokenLanguages{text}}"
 private const val IMDB_CLIP_FIELDS = "id name{value}runtime{value}description{value}thumbnail{url}"
 
 /** The list's query, as imdb.com asks it ([today] ISO: the trailer lists split on the release date). */
@@ -462,6 +467,9 @@ internal fun imdbPick(t: JSONObject, clip: JSONObject? = null, rank: Int? = null
         clip?.text("id"), clip?.optJSONObject("thumbnail")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX640_.jpg"),
         clip?.optJSONObject("runtime")?.optInt("value", 0)?.takeIf { it > 0 },
         gross,
+        original = t.optJSONObject("originalTitleText")?.text("text")?.takeIf { !it.equals(name, true) },
+        countries = t.optJSONObject("countriesOfOrigin")?.optJSONArray("countries").objects().mapNotNull { it.text("text") },
+        languages = t.optJSONObject("spokenLanguages")?.optJSONArray("spokenLanguages").objects().mapNotNull { it.text("text") },
     )
 }
 

@@ -61,7 +61,8 @@ class JwList(val service: JwService, val tv: Boolean) {
 
 /** A title as JustWatch lists it: enough for a card and the title line without asking IMDb. */
 class JwPick(val imdbId: String?, val title: String, val year: Int?, val poster: String?, val tv: Boolean,
-             val plot: String?, val genres: List<String>, val rating: String?)
+             val plot: String?, val genres: List<String>, val rating: String?,
+             val original: String? = null, val countries: List<String> = emptyList())
 
 /** A placed title: its rank on the service and its details in the shape every other row uses. */
 class JwTitle(val rank: Int, val poster: String?, val title: ImdbPick) {
@@ -74,7 +75,7 @@ class JwTitle(val rank: Int, val poster: String?, val title: ImdbPick) {
 internal const val JW_URL = "https://apis.justwatch.com/graphql"
 internal const val JW_SIZE = 10
 
-private const val JW_FIELDS = "edges { node { objectType content(country: \$country, language: \"en\") { title originalReleaseYear shortDescription externalIds { imdbId } posterUrl genres { shortName } scoring { imdbScore } } } }"
+private const val JW_FIELDS = "edges { node { objectType content(country: \$country, language: \"en\") { title originalTitle productionCountries originalReleaseYear shortDescription externalIds { imdbId } posterUrl genres { shortName } scoring { imdbScore } } } }"
 
 /** JustWatch's genre codes, as words. */
 private val JW_GENRES = mapOf("act" to "Action", "ani" to "Animation", "cmy" to "Comedy", "crm" to "Crime", "doc" to "Documentary",
@@ -100,14 +101,21 @@ internal fun parseJwCountry(json: JSONObject, country: JwCountry): Map<String, L
             JwPick(c.optJSONObject("externalIds")?.text("imdbId")?.takeIf { it.startsWith("tt") }, name,
                 c.optInt("originalReleaseYear", 0).takeIf { it > 0 }, jwPoster(c.text("posterUrl")), l.tv,
                 c.text("shortDescription"), c.optJSONArray("genres").objects().mapNotNull { JW_GENRES[it.text("shortName")] },
-                c.optJSONObject("scoring")?.optDouble("imdbScore", 0.0)?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.US, it) })
+                c.optJSONObject("scoring")?.optDouble("imdbScore", 0.0)?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.US, it) },
+                c.text("originalTitle")?.takeIf { !it.equals(name, true) },
+                c.optJSONArray("productionCountries").strings().map { countryName(it) })
         }
     }
 }
 
 /** The pick in the shape the cards and the title line read, under its IMDb id. */
 internal fun jwTitle(p: JwPick, id: String, rank: Int) = JwTitle(rank, p.poster,
-    ImdbPick(id, p.title, if (p.tv) "series" else "movie", p.poster, p.year?.toString(), p.plot, p.genres, p.rating, rank, null, null, null, null))
+    ImdbPick(id, p.title, if (p.tv) "series" else "movie", p.poster, p.year?.toString(), p.plot, p.genres, p.rating, rank, null, null, null, null,
+        original = p.original, countries = p.countries))
+
+/** "FR" as "France", in the TV's language; a code Java does not know (or calls an unknown region) stays as it is. */
+internal fun countryName(code: String): String =
+    java.util.Locale("", code).displayCountry.takeIf { it.isNotEmpty() && !it.contains("unknown", ignoreCase = true) } ?: code
 
 /** JustWatch's poster path, "/poster/123/{profile}/name.{format}", as a picture of a card's width. */
 internal fun jwPoster(path: String?): String? = path?.let { "https://images.justwatch.com" + it.replace("{profile}", "s332").replace("{format}", "jpg") }

@@ -49,6 +49,8 @@ class DetailsActivity : Screen() {
     private val initialArt by lazy { intent.getStringExtra("background") }
     private val listedTrailer by lazy { intent.getStringExtra("trailer") } // IMDb's video id from the IMDb page: Trailer plays this one
     private val listedRelease by lazy { intent.getStringExtra("released") } // IMDb's release date, when the add-on has none
+    private val original by lazy { intent.getStringExtra("original") } // the title in its own language, from the Foreign page's rows
+    private val origin by lazy { intent.getStringExtra("origin") } // "Italy · Italian", the same way
 
     private lateinit var key: String
     override val backdrop get() = heroArt
@@ -216,9 +218,14 @@ class DetailsActivity : Screen() {
         } else {
             // The facts line and the critics' line are filled apart from the block, so a late number (the age rating,
             // Rotten Tomatoes) refills them where they are instead of rebuilding the controls under the remote.
+            // The title in its own language under the English one ("Gomorra"), when the rows knew it and it differs.
+            val own = original?.takeIf { it.isNotBlank() && !it.equals(m.name, true) }
+            if (own != null) stack.addView(text(own, SMALL, color = TEXT_2, serif = true).onArt().apply {
+                maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(2) })
             val facts = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; fillFacts(this, m) }
             factRow = facts
-            stack.addView(facts, wrap().apply { topMargin = dp(12) })
+            stack.addView(facts, wrap().apply { topMargin = dp(if (own != null) 8 else 12) })
             m.description?.takeIf { it.isNotBlank() }?.let {
                 stack.addView(text(it, BODY, color = TEXT).onArt().apply {
                     maxLines = 3; ellipsize = TextUtils.TruncateAt.END
@@ -302,7 +309,8 @@ class DetailsActivity : Screen() {
         row.removeAllViews()
         val length = if (type == "series") m.videos.map { it.season }.filter { it > 0 }.distinct().size
             .takeIf { it > 0 }?.let(::seasons) else m.runtime
-        val facts = listOfNotNull(m.year, m.genres.firstOrNull(), length).joinToString(DOT)
+        // Where it was made and in what language first, for a title that came from the Foreign page.
+        val facts = listOfNotNull(origin?.takeIf { it.isNotBlank() }, m.year, m.genres.firstOrNull(), length).joinToString(DOT)
         // The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it.
         val cert = certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
         if (cert != null) row.addView(text(cert, 10.5f, bold = true, color = TEXT_2).apply {

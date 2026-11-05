@@ -246,6 +246,9 @@ class MainActivity : Screen() {
         val corner: String? = null, // a wide card's corner label ("2:14" on a trailer) in place of the time left
         val trailerId: String? = null, // IMDb's video id for the trailer this card shows: the title page's Trailer plays it
         val released: String? = null, // ISO release date IMDb gave, for the title page when the add-on has none
+        val rank: Int? = null, // its place in a top ten or a highest-rated row: the numeral on the card
+        val original: String? = null, // the title in its own language, when it differs ("Gomorra")
+        val origin: String? = null, // "Italy · Italian": where it was made and its language
     ) {
         var newCount = newEpisodes
         val newEpisode get() = newCount > 0
@@ -1027,7 +1030,7 @@ class MainActivity : Screen() {
         // A show in progress describes its next episode, so the line names that episode rather than the show.
         val code = item.left?.split(DOT)?.firstOrNull { it.startsWith("S") && " E" in it }
         heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
-            else listOfNotNull(item.note, year, genre, length)).joinToString(DOT)
+            else listOfNotNull(item.original, item.note, year, genre, length, item.origin)).joinToString(DOT)
         showScores(item)
         main.removeCallbacks(scoresAhead)
         main.postDelayed(scoresAhead, SCORES_WAIT)
@@ -1118,6 +1121,7 @@ class MainActivity : Screen() {
             genreStrip.removeAllViews()
             genreChips.clear()
             countryChips.clear()
+            foreignOrder = emptyList()
         }
         val switched = p != page
         page = p
@@ -1537,8 +1541,10 @@ class MainActivity : Screen() {
     /** The country IMDb's lists are asked from: the TV's own, else the UK. (A choice of countries was tried and dropped: it changed little.) */
     private fun imdbCountry(): String = Locale.getDefault().country.ifEmpty { "GB" }
 
-    /** The country the Foreign page shows: the one chosen on its chips, kept across visits; the United States to begin with. */
-    private fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> JW_COUNTRIES.any { it.code == c } } ?: "US"
+    /** The Foreign page's choice, kept across visits: a country's code, or [WORLD] (every country's best, one row each). */
+    private fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> c == WORLD || JW_COUNTRIES.any { it.code == c } } ?: WORLD
+
+    private var foreignOrder: List<JwCountry> = emptyList() // the chips' order for this visit: the recent ones first, then A to Z
 
     private var pendingCountry = ""
     // As the rail's pages: a country opens once the remote rests on its chip, so passing along the chips opens nothing.
@@ -1564,23 +1570,31 @@ class MainActivity : Screen() {
             setPadding(dp(EDGE), dp(2), dp(PAD), dp(2))
         }
         val current = foreignCountry()
-        JW_COUNTRIES.forEach { c ->
-            val control = chip(c.label, c.code == current).apply {
+        // World first, then the three countries chosen most recently, then the rest A to Z. The order is set when the
+        // page is entered and kept while on it, so a chip never moves under the remote as it rests there.
+        if (foreignOrder.isEmpty()) {
+            val recent = Settings.foreignRecent(this).mapNotNull(::jwCountry)
+            foreignOrder = recent + JW_COUNTRIES.filter { it !in recent }
+        }
+        (listOf(WORLD to "World") + foreignOrder.map { it.code to it.label }).forEach { (code, label) ->
+            val control = chip(label, code == current).apply {
                 setOnFocusChangeListener { _, has ->
                     main.removeCallbacks(countrySwitch)
-                    if (has && c.code != foreignCountry()) { pendingCountry = c.code; main.postDelayed(countrySwitch, SWITCH_WAIT) }
+                    if (has && code != foreignCountry()) { pendingCountry = code; main.postDelayed(countrySwitch, SWITCH_WAIT) }
                 }
                 setOnClickListener {
                     main.removeCallbacks(countrySwitch)
-                    if (foreignCountry() == c.code) firstRow()?.focusFirst()
-                    else { pendingCountry = c.code; countrySwitch.run() }
+                    if (foreignCountry() == code) firstRow()?.focusFirst()
+                    else { pendingCountry = code; countrySwitch.run() }
                 }
             }
-            countryChips[c.code] = control
+            countryChips[code] = control
             line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
         }
         genreStrip.addView(line)
         if (hadFocus) countryChips[current]?.requestFocus()
+        // The chosen chip in view, however far along the line it sits.
+        genreStrip.post { countryChips[current]?.let { v -> genreStrip.smoothScrollTo((v.left + v.width / 2 - genreStrip.width / 2).coerceAtLeast(0), 0) } }
     }
 
     private fun markChip(rowTitle: String) {
@@ -2067,6 +2081,18 @@ class MainActivity : Screen() {
                     background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xE6000000.toInt(), 0x66000000, 0x00000000))
                 }, LayoutParams(-1, dp(cardH * (if (wide) 6 else 4) / 10), Gravity.BOTTOM))
                 if (wide) name.visibility = View.VISIBLE
+                // A ranked row (a top ten, a highest-rated list) wears its number large in the poster's corner, the way
+                // Netflix's Top 10 shelf does: the row reads as a ranking from the sofa without moving the remote.
+                val rank = item.rank
+                if (rank != null && !wide && !grid) {
+                    face.addView(View(context).apply {
+                        background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xD9000000.toInt(), 0x4D000000, 0x00000000))
+                    }, LayoutParams(-1, dp(cardH * 3 / 10), Gravity.BOTTOM))
+                    face.addView(text("$rank", RANK_SIZE, bold = true, serif = true).onArt().apply {
+                        includeFontPadding = false
+                        letterSpacing = -0.03f
+                    }, LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { setMargins(dp(8), 0, 0, dp(4)) })
+                }
                 // Time left as a quiet label in the corner, where the eye checks before choosing what to resume.
                 val timeLeft = item.corner ?: item.left?.split(DOT)?.lastOrNull { it.endsWith("left") }
                 if (wide && timeLeft != null) face.addView(text(timeLeft, SMALL, bold = true).apply {
@@ -2246,7 +2272,11 @@ class MainActivity : Screen() {
             Page.SHOWS -> listOf(rt(RtList.POPULAR_TV), imdb(ImdbList.NEW_SERIES), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
             // Foreign: what the chosen country has made best (its series, then its films), then its services in
             // its own order, each as ten films then ten series.
-            Page.FOREIGN -> jwCountry(foreignCountry())?.let { c ->
+            // World: every country's highest rated TV, one row each, to scroll down through rather than hop chips.
+            Page.FOREIGN -> if (foreignCountry() == WORLD) JW_COUNTRIES.map { c ->
+                val title = "${c.label}: highest rated TV"
+                title to { slot: LinearLayout, g: Int -> bestRow(slot, c, true, g, title) }
+            } else jwCountry(foreignCountry())?.let { c ->
                 listOf(true, false).map { tv -> c.bestTitle(tv) to { slot: LinearLayout, g: Int -> bestRow(slot, c, tv, g) } } +
                     c.services.flatMap { s -> listOf(JwList(s, false), JwList(s, true)) }.map { l -> l.title to { slot: LinearLayout, g: Int -> jwRow(slot, l, g) } }
             }.orEmpty()
@@ -2314,14 +2344,16 @@ class MainActivity : Screen() {
     private fun jwItem(t: JwTitle) = rankedItem(t.title, t.rank, t.poster)
 
     /** IMDb's highest rated series or films from the Foreign page's country, numbered from one. */
-    private fun bestRow(slot: LinearLayout, c: JwCountry, tv: Boolean, g: Int) =
-        fetchedRow(slot, c.bestTitle(tv), g, country = c.code, cached = { cachedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } },
+    private fun bestRow(slot: LinearLayout, c: JwCountry, tv: Boolean, g: Int, title: String = c.bestTitle(tv)) =
+        fetchedRow(slot, title, g, country = c.code, cached = { cachedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } },
             saved = { savedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } }) { bestList(c, tv).map { rankedItem(it, it.rank ?: 0) } }
 
     private fun rankedItem(pk: ImdbPick, rank: Int, poster: String? = null): Item {
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
+        val origin = listOfNotNull(pk.countries.firstOrNull(), pk.languages.firstOrNull()).joinToString(DOT).ifEmpty { null }
         return Item(pk.id, pk.type, pk.name, pk.poster ?: poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = "No. $rank".takeIf { rank > 0 }, released = pk.date)
+            null, 0f, resume = false, left = null, note = "No. $rank".takeIf { rank > 0 }, released = pk.date,
+            rank = rank.takeIf { it > 0 }, original = pk.original, origin = origin)
     }
 
     /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */
@@ -2417,7 +2449,8 @@ class MainActivity : Screen() {
         startActivity(Intent(this, DetailsActivity::class.java)
             .putExtra("type", item.type).putExtra("id", item.id).putExtra("name", item.name)
             .putExtra("poster", item.poster).putExtra("background", item.art).putExtra("videoId", item.videoId)
-            .putExtra("trailer", item.trailerId).putExtra("released", item.released))
+            .putExtra("trailer", item.trailerId).putExtra("released", item.released)
+            .putExtra("original", item.original).putExtra("origin", item.origin))
     }
 
     // ---------- vertical movement ----------
@@ -2533,6 +2566,8 @@ class MainActivity : Screen() {
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
         const val FOREIGN_AHEAD_WAIT = 2500L // ms after the Foreign page opens before the other countries are fetched behind it
+        const val WORLD = "ALL" // the Foreign page's first chip: every country's best, one row each
+        const val RANK_SIZE = 30f // sp, the numeral on a ranked card
         const val LOGO_W = 360 // the cinema's title logo
         const val LOGO_H = 100
         const val RADIUS = 10

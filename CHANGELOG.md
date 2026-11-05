@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.33.0
+Put changes that are not released under `## 1.34.0
+
+- Foreign opens on a new first chip, World: one row for each country, its highest rated TV, to scroll down through. The countries you chose last come next on the chips, then the rest A to Z. The chip in use stays in view.
+- A ranked row (a top ten, a highest rated list) shows its number large in the corner of each poster.
+- A title from Foreign shows its own-language name under the English one, on the title line and on its page ("Gomorra" under Gomorrah). The title page's facts start with the country and the language: "Italy · Neapolitan".
+
+## 1.33.0
 
 - Foreign starts each country with two new rows: its highest rated TV and its highest rated films, in the country's own languages, from IMDb. Italy opens with Gomorrah and My Brilliant Friend, Germany with Dark and Babylon Berlin, Denmark with The Killing and Borgen, South Korea with My Mister and Reply 1988.
 - Eleven more countries on the chips: Denmark, Germany, India, Israel, Mexico, Netherlands, Norway, Poland, South Korea, Sweden and Turkey, each with its own services (Viaplay, wavve, JioHotstar, Videoland, Player, TV+…).
