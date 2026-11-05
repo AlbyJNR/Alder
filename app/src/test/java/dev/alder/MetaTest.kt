@@ -188,6 +188,17 @@ class MetaTest {
         assertEquals("Mjk=", next)
         assertEquals(null, parseRtList(JSONObject("""{"grid":{"list":[]},"pageInfo":{"endCursor":"Mjk=","hasNextPage":false}}""")).second)
         assertEquals("https://www.rottentomatoes.com/cnapi/browse/tv_series_browse/sort:popular?after=Mjk=", rtListUrl(RtList.POPULAR_TV, "Mjk="))
+        // A finished row survives the trip to disk and back as the same titles and scores.
+        val title = imdbPickOf(JSONObject("""{"id":"tt1","name":"Clayface","type":"movie","year":"2026","genres":["Horror"],"rating":"6.3","rank":3}"""))!!
+        val back = RtTitle.of(RtTitle(picks[0], title).json())!!
+        assertEquals("Clayface" to 78, back.rt.title to back.rt.critics)
+        assertEquals(listOf("Horror") to 3, back.title.genres to back.title.rank)
+        val review = EbertPick.of(EbertPick(EbertReview("Heat", "Roger Ebert", "A masterpiece.", "1995-12-15", "https://www.rogerebert.com/reviews/heat-1995"), title).json())!!
+        assertEquals("Roger Ebert" to 1995, review.review.critic to review.review.year)
+        val scores = RtScores.of(RtScores("u", 78, true, 94, false, "Good.", 5).json())!!
+        assertEquals(listOf(78, 94, 5), listOf(scores.critics, scores.audience, scores.season))
+        assertTrue(scores.criticsCertified && !scores.audienceCertified)
+        assertEquals(null, RtScores.of(JSONObject("{}")))
     }
 
     @Test fun imdbBoxOfficeAndSearchListsParse() {
@@ -207,7 +218,7 @@ class MetaTest {
         assertTrue(imdbListQuery(ImdbList.NEW_SERIES, "2026-11-05").contains("start:\\\"2026-11-01\\\",end:\\\"2026-11-30\\\""))
         assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05").contains("amzn1.imdb.w2w.provider.netflix"))
         assertTrue(imdbListQuery(ImdbList.BOX_OFFICE, "2026-11-05").contains("boxOfficeWeekendChart"))
-        assertTrue(imdbListQuery(ImdbList.THIS_MONTH, "2026-11-05").contains("popularTitles(limit:50,queryFilter:{releaseDateRange:{start:\\\"2026-11-01\\\",end:\\\"2026-11-30\\\"}})"))
+        assertTrue(imdbListQuery(ImdbList.THIS_MONTH, "2026-11-05").contains("popularTitles(limit:30,queryFilter:{releaseDateRange:{start:\\\"2026-11-01\\\",end:\\\"2026-11-30\\\"}})"))
         assertTrue(imdbListQuery(ImdbList.ON_MAX, "2026-11-05").contains("provider.hbo_max"))
         assertTrue(imdbListQuery(ImdbList.ANTICIPATED, "2026-11-05").contains("start:\\\"2026-11-05\\\",end:\\\"2027-02-03\\\""))
         assertTrue(imdbListQuery(ImdbList.TOP_TV, "2026-11-05").contains("rankingsChartType:TOP_250_TV"))

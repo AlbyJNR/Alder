@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.28.0
+Put changes that are not released under `## 1.29.0
+
+- Pages open faster and do less behind the scenes. A row fetched within the hour is drawn at once, with nothing read or asked. Content fills its rows in waves: the first five at once, three more as you scroll or every two seconds.
+- The Roger Ebert and Rotten Tomatoes rows are kept as one small file each, so a cold start reads one file instead of replaying every lookup. A title's Rotten Tomatoes scores are kept as a few hundred bytes for a week, not as the pages they came from.
+- IMDb lists are thirty titles, not fifty. A name IMDb places once is not asked again.
+
+## 1.28.0
 
 - Scores on every page: the line under a title's name on Home, TV, Movies, Content and Library shows IMDb and Rotten Tomatoes (C critics, A audience) for the title under the remote. Rotten Tomatoes is asked a moment after you stop on a title and the answer is kept, so a title you pass again shows it at once.
 - A card whose add-on gives no IMDb rating gets it from IMDb the same way.

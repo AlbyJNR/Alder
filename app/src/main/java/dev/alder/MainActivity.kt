@@ -309,7 +309,7 @@ class MainActivity : Screen() {
         }.apply {
             isVerticalScrollBarEnabled = false
             addView(content)
-            setOnScrollChangeListener { _, _, _, _, _ -> updateImages(); loadMoreSections?.invoke() }
+            setOnScrollChangeListener { _, _, _, _, _ -> updateImages(); loadMoreSections?.invoke(); webRowsMore?.invoke() }
         }
 
         art = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0f }
@@ -1133,6 +1133,7 @@ class MainActivity : Screen() {
         listHint.visibility = if (grid) View.VISIBLE else View.GONE
         val g = ++generation
         loadMoreSections = null
+        webRowsMore = null
         val opened = android.os.SystemClock.uptimeMillis()
         refreshLibrary = null
         touched = false
@@ -1288,9 +1289,7 @@ class MainActivity : Screen() {
                 genreStrip.visibility = View.VISIBLE
             }
             // The page's rows from the web above the catalogs (see webRows); the Content page has them all.
-            if (p.isCatalog && !profile.kids) {
-                webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }.forEach { it.second(slot(), g) }
-            }
+            if (p.isCatalog && !profile.kids) buildWebRows(webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }, g)
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
             fun buildSection(i: Int) {
@@ -2157,7 +2156,23 @@ class MainActivity : Screen() {
      * most popular films and TV), numbered. The hero adds when a title is out; OK opens the title page as anywhere,
      * where Trailer plays the trailer IMDb listed. Last time's lists first, from disk; today's replace them.
      */
-    private fun buildImdb(g: Int) = webRows(Page.IMDB).forEach { it.second(slot(), g) }
+    private fun buildImdb(g: Int) = buildWebRows(webRows(Page.IMDB), g)
+
+    private var webRowsMore: (() -> Unit)? = null
+
+    /**
+     * The web rows in waves, not all at once: their slots go in now, in order, so the page's shape is fixed; the
+     * first few fill at once, the rest three at a time as the page scrolls or every couple of seconds, whichever
+     * comes first. A cold Content page then costs a handful of requests before it's usable, not a hundred.
+     */
+    private fun buildWebRows(rows: List<Pair<String, (LinearLayout, Int) -> Unit>>, g: Int) {
+        val pending = rows.map { it.second to slot() }.toMutableList()
+        fun fill(n: Int) { repeat(n) { pending.removeFirstOrNull()?.let { (build, slot) -> build(slot, g) } } }
+        fill(WEB_ROWS_FIRST)
+        webRowsMore = { if (g == generation && pending.isNotEmpty()) fill(WEB_ROWS_WAVE) else if (pending.isEmpty()) webRowsMore = null }
+        val wave = object : Runnable { override fun run() { if (g != generation) return; webRowsMore?.invoke(); if (pending.isNotEmpty()) main.postDelayed(this, WEB_ROWS_PAUSE) } }
+        main.postDelayed(wave, WEB_ROWS_PAUSE)
+    }
 
     /**
      * The rows read from the web, by page and in order (Alan's, 2026-11-05): title to builder. Movies opens with
@@ -2199,6 +2214,7 @@ class MainActivity : Screen() {
             slot.addView(row(list.title, items.take(START), later(items)).view)
         }
         val country = imdbCountry()
+        cachedImdbList(list, today, country)?.let { show(it); return } // fetched within the hour: no disk, no network
         background({ savedImdbList(list, today, country) }) { r -> r.getOrNull()?.let(::show) }
         background({ imdbList(list, today, country) }) { r ->
             r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
@@ -2224,18 +2240,20 @@ class MainActivity : Screen() {
      */
     private fun ebertRow(slot: LinearLayout, g: Int) {
         val today = java.time.LocalDate.now().toString()
-        fetchedRow(slot, EBERT_ROW, g) { country, offline -> ebertReviews(country, offline).map { ebertItem(it, today) } }
+        fetchedRow(slot, EBERT_ROW, g, cached = { c -> cachedEbertReviews(c)?.map { ebertItem(it, today) } },
+            saved = { c -> savedEbertReviews(c)?.map { ebertItem(it, today) } }) { c -> ebertReviews(c).map { ebertItem(it, today) } }
     }
 
     /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */
     private fun rtRow(slot: LinearLayout, list: RtList, g: Int) =
-        fetchedRow(slot, list.title, g) { country, offline -> rtList(list, country, offline).map(::rtItem) }
+        fetchedRow(slot, list.title, g, cached = { c -> cachedRtList(list, c)?.map(::rtItem) }, saved = { c -> savedRtList(list, c)?.map(::rtItem) }) { c -> rtList(list, c).map(::rtItem) }
 
     /**
-     * A row whose titles come from the web in the background: [fetch] runs twice, first from what the last run kept
-     * on disk (offline), then live; each answer replaces the row only when its titles differ from those shown.
+     * A row whose titles come from the web: [cached] (fetched within the hour) draws it at once with nothing read
+     * or asked; otherwise the one file the last run kept ([saved]) fills it, and [fetch] runs live behind it. Each
+     * answer replaces the row only when its titles differ from those shown.
      */
-    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, fetch: (country: String, offline: Boolean) -> List<Item>) {
+    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, cached: (String) -> List<Item>?, saved: (String) -> List<Item>?, fetch: (String) -> List<Item>) {
         var shownIds = emptyList<String>()
         fun show(items: List<Item>) {
             val ids = items.map { it.id }
@@ -2246,8 +2264,9 @@ class MainActivity : Screen() {
             slot.addView(row(title, items.take(START), later(items)).view)
         }
         val country = imdbCountry()
-        background({ fetch(country, true) }) { r -> r.getOrNull()?.let(::show) }
-        background({ fetch(country, false) }) { r ->
+        cached(country)?.let { show(it); return }
+        background({ saved(country) }) { r -> r.getOrNull()?.let(::show) }
+        background({ fetch(country) }) { r ->
             r.exceptionOrNull()?.let { android.util.Log.w("CAS", "$title failed: $it") }
             r.getOrNull()?.let(::show)
         }
@@ -2470,3 +2489,6 @@ class MainActivity : Screen() {
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
 private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
+private const val WEB_ROWS_FIRST = 5 // web rows filled as a page opens
+private const val WEB_ROWS_WAVE = 3 // and how many more each wave brings
+private const val WEB_ROWS_PAUSE = 2000L // ms between waves when the page is not scrolled

@@ -357,6 +357,18 @@ class ImdbPick(
     val gross: String? = null, // the box office chart: "$42.1M weekend"
 )
 
+/** The pick as JSON, for a finished row kept on disk; [imdbPickOf] reads it back. */
+internal fun ImdbPick.json(): JSONObject = JSONObject().put("id", id).put("name", name).put("type", type).put("poster", poster).put("year", year)
+    .put("plot", plot).put("genres", JSONArray(genres)).put("rating", rating).put("rank", rank).put("date", date)
+    .put("trailerId", trailerId).put("still", still).put("seconds", seconds).put("gross", gross)
+internal fun imdbPickOf(j: JSONObject): ImdbPick? {
+    val id = j.text("id") ?: return null
+    val name = j.text("name") ?: return null
+    return ImdbPick(id, name, j.text("type") ?: "movie", j.text("poster"), j.text("year"), j.text("plot"), j.optJSONArray("genres").strings(),
+        j.text("rating"), j.optInt("rank", 0).takeIf { it > 0 }, j.text("date"), j.text("trailerId"), j.text("still"),
+        j.optInt("seconds", 0).takeIf { it > 0 }, j.text("gross"))
+}
+
 /**
  * IMDb's lists on the IMDb page, in the order they first sit down it (the viewer can move them): the trailer lists
  * from imdb.com/trailers, the weekend box office (Box Office Mojo's chart, as IMDb carries it), what's on TV and
@@ -414,10 +426,14 @@ internal fun imdbListQuery(list: ImdbList, today: String, region: String = "GB")
 private val imdbListCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ImdbPick>>>()
 
 /** One of IMDb's lists, fresh, for the TV's [country] (ISO): an hour in memory, kept on disk for the next cold start ([savedImdbList]). Blocks. */
+/** The list as fetched within the hour, or null: drawn at once, nothing read or asked. */
+internal fun cachedImdbList(list: ImdbList, today: String, country: String): List<ImdbPick>? =
+    imdbListCache["$list/$today/${list.region ?: country}"]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.second
+
 internal fun imdbList(list: ImdbList, today: String, country: String): List<ImdbPick> {
     val region = list.region ?: country
     val k = "$list/$today/$region"
-    imdbListCache[k]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.let { return it.second }
+    cachedImdbList(list, today, country)?.let { return it }
     val raw = Http.post("https://api.graphql.imdb.com/", imdbListQuery(list, today, region), keep = true, timeoutMs = 15_000,
         headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to region))
     return parseImdbList(list, JSONObject(raw)).also { imdbListCache[k] = System.currentTimeMillis() to it }
@@ -481,7 +497,7 @@ internal fun money(total: JSONObject): String? {
     }
 }
 
-private const val IMDB_LIST_SIZE = 50
+private const val IMDB_LIST_SIZE = 30 // a row shows a dozen; thirty is plenty to move along, and a third less to parse and picture
 
 /**
  * Where a video stands as the title's trailer: 0 a full-length official trailer, 1 another full-length trailer,
