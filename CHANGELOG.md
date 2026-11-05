@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.32.0
+Put changes that are not released under `## 1.33.0
+
+- Foreign starts each country with two new rows: its highest rated TV and its highest rated films, in the country's own languages, from IMDb. Italy opens with Gomorrah and My Brilliant Friend, Germany with Dark and Babylon Berlin, Denmark with The Killing and Borgen, South Korea with My Mister and Reply 1988.
+- Eleven more countries on the chips: Denmark, Germany, India, Israel, Mexico, Netherlands, Norway, Poland, South Korea, Sweden and Turkey, each with its own services (Viaplay, wavve, JioHotstar, Videoland, Player, TV+…).
+- The rows count only titles with enough votes, and leave out variety, chat, quiz, news, concert and short titles. A co-production counts when the country is one of its makers.
+
+## 1.32.0
 
 - Foreign: a country changes as soon as the remote rests on its chip. You do not press OK. OK on the country in use goes down to its rows.
 - Foreign is faster. One request brings a whole country, all of its rows, with the poster, the plot, the IMDb score and the genres. Before, each row made two requests. The other countries are fetched behind the page, so the next chip shows at once.

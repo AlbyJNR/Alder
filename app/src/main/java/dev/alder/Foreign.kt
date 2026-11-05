@@ -4,14 +4,17 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * What is streaming where: the ten most popular films and the ten most popular series on each service in a country,
- * from JustWatch's public catalogue API (the calls its own site makes; no key, a plain client). The Foreign page
- * lists the countries Alan asked for, each with the big services and its own (Stan, Globoplay, Canal+, U-NEXT…).
- * Each title comes with its IMDb id, so IMDb fills in the poster, plot, rating and genres as on every other row.
+ * The Foreign page's sources. What is streaming where comes from JustWatch's public catalogue API (the calls its own
+ * site makes; no key, a plain client): the ten most popular films and series on each service in a country. What a
+ * country has made best comes from IMDb: its highest rated series and films in its own languages. The countries are
+ * the ones Alan asked for and the great exporters of drama (Gomorrah, Dark, Borgen, Squid Game), each with the big
+ * services and its own (Stan, Globoplay, Canal+, U-NEXT, Viaplay, wavve…).
  */
-class JwCountry(val code: String, val label: String, val services: List<JwService>)
+class JwCountry(val code: String, val label: String, val demonym: String, val langs: List<String>, val services: List<JwService>) {
+    fun bestTitle(tv: Boolean) = "Highest rated $demonym ${if (tv) "TV" else "films"}"
+}
 
-/** A service by the short names JustWatch gives it; Prime Video is "amp" in the US and Japan, "prv" elsewhere. */
+/** A service by the short names JustWatch gives it; Prime Video is "amp" in some countries, "prv" in others. */
 class JwService(val name: String, vararg val ids: String)
 
 private val NETFLIX = JwService("Netflix", "nfx")
@@ -20,17 +23,30 @@ private val DISNEY = JwService("Disney+", "dnp")
 private val APPLE = JwService("Apple TV", "atp")
 private val MAX = JwService("HBO Max", "mxx", "mxu")
 private val PARAMOUNT = JwService("Paramount+", "pmp", "ppp")
+private val VIAPLAY = JwService("Viaplay", "vip")
+private val SKYSHOWTIME = JwService("SkyShowtime", "sst")
 
-/** The countries on the Foreign page's chips, alphabetical, each with the services its own viewers rank. */
+/** The countries on the Foreign page's chips, alphabetical, each with its languages (IMDb's codes) and services. */
 val JW_COUNTRIES = listOf(
-    JwCountry("AR", "Argentina", listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, PARAMOUNT)),
-    JwCountry("AU", "Australia", listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Stan", "stn"), JwService("BINGE", "bng"), PARAMOUNT)),
-    JwCountry("BR", "Brazil", listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, JwService("Globoplay", "gop"), PARAMOUNT)),
-    JwCountry("FR", "France", listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Canal+", "cpd"), PARAMOUNT)),
-    JwCountry("IT", "Italy", listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Now TV", "ntv"), JwService("RaiPlay", "rai"), PARAMOUNT)),
-    JwCountry("JP", "Japan", listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("U-NEXT", "unx"), JwService("Hulu", "hlu"))),
-    JwCountry("ES", "Spain", listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, JwService("Movistar Plus+", "mp9"))),
-    JwCountry("US", "United States", listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, JwService("Hulu", "hlu"), JwService("Peacock", "pct"), PARAMOUNT)),
+    JwCountry("AR", "Argentina", "Argentine", listOf("es"), listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, PARAMOUNT)),
+    JwCountry("AU", "Australia", "Australian", listOf("en"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Stan", "stn"), JwService("BINGE", "bng"), PARAMOUNT)),
+    JwCountry("BR", "Brazil", "Brazilian", listOf("pt"), listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, JwService("Globoplay", "gop"), PARAMOUNT)),
+    JwCountry("DK", "Denmark", "Danish", listOf("da"), listOf(NETFLIX, PRIME, DISNEY, APPLE, VIAPLAY, JwService("TV 2", "tvt"))),
+    JwCountry("FR", "France", "French", listOf("fr"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Canal+", "cpd"), PARAMOUNT)),
+    JwCountry("DE", "Germany", "German", listOf("de"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("WOW", "sko"), JwService("Joyn", "jyn"), PARAMOUNT)),
+    JwCountry("IN", "India", "Indian", listOf("hi", "ta", "te", "ml", "kn", "bn", "mr"), listOf(NETFLIX, PRIME, APPLE, JwService("JioHotstar", "jhs"), JwService("Zee5", "zee"), JwService("Sony LIV", "snl"))),
+    JwCountry("IL", "Israel", "Israeli", listOf("he"), listOf(NETFLIX, PRIME, APPLE)),
+    JwCountry("IT", "Italy", "Italian", listOf("it", "nap"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Now TV", "ntv"), JwService("RaiPlay", "rai"), PARAMOUNT)),
+    JwCountry("JP", "Japan", "Japanese", listOf("ja"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("U-NEXT", "unx"), JwService("Hulu", "hlu"))),
+    JwCountry("MX", "Mexico", "Mexican", listOf("es"), listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, PARAMOUNT)),
+    JwCountry("NL", "Netherlands", "Dutch", listOf("nl"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("Videoland", "vil"), VIAPLAY, SKYSHOWTIME)),
+    JwCountry("NO", "Norway", "Norwegian", listOf("no", "nb", "nn"), listOf(NETFLIX, PRIME, DISNEY, APPLE, VIAPLAY, JwService("TV 2 Play", "st2"))),
+    JwCountry("PL", "Poland", "Polish", listOf("pl"), listOf(NETFLIX, PRIME, DISNEY, APPLE, SKYSHOWTIME, JwService("Player", "plp"))),
+    JwCountry("KR", "South Korea", "Korean", listOf("ko"), listOf(NETFLIX, PRIME, DISNEY, APPLE, JwService("wavve", "wav"), JwService("Watcha", "wac"))),
+    JwCountry("ES", "Spain", "Spanish", listOf("es", "ca", "eu", "gl"), listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, JwService("Movistar Plus+", "mp9"))),
+    JwCountry("SE", "Sweden", "Swedish", listOf("sv"), listOf(NETFLIX, PRIME, DISNEY, APPLE, VIAPLAY, SKYSHOWTIME)),
+    JwCountry("TR", "Turkey", "Turkish", listOf("tr"), listOf(NETFLIX, PRIME, DISNEY, JwService("TV+", "ttp"))),
+    JwCountry("US", "United States", "American", listOf("en"), listOf(NETFLIX, PRIME, DISNEY, APPLE, MAX, JwService("Hulu", "hlu"), JwService("Peacock", "pct"), PARAMOUNT)),
 )
 
 fun jwCountry(code: String): JwCountry? = JW_COUNTRIES.firstOrNull { it.code == code }
@@ -145,10 +161,56 @@ internal fun jwCountryLists(country: String, home: String = java.util.Locale.get
 internal fun jwList(list: JwList, country: String): List<JwTitle> = jwCountryLists(country)[list.key].orEmpty()
 
 /** The other countries, one after another on a quiet thread, so a move along the chips finds each ready. */
-internal fun jwFetchAhead(except: String) {
+internal fun foreignFetchAhead(except: String) {
     jwAhead.execute {
-        JW_COUNTRIES.filter { it.code != except && cachedJwCountry(it.code) == null }.forEach { c ->
-            runCatching { jwCountryLists(c.code) }.onFailure { android.util.Log.w("CAS", "JustWatch ahead ${c.code} failed: $it") }
+        JW_COUNTRIES.filter { it.code != except }.forEach { c ->
+            if (cachedJwCountry(c.code) == null) runCatching { jwCountryLists(c.code) }.onFailure { android.util.Log.w("CAS", "JustWatch ahead ${c.code} failed: $it") }
+            for (tv in listOf(true, false)) if (cachedBest(c, tv) == null) runCatching { bestList(c, tv) }.onFailure { android.util.Log.w("CAS", "IMDb best ahead ${c.code} failed: $it") }
         }
     }
+}
+
+// ---------- IMDb: what a country has made best ----------
+
+internal const val IMDB_URL = "https://api.graphql.imdb.com/"
+internal const val BEST_RATING = 7
+internal const val BEST_TV_VOTES = 2500 // enough votes for the rating to mean something; smaller countries' series have fewer
+internal const val BEST_FILM_VOTES = 10000
+/** Not what "the best series from Korea" means: variety, chat, quizzes, news, concerts, shorts. */
+private val BEST_EXCLUDED = listOf("Reality-TV", "Talk-Show", "Game-Show", "News", "Music", "Short")
+
+/**
+ * IMDb's highest rated series or films made in the country, in one of its own languages (the primary language:
+ * Gomorrah's is Neapolitan, so Italy lists it and Neapolitan too), with a floor of votes so a dozen fans' 9.8 does
+ * not top the row. A co-production counts when the country is among its makers.
+ */
+internal fun bestQuery(c: JwCountry, tv: Boolean): String {
+    val types = if (tv) """["tvSeries","tvMiniSeries"]""" else """["movie"]"""
+    val votes = if (tv) BEST_TV_VOTES else BEST_FILM_VOTES
+    return JSONObject().put("query", "query CAS_BEST{advancedTitleSearch(first:$IMDB_LIST_SIZE,sort:{sortBy:USER_RATING,sortOrder:DESC},constraints:{" +
+        "originCountryConstraint:{allCountries:[\"${c.code}\"]},languageConstraint:{anyPrimaryLanguages:${JSONArray(c.langs)}}," +
+        "titleTypeConstraint:{anyTitleTypeIds:$types},userRatingsConstraint:{aggregateRatingRange:{min:$BEST_RATING},ratingsCountRange:{min:$votes}}," +
+        "genreConstraint:{excludeGenreIds:${JSONArray(BEST_EXCLUDED)}},explicitContentConstraint:{explicitContentFilter:EXCLUDE_ADULT}})" +
+        "{edges{node{title{$IMDB_TITLE_FIELDS}}}}}").toString()
+}
+
+/** The answer's titles in IMDb's order, numbered from one. */
+internal fun parseBest(json: JSONObject): List<ImdbPick> =
+    json.optJSONObject("data")?.optJSONObject("advancedTitleSearch")?.optJSONArray("edges").objects()
+        .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.optJSONObject("title")?.let { imdbPick(it, rank = i + 1) } }
+
+private val bestCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ImdbPick>>>()
+
+/** The row as fetched within the hour, or null. */
+internal fun cachedBest(c: JwCountry, tv: Boolean): List<ImdbPick>? =
+    bestCache["${c.code}/$tv"]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.second
+
+/** The row from the last run's answer on disk, or null. */
+internal fun savedBest(c: JwCountry, tv: Boolean): List<ImdbPick>? =
+    Http.savedAnswer(IMDB_URL, bestQuery(c, tv))?.let { runCatching { parseBest(JSONObject(it)) }.getOrNull() }?.ifEmpty { null }
+
+/** The row from IMDb, kept for the hour and on disk. */
+internal fun bestList(c: JwCountry, tv: Boolean, home: String = java.util.Locale.getDefault().country.ifEmpty { "GB" }): List<ImdbPick> {
+    cachedBest(c, tv)?.let { return it }
+    return parseBest(JSONObject(Source(home).text(IMDB_URL, bestQuery(c, tv), keep = true))).also { bestCache["${c.code}/$tv"] = System.currentTimeMillis() to it }
 }

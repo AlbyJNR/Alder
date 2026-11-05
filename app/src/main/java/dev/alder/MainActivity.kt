@@ -1254,7 +1254,7 @@ class MainActivity : Screen() {
         if (p == Page.FOREIGN) {
             buildWebRows(webRows(Page.FOREIGN), g)
             // The other countries fetched behind this one (one small request each), so the chips switch at once.
-            main.postDelayed({ if (g == generation) jwFetchAhead(foreignCountry()) }, FOREIGN_AHEAD_WAIT)
+            main.postDelayed({ if (g == generation) foreignFetchAhead(foreignCountry()) }, FOREIGN_AHEAD_WAIT)
             return
         }
 
@@ -2244,9 +2244,12 @@ class MainActivity : Screen() {
         return when (p) {
             Page.MOVIES -> listOf(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
             Page.SHOWS -> listOf(rt(RtList.POPULAR_TV), imdb(ImdbList.NEW_SERIES), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
-            // Foreign: the chosen country's services in its own order, each as ten films then ten series.
-            Page.FOREIGN -> jwCountry(foreignCountry())?.services.orEmpty().flatMap { s -> listOf(JwList(s, false), JwList(s, true)) }
-                .map { l -> l.title to { slot: LinearLayout, g: Int -> jwRow(slot, l, g) } }
+            // Foreign: what the chosen country has made best (its series, then its films), then its services in
+            // its own order, each as ten films then ten series.
+            Page.FOREIGN -> jwCountry(foreignCountry())?.let { c ->
+                listOf(true, false).map { tv -> c.bestTitle(tv) to { slot: LinearLayout, g: Int -> bestRow(slot, c, tv, g) } } +
+                    c.services.flatMap { s -> listOf(JwList(s, false), JwList(s, true)) }.map { l -> l.title to { slot: LinearLayout, g: Int -> jwRow(slot, l, g) } }
+            }.orEmpty()
             Page.IMDB -> listOf(ImdbList.TRENDING, ImdbList.ANTICIPATED, ImdbList.THIS_MONTH, ImdbList.POPULAR, ImdbList.RECENT).map(::imdb) +
                 ebert + rt(RtList.FRESH_IN_CINEMAS) + rt(RtList.POPULAR_TV) +
                 listOf(ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK).map(::imdb) +
@@ -2308,11 +2311,17 @@ class MainActivity : Screen() {
         fetchedRow(slot, list.title, g, country = foreignCountry(), cached = { c -> cachedJwList(list, c)?.map(::jwItem) },
             saved = { c -> savedJwList(list, c)?.map(::jwItem) }) { c -> jwList(list, c).map(::jwItem) }
 
-    private fun jwItem(t: JwTitle): Item {
-        val pk = t.title
+    private fun jwItem(t: JwTitle) = rankedItem(t.title, t.rank, t.poster)
+
+    /** IMDb's highest rated series or films from the Foreign page's country, numbered from one. */
+    private fun bestRow(slot: LinearLayout, c: JwCountry, tv: Boolean, g: Int) =
+        fetchedRow(slot, c.bestTitle(tv), g, country = c.code, cached = { cachedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } },
+            saved = { savedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } }) { bestList(c, tv).map { rankedItem(it, it.rank ?: 0) } }
+
+    private fun rankedItem(pk: ImdbPick, rank: Int, poster: String? = null): Item {
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
-        return Item(pk.id, pk.type, pk.name, pk.poster ?: t.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = "No. ${t.rank}", released = pk.date)
+        return Item(pk.id, pk.type, pk.name, pk.poster ?: poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+            null, 0f, resume = false, left = null, note = "No. $rank".takeIf { rank > 0 }, released = pk.date)
     }
 
     /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */

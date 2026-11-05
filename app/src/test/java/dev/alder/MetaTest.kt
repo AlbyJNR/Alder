@@ -229,7 +229,23 @@ class MetaTest {
         // The chips are alphabetical, each country once, and every country has its services.
         assertEquals(JW_COUNTRIES.map { it.label }.sorted(), JW_COUNTRIES.map { it.label })
         assertEquals(JW_COUNTRIES.size, JW_COUNTRIES.map { it.code }.distinct().size)
-        assertTrue(JW_COUNTRIES.all { it.services.size >= 6 })
+        assertTrue(JW_COUNTRIES.all { it.services.size >= 3 && it.langs.isNotEmpty() && it.demonym.isNotEmpty() })
+        // IMDb's best-of-a-country request: the country, its primary languages, the kind, the floors, no variety.
+        val italy = JW_COUNTRIES.first { it.code == "IT" }
+        val best = JSONObject(bestQuery(italy, tv = true)).getString("query")
+        assertTrue(best.contains("""originCountryConstraint:{allCountries:["IT"]}"""))
+        assertTrue(best.contains("""anyPrimaryLanguages:["it","nap"]"""))
+        assertTrue(best.contains("""anyTitleTypeIds:["tvSeries","tvMiniSeries"]""") && best.contains("ratingsCountRange:{min:2500}"))
+        assertTrue(JSONObject(bestQuery(italy, tv = false)).getString("query").contains("""anyTitleTypeIds:["movie"]"""))
+        assertTrue(best.contains("""excludeGenreIds:["Reality-TV","""))
+        assertEquals("Highest rated Italian TV", italy.bestTitle(true))
+        val ranked = parseBest(JSONObject("""{"data":{"advancedTitleSearch":{"edges":[
+            {"node":{"title":{"id":"tt2049116","titleText":{"text":"Gomorrah"},"titleType":{"id":"tvSeries"},"releaseYear":{"year":2014},"ratingsSummary":{"aggregateRating":8.6},"genres":{"genres":[{"text":"Crime"},{"text":"Drama"}]}}}},
+            {"node":{"title":{"id":"tt10278918","titleText":{"text":"My Brilliant Friend"},"titleType":{"id":"tvSeries"},"ratingsSummary":{"aggregateRating":8.6}}}},
+            {"node":{"title":{"titleText":{"text":"nameless"}}}}
+        ]}}}"""))
+        assertEquals(listOf("Gomorrah" to 1, "My Brilliant Friend" to 2), ranked.map { it.name to it.rank })
+        assertEquals("series" to "8.6", ranked[0].type to ranked[0].rating)
         // A placed title has the card's shape and survives the trip to disk and back with its rank.
         val placed = jwTitle(films[0], "tt31049299", 3)
         assertEquals("movie" to 3, placed.title.type to placed.title.rank)

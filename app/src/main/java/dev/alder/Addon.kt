@@ -497,7 +497,7 @@ internal fun money(total: JSONObject): String? {
     }
 }
 
-private const val IMDB_LIST_SIZE = 30 // a row shows a dozen; thirty is plenty to move along, and a third less to parse and picture
+internal const val IMDB_LIST_SIZE = 30 // a row shows a dozen; thirty is plenty to move along, and a third less to parse and picture
 
 /**
  * Where a video stands as the title's trailer: 0 a full-length official trailer, 1 another full-length trailer,
