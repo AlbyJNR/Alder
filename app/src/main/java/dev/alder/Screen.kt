@@ -46,6 +46,7 @@ import androidx.media3.exoplayer.audio.ForwardingAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -113,6 +114,53 @@ internal fun brightLeft(pixels: IntArray, width: Int): Boolean {
     }
     return luminance / (left * (pixels.size / width) * 255) > 0.5
 }
+
+/**
+ * The title's own colour, deep enough to be a room's wall: the art's hue, found from its more colourful pixels, at a
+ * fixed low lightness. Everything that was near-black ([Screen.BASE]) around a title's art takes this instead, so a
+ * blue film sits in blue and a desert film in amber, as Apple's Now Playing does with a record's sleeve.
+ */
+internal fun filmTint(pixels: IntArray): Int {
+    require(pixels.isNotEmpty())
+    var red = 0.0; var green = 0.0; var blue = 0.0; var total = 0.0
+    for (p in pixels) {
+        val r = p ushr 16 and 255; val g = p ushr 8 and 255; val b = p and 255
+        // Colourful pixels say what colour the picture is; grey ones barely vote, dark ones a little less again.
+        val weight = (maxOf(r, g, b) - minOf(r, g, b)) + 6.0
+        red += r * weight; green += g * weight; blue += b * weight; total += weight
+    }
+    val r = red / total / 255; val g = green / total / 255; val b = blue / total / 255
+    val max = maxOf(r, g, b); val min = minOf(r, g, b)
+    val light = (max + min) / 2
+    var sat = if (max == min) 0.0 else (max - min) / (1 - Math.abs(2 * light - 1))
+    val hue = when {
+        max == min -> 0.0
+        max == r -> ((g - b) / (max - min) + 6) % 6
+        max == g -> (b - r) / (max - min) + 2
+        else -> (r - g) / (max - min) + 4
+    } * 60
+    // A little richer than the picture averages to (averaging dulls), capped so no room is garish.
+    sat = (sat * 1.35).coerceIn(0.0, 0.55)
+    return hsl(hue, sat, TINT_LIGHTNESS)
+}
+
+/** An opaque colour from hue (0..360), saturation and lightness (0..1). */
+internal fun hsl(hue: Double, sat: Double, light: Double): Int {
+    val c = (1 - Math.abs(2 * light - 1)) * sat
+    val x = c * (1 - Math.abs(hue / 60 % 2 - 1))
+    val m = light - c / 2
+    val (r1, g1, b1) = when {
+        hue < 60 -> Triple(c, x, 0.0); hue < 120 -> Triple(x, c, 0.0); hue < 180 -> Triple(0.0, c, x)
+        hue < 240 -> Triple(0.0, x, c); hue < 300 -> Triple(x, 0.0, c); else -> Triple(c, 0.0, x)
+    }
+    fun ch(v: Double) = Math.round((v + m) * 255).toInt().coerceIn(0, 255)
+    return (0xFF shl 24) or (ch(r1) shl 16) or (ch(g1) shl 8) or ch(b1)
+}
+
+/** [color] at [alpha] (0..255): the shades are one colour at many strengths. */
+internal fun withAlpha(color: Int, alpha: Int) = (alpha shl 24) or (color and 0xFFFFFF)
+
+internal const val TINT_LIGHTNESS = 0.085 // deep: a wall the art and white words sit on, not a colour of its own
 
 /** What every screen shares: the signed-in account, background work, and the few view helpers the plain UI uses. */
 abstract class Screen : Activity() {
@@ -227,6 +275,44 @@ abstract class Screen : Activity() {
     private var windowShade: View? = null
     private var windowArt: ImageView? = null
     private var shadeSource: Bitmap? = null
+    private var shadeBright = false
+    // Every shade around the art, with its strengths: recoloured together when the title's tint changes.
+    private val tintedShades = mutableListOf<Pair<GradientDrawable, IntArray>>()
+    private var tintAnimator: android.animation.ValueAnimator? = null
+
+    /** The colour the screen's near-black takes from the title's art ([filmTint]); [BASE] until art is in. */
+    protected var tint = BASE
+        private set
+
+    /** The art's colour is known (or changed): screens with shades of their own recolour them here. */
+    protected open fun onTint(color: Int) {}
+
+    private fun shade(orientation: GradientDrawable.Orientation, alphas: IntArray) =
+        GradientDrawable(orientation, IntArray(alphas.size) { withAlpha(tint, alphas[it]) }).also { tintedShades += it to alphas }
+
+    private fun leftShadeAlphas(bright: Boolean) = if (bright) intArrayOf(0xF7, 0xE0, 0x80, 0x00) else intArrayOf(0xEB, 0x00, 0x00)
+
+    /** Moves every shade to [color] over a moment, so a tint arriving after the art doesn't snap. */
+    private fun setTint(color: Int) {
+        if (color == tint) return
+        tintAnimator?.cancel()
+        val from = tint
+        val eval = android.animation.ArgbEvaluator()
+        tintAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 450
+            addUpdateListener { a ->
+                tint = eval.evaluate(a.animatedFraction, from, color) as Int
+                tintedShades.forEach { (d, alphas) -> d.colors = IntArray(alphas.size) { withAlpha(tint, alphas[it]) } }
+                onTint(tint)
+            }
+            start()
+        }
+    }
+
+    /** Takes the screen's tint from [art] (a bitmap the screen shows), off the main thread. */
+    protected fun sampleTint(art: Bitmap) {
+        background({ samplePixels(art, 16, 24)?.let(::filmTint) }) { r -> r.getOrNull()?.let(::setTint) }
+    }
 
     /** The left shade is for text over bare art; a screen that puts its text on glass can lift it off the art. */
     protected fun leftShade(on: Boolean) {
@@ -238,13 +324,16 @@ abstract class Screen : Activity() {
         if (art === shadeSource) return
         shadeSource = art
         // Sampled off the main thread: reading a hardware bitmap back from the GPU stalls it for several ms.
-        background({ samplePixels(art, 16, 24)?.let { brightLeft(it, 16) } }) { r ->
-            val bright = r.getOrNull() ?: return@background
+        background({ samplePixels(art, 16, 24)?.let { brightLeft(it, 16) to filmTint(it) } }) { r ->
+            val (bright, colour) = r.getOrNull() ?: return@background
             if (art !== shadeSource) return@background
             // A bright film keeps the shade dark across the whole text column, not just at the screen's edge.
-            windowShade?.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                if (bright) intArrayOf(0xF708090B.toInt(), 0xE008090B.toInt(), 0x8008090B.toInt(), 0x0008090B)
-                else intArrayOf(0xEB08090B.toInt(), 0x0008090B, 0x0008090B))
+            if (bright != shadeBright) {
+                shadeBright = bright
+                tintedShades.removeAll { (d, _) -> d === windowShade?.background }
+                windowShade?.background = shade(GradientDrawable.Orientation.LEFT_RIGHT, leftShadeAlphas(bright))
+            }
+            setTint(colour)
         }
     }
 
@@ -252,18 +341,20 @@ abstract class Screen : Activity() {
     protected fun setWindowed(content: View, backdrop: View = View(this).apply { background = mood() }) {
         windowArt = backdrop as? ImageView
         shadeSource = null
+        shadeBright = false
+        tintedShades.clear()
         window.setBackgroundDrawable(null) // the scene paints the whole screen
         setContentView(FrameLayout(this).apply {
             addView(backdrop, FrameLayout.LayoutParams(-1, -1))
+            // The shades are the title's tint, not a fixed near-black: they take the art's colour as it arrives.
             windowShade = View(context).apply {
-                background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xEB08090B.toInt(), 0x0008090B, 0x0008090B))
+                background = shade(GradientDrawable.Orientation.LEFT_RIGHT, leftShadeAlphas(false))
             }.also { addView(it, FrameLayout.LayoutParams(-1, -1)) }
             addView(View(context).apply {
-                background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xF708090B.toInt(), 0x0008090B, 0x0008090B))
+                background = shade(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xF7, 0x00, 0x00))
             }, FrameLayout.LayoutParams(-1, -1))
             addView(View(context).apply {
-                background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0x8C08090B.toInt(), 0x0008090B, 0x0008090B, 0x0008090B, 0x0008090B, 0x0008090B, 0x0008090B))
+                background = shade(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x8C, 0, 0, 0, 0, 0, 0))
             }, FrameLayout.LayoutParams(-1, -1))
             for (edge in listOf(GradientDrawable.Orientation.LEFT_RIGHT, GradientDrawable.Orientation.RIGHT_LEFT,
                 GradientDrawable.Orientation.TOP_BOTTOM, GradientDrawable.Orientation.BOTTOM_TOP)) {
@@ -853,6 +944,83 @@ abstract class Screen : Activity() {
         }
     }
 
+    /** An icon of [sizeDp] in the middle of whatever it's drawn over (a round button's face). */
+    protected fun centred(res: Int, sizeDp: Int, tint: Int) = getDrawable(res)?.mutate()?.let { d ->
+        d.setTint(tint)
+        LayerDrawable(arrayOf(d)).apply { setLayerSize(0, dp(sizeDp), dp(sizeDp)); setLayerGravity(0, Gravity.CENTER) }
+    }
+
+    /**
+     * The main action as a white disc with a dark glyph, the way Apple's artist page leads with Play: at rest it is
+     * already the brightest thing in its line; focus grows it and lifts it on its own glow.
+     */
+    protected fun disc(sizeDp: Int, icon: Int, description: String): TextView = text("", BODY).apply {
+        isFocusable = true
+        gravity = Gravity.CENTER
+        contentDescription = description
+        foreground = centred(icon, (sizeDp * 0.46f).toInt(), BASE)
+        background = rounded(TEXT, sizeDp / 2)
+        elevation = dp(2).toFloat()
+        if (android.os.Build.VERSION.SDK_INT >= 28) outlineSpotShadowColor = TUNGSTEN_GLOW
+        setOnFocusChangeListener { v, has ->
+            v.grow(has, DISC_GROW).start()
+            v.animate().translationZ(if (has) dp(CARD_LIFT).toFloat() else 0f).setDuration(150).start()
+        }
+        layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
+    }
+
+    // Focus by light: a column's rows under the remote at full brightness, the others stepped back.
+    private val lightLevels = java.util.WeakHashMap<View, Float>()
+    private val lightAnimators = java.util.WeakHashMap<View, android.animation.ValueAnimator>()
+
+    /**
+     * How Apple's lyrics page shows where you are: the line under the remote is bright and sharp and the lines
+     * around it step back. For a column of rows (episodes, sources, settings, a menu): while the remote is in it,
+     * every focusable row but the focused one dims; once it leaves, all rows come back. Brightness rather than a
+     * border is what reads from the sofa.
+     */
+    protected fun ViewGroup.focusByLight(dim: Float = LIGHT_DIM) {
+        val column = this
+        val listener = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
+            val inside = now != null && isInside(now, column)
+            for (i in 0 until childCount) {
+                val child = getChildAt(i)
+                if (!child.isFocusable) continue // headings and notes stay as they are
+                child.light(if (!inside || isInside(now!!, child)) 1f else dim)
+            }
+        }
+        var observer: android.view.ViewTreeObserver? = null
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { observer = v.viewTreeObserver.also { it.addOnGlobalFocusChangeListener(listener) } }
+            override fun onViewDetachedFromWindow(v: View) { observer?.takeIf { it.isAlive }?.removeOnGlobalFocusChangeListener(listener); observer = null }
+        })
+        if (isAttachedToWindow) observer = viewTreeObserver.also { it.addOnGlobalFocusChangeListener(listener) }
+    }
+
+    /**
+     * Draws the view at [level] of its brightness (1 = as it is) through a colour filter on a hardware layer: its
+     * words and glass dim together and what is transparent stays transparent, unlike a lower alpha, which rows
+     * already use for their own reasons (an unaired episode, an SD source).
+     */
+    private fun View.light(level: Float) {
+        val from = lightLevels[this] ?: 1f
+        if (from == level) return
+        lightLevels[this] = level
+        lightAnimators.remove(this)?.cancel()
+        val paint = Paint()
+        fun apply(l: Float) {
+            if (l >= 0.995f) { setLayerType(View.LAYER_TYPE_NONE, null); return }
+            paint.colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(floatArrayOf(
+                l, 0f, 0f, 0f, 0f, 0f, l, 0f, 0f, 0f, 0f, 0f, l, 0f, 0f, 0f, 0f, 0f, 1f, 0f)))
+            if (layerType != View.LAYER_TYPE_HARDWARE) setLayerType(View.LAYER_TYPE_HARDWARE, paint) else setLayerPaint(paint)
+        }
+        lightAnimators[this] = android.animation.ValueAnimator.ofFloat(from, level).apply {
+            duration = if (level < from) 180 else 120
+            addUpdateListener { apply(it.animatedValue as Float) }
+            start()
+        }
+    }
+
     private val glowCache = java.util.WeakHashMap<View, Pair<Bitmap, Int>>()
 
     private fun posterBitmap(view: View): Bitmap? = when (view) {
@@ -990,6 +1158,7 @@ abstract class Screen : Activity() {
                 list.addView(this, LinearLayout.LayoutParams(-1, -2))
             }
         }
+        list.focusByLight()
         dialog.setContentView(android.widget.ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             background = glassOver(this, 16) // the episode list's glass, over the screen's art
@@ -1169,6 +1338,9 @@ abstract class Screen : Activity() {
             "return {chrome:m?'Chrome '+m[1]:'',h264:c.canPlayType('video/mp4; codecs=\"avc1.42E01E\"'),vp9:c.canPlayType('video/webm; codecs=\"vp9\"')," +
             "video:!!v,w:v?v.videoWidth:0,h:v?v.videoHeight:0,rs:v?v.readyState:0,paused:v?v.paused:true,err:(v&&v.error)?v.error.code:0,id:(location.pathname.split('/').pop()||''),txt:(document.body?document.body.innerText:'').slice(0,200)}})()"
         const val CARD_GROW = 1.06f
+        const val DISC_GROW = 1.1f // the white disc: bigger growth than a card, it is the one thing on its line
+        const val DISC = 52 // dp, the title page's Play
+        const val LIGHT_DIM = 0.55f // brightness of the rows around the focused one (focus by light)
         const val CHIP_GROW = 1.04f // a wide chip grown as much as a card filled the gap to its neighbour
         const val CARD_LIFT = 8
         // Spacing, everywhere rows of pictures appear: between cards, from a row's heading to its cards (plus room for

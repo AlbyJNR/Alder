@@ -9,6 +9,29 @@ class ScreenDesignTest {
         assertEquals(0x8CB2B2B2.toInt(), filmGlow(intArrayOf(0xFFFFFFFF.toInt())))
     }
 
+    @Test fun filmTintIsTheArtsHueAtWallDepth() {
+        val red = filmTint(intArrayOf(0xFFFF2020.toInt(), 0xFFC01010.toInt()))
+        val r = red ushr 16 and 255; val g = red ushr 8 and 255; val b = red and 255
+        assert(r > g && r > b) { "a red film tints red: ${Integer.toHexString(red)}" }
+        assert(r <= 0x40) { "deep, a wall not a colour: ${Integer.toHexString(red)}" }
+        assertEquals(0xFF, red ushr 24)
+        // A grey picture gives a near-neutral tint, close to the base near-black: no colour is invented.
+        val grey = filmTint(intArrayOf(0xFF808080.toInt(), 0xFF404040.toInt()))
+        val channels = listOf(grey ushr 16 and 255, grey ushr 8 and 255, grey and 255)
+        assert(channels.max() - channels.min() <= 2) { Integer.toHexString(grey) }
+        // Colourful pixels decide the hue even in a mostly grey picture.
+        val mostlyGrey = filmTint(IntArray(20) { 0xFF505050.toInt() } + intArrayOf(0xFF2040FF.toInt()))
+        assert((mostlyGrey and 255) > (mostlyGrey ushr 16 and 255)) { Integer.toHexString(mostlyGrey) }
+    }
+
+    @Test fun hslRoundTripsThePrimaries() {
+        assertEquals(0xFFFF0000.toInt(), hsl(0.0, 1.0, 0.5))
+        assertEquals(0xFF00FF00.toInt(), hsl(120.0, 1.0, 0.5))
+        assertEquals(0xFF0000FF.toInt(), hsl(240.0, 1.0, 0.5))
+        assertEquals(0xFF808080.toInt(), hsl(0.0, 0.0, 0.5))
+        assertEquals(0x80123456.toInt(), withAlpha(0xFF123456.toInt(), 0x80))
+    }
+
     @Test fun shadeRespondsToBrightnessOnTheTextSide() {
         assertEquals(true, brightLeft(intArrayOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt()), 2))
         assertEquals(false, brightLeft(intArrayOf(0xFF000000.toInt(), 0xFFFFFFFF.toInt()), 2))

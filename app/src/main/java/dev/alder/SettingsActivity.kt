@@ -268,6 +268,7 @@ class SettingsActivity : Screen() {
         })
 
         groups = column(Gravity.START).apply {
+            focusByLight()
             setPadding(dp(7), dp(9), dp(7), dp(9))
             background = glassOver(this, 14)
         }
@@ -281,7 +282,7 @@ class SettingsActivity : Screen() {
         })
 
         detailTitle = text("", BODY, bold = true).apply { setPadding(dp(12), 0, 0, 0) }
-        detailRows = column(Gravity.START)
+        detailRows = column(Gravity.START).apply { focusByLight() }
         rowsScroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             clipChildren = false

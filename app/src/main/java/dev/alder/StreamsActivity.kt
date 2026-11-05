@@ -89,6 +89,7 @@ class StreamsActivity : Screen() {
 
     private lateinit var art: ImageView
     override val backdrop get() = art
+    private val room by lazy { intent.getIntExtra("tint", BASE) } // the title page's colour, carried on to the player
     // Audio language chips above the list: All, then each language the sources name. A pick lasts while the page is open.
     private lateinit var languageStrip: HorizontalScrollView
     private var audio: String? = null
@@ -136,7 +137,7 @@ class StreamsActivity : Screen() {
         languageStrip = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false; clipChildren = false; clipToPadding = false; visibility = View.GONE
         }
-        val rows = column(Gravity.START)
+        val rows = column(Gravity.START).apply { focusByLight() }
         val status = text(intent.getStringExtra("message") ?: "Finding sources…", BODY, color = TEXT_2).onArt()
         rows.addView(status, LinearLayout.LayoutParams(-1, -2).apply { marginStart = dp(12); topMargin = dp(12) })
         val scroll = ScrollView(this).apply {
@@ -177,7 +178,7 @@ class StreamsActivity : Screen() {
             addView(art, FrameLayout.LayoutParams(-1, -1))
             addView(View(context).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                    intArrayOf(0xB308090B.toInt(), 0x7308090B, 0x5908090B))
+                    intArrayOf(withAlpha(room, 0xB3), withAlpha(room, 0x73), withAlpha(room, 0x59)))
             }, FrameLayout.LayoutParams(-1, -1))
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL

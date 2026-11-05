@@ -172,15 +172,18 @@ class MainActivity : Screen() {
         val dw = src.width * scale
         val dh = src.height * scale
         canvas.drawBitmap(src, null, RectF((w - dw) / 2, (h - dh) / 2, (w + dw) / 2, (h + dh) / 2), Paint(Paint.FILTER_BITMAP_FLAG))
-        val bright = samplePixels(src, 16, 24)?.let { brightLeft(it, 16) } ?: false
+        val pixels = samplePixels(src, 16, 24)
+        val bright = pixels?.let { brightLeft(it, 16) } ?: false
+        // The shades in the title's own colour ([filmTint]): each picture brings its room with it.
+        val wall = pixels?.let(::filmTint) ?: BASE
         val shade = Paint().apply {
             shader = LinearGradient(0f, 0f, w * 0.55f, 0f,
-                if (bright) 0xF708090B.toInt() else 0xEB08090B.toInt(), 0x0008090B, Shader.TileMode.CLAMP)
+                withAlpha(wall, if (bright) 0xF7 else 0xEB), withAlpha(wall, 0), Shader.TileMode.CLAMP)
         }
         canvas.drawRect(0f, 0f, w * 0.55f, h.toFloat(), shade)
-        shade.shader = LinearGradient(0f, h.toFloat(), 0f, h * 0.55f, 0xF708090B.toInt(), 0x0008090B, Shader.TileMode.CLAMP)
+        shade.shader = LinearGradient(0f, h.toFloat(), 0f, h * 0.55f, withAlpha(wall, 0xF7), withAlpha(wall, 0), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, h * 0.55f, w.toFloat(), h.toFloat(), shade)
-        shade.shader = LinearGradient(0f, 0f, 0f, h * 0.14f, 0x8C08090B.toInt(), 0x0008090B, Shader.TileMode.CLAMP)
+        shade.shader = LinearGradient(0f, 0f, 0f, h * 0.14f, withAlpha(wall, 0x8C), withAlpha(wall, 0), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, w.toFloat(), h * 0.14f, shade)
         for (edge in listOf(GradientDrawable.Orientation.LEFT_RIGHT, GradientDrawable.Orientation.RIGHT_LEFT,
             GradientDrawable.Orientation.TOP_BOTTOM, GradientDrawable.Orientation.BOTTOM_TOP)) {
@@ -714,6 +717,7 @@ class MainActivity : Screen() {
             art.scaleY = 1f
             art.alpha = 0f
             Images.load(url, art, artW, urgent = true, look = shaded, failed = ready) {
+                (art.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.let(::sampleTint) // for the player's shades
                 // Once the new art covers it, the old one lets go: otherwise the GPU paints a hidden full screen every frame.
                 art.animate().alpha(1f).setDuration(if (artBack.drawable == null) 600 else 380).withEndAction {
                     artBack.setImageDrawable(null)
@@ -2080,7 +2084,7 @@ class MainActivity : Screen() {
         startActivity(Intent(this, StreamsActivity::class.java)
             .putExtra("type", item.type).putExtra("id", item.id).putExtra("name", item.name).putExtra("poster", item.poster)
             .putExtra("videoId", videoId).putExtra("nextVideoId", next?.id).putExtra("pick", pick)
-            .putExtra("background", metas[item.id]?.background ?: item.art)
+            .putExtra("background", metas[item.id]?.background ?: item.art).putExtra("tint", tint)
             .putExtra("logo", metas[item.id]?.logo ?: item.logo)
             .putExtra("still", videos.firstOrNull { it.id == videoId }?.thumbnail)
             .putExtra("runtime", metas[item.id]?.runtime)

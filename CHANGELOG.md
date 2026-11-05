@@ -13,7 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Before each release, read all of `## Unreleased` again and rewrite each entry that does not obey these rules. Then rename that heading to the version number.
 
-## Unreleased
+## 1.15.0
+
+- **Each title brings its own colour.** The dark areas around a title's art on Home, on its page, on the sources page and in the player take the colour of the art. Before, they were always the same near-black.
+- **Focus by light.** In a list (episodes, sources, Settings, a menu), the row under the remote is bright and the other rows step back. Before, only a pale box showed the row.
+- **Play is a white disc.** On a title's page, **Play** is a large white circle. The small circles for **My List**, information and **Start over** are larger.
 
 ## 1.14.0
 

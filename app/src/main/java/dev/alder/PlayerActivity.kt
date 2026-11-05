@@ -141,6 +141,9 @@ class PlayerActivity : Screen() {
         next()
     }
 
+    // The title page's tint, so the controls' shades are this film's colour and not a fixed near-black.
+    private val room by lazy { intent.getIntExtra("tint", BASE) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val key = authKey ?: return finish()
@@ -412,7 +415,7 @@ class PlayerActivity : Screen() {
 
     private fun buildLoading() = FrameLayout(this).apply {
         visibility = View.GONE
-        addView(View(context).apply { setBackgroundColor(0x8008090B.toInt()) }, FrameLayout.LayoutParams(-1, -1))
+        addView(View(context).apply { setBackgroundColor(withAlpha(room, 0x80)) }, FrameLayout.LayoutParams(-1, -1))
         val center = column(Gravity.CENTER_HORIZONTAL).apply {
             addView(ring(), LinearLayout.LayoutParams(dp(40), dp(40)))
             addView(status, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
@@ -979,11 +982,11 @@ class PlayerActivity : Screen() {
             alpha = 0f
             addView(View(context).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(0x9908090B.toInt(), 0x0008090B))
+                    intArrayOf(withAlpha(room, 0x99), withAlpha(room, 0)))
             }, FrameLayout.LayoutParams(-1, dp(120), Gravity.TOP))
             addView(View(context).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                    intArrayOf(0xE608090B.toInt(), 0xA608090B.toInt(), 0x0008090B))
+                    intArrayOf(withAlpha(room, 0xE6), withAlpha(room, 0xA6), withAlpha(room, 0)))
             }, FrameLayout.LayoutParams(-1, dp(220), Gravity.BOTTOM))
             addView(playerLogo, FrameLayout.LayoutParams(dp(150), dp(50)).apply {
                 leftMargin = dp(PAD); topMargin = dp(26)
@@ -1022,14 +1025,6 @@ class PlayerActivity : Screen() {
             addView(column(Gravity.END, keyHint("OK", "Play / pause"), keyHint("◀ ▶", "Seek on the bar")), FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
                 rightMargin = dp(PAD); bottomMargin = dp(35)
             })
-        }
-    }
-
-    /** An icon of [size] dp in the middle of whatever it's drawn over (a button's circle). */
-    private fun centred(res: Int, size: Int, tint: Int) = getDrawable(res)?.mutate()?.let { d ->
-        d.setTint(tint)
-        android.graphics.drawable.LayerDrawable(arrayOf(d)).apply {
-            setLayerSize(0, dp(size), dp(size)); setLayerGravity(0, Gravity.CENTER)
         }
     }
 
@@ -1173,7 +1168,7 @@ class PlayerActivity : Screen() {
     private fun openOptions() {
         hideControls(force = true)
         controls.visibility = View.GONE
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; focusByLight() }
         list.addView(text("Audio & subtitles", SERIF_TITLE, serif = true), wrap())
         list.addView(text(listOfNotNull(pauseTitle.text.toString().takeIf { it.isNotBlank() },
             subtitle.text.toString().takeIf { it.isNotBlank() }).joinToString(DOT),
@@ -1238,7 +1233,7 @@ class PlayerActivity : Screen() {
             addView(list)
             setPadding(dp(22), dp(20), dp(22), dp(22))
             clipToPadding = false
-            background = android.graphics.drawable.LayerDrawable(arrayOf(rounded(0xF008090B.toInt(), 14), glass(14)))
+            background = android.graphics.drawable.LayerDrawable(arrayOf(rounded(withAlpha(room, 0xF0), 14), glass(14)))
         }, FrameLayout.LayoutParams(dp(310), resources.displayMetrics.heightPixels - dp(54)).apply {
             leftMargin = dp(27); topMargin = dp(27)
         })

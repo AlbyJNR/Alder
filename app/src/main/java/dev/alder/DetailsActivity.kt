@@ -289,7 +289,8 @@ class DetailsActivity : Screen() {
         }.marginTop(16))
         if (remaining != null) stack.addView(progressBar(resumeAt.toFloat() / duration), LinearLayout.LayoutParams(dp(240), dp(3)).apply { topMargin = dp(8) })
 
-        playButton = pill(if (resumeAt > 0) "Resume" else "Play", R.drawable.ic_play).apply {
+        // The white disc: already the brightest thing on the page at rest, so the eye lands on it before the remote does.
+        playButton = disc(DISC, R.drawable.ic_play, if (resumeAt > 0) "Resume" else "Play").apply {
             setOnClickListener { if (unaired != null) notAired(unaired) else openSources(target?.first ?: metaId, startOver = false) }
             // Held OK: every source, to choose one by hand.
             setOnLongClickListener { if (unaired != null) notAired(unaired) else openSources(target?.first ?: metaId, startOver = false, pick = true); true }
@@ -323,15 +324,16 @@ class DetailsActivity : Screen() {
         val lead = if (comingOut != null && trailer != null) trailer else playButton
         actionRow1 = LinearLayout(this).apply {
             clipChildren = false
-            if (lead === trailer) addView(trailer, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(10) })
-            addView(playButton, wrap().apply { marginEnd = dp(10) })
+            gravity = Gravity.CENTER_VERTICAL // the worded glass controls sit on the disc's centre line
+            if (lead === trailer) addView(trailer, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(14) })
+            addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(14) })
             listOfNotNull(trailer.takeIf { lead !== trailer }, preview, recap).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
         }
         stack.addView(actionRow1, wrap().apply { topMargin = dp(16) })
         actionRow2 = LinearLayout(this).apply {
             clipChildren = false
-            startOver?.let { addView(it, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) }) }
-            addView(listButton, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
+            startOver?.let { addView(it, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginEnd = dp(10) }) }
+            addView(listButton, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginEnd = dp(10) })
             addView(infoButton)
         }
         stack.addView(actionRow2, wrap().apply { topMargin = dp(12) })
@@ -349,12 +351,13 @@ class DetailsActivity : Screen() {
         return null
     }
 
+    /** A small frosted circle (ⓘ, +, ↺) under the disc, as Apple's artist page sets its secondary actions. */
     private fun iconButton(symbol: String, description: String, action: () -> Unit) = text(symbol, 18f).apply {
         gravity = Gravity.CENTER
         contentDescription = description
-        lightFocus(16)
+        lightFocus(ORB / 2)
         setOnClickListener { action() }
-        layoutParams = LinearLayout.LayoutParams(dp(32), dp(32))
+        layoutParams = LinearLayout.LayoutParams(dp(ORB), dp(ORB))
     }
 
     /** A worded glass control beside Play, as tall as the icon buttons. */
@@ -517,7 +520,7 @@ class DetailsActivity : Screen() {
         }, FrameLayout.LayoutParams(width + 2 * room, dp(32) + 2 * room).apply { leftMargin = x - room; topMargin = dp(88) - room })
 
         val pane = glassPane()
-        guideRows = column(Gravity.START)
+        guideRows = column(Gravity.START).apply { focusByLight() }
         pane.addView(ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             // The row past the panel's foot fades out instead of running into the edge.
@@ -852,7 +855,7 @@ class DetailsActivity : Screen() {
         startActivity(Intent(this, StreamsActivity::class.java)
             .putExtra("type", type).putExtra("id", metaId).putExtra("name", m?.name ?: name).putExtra("poster", m?.poster ?: poster)
             .putExtra("videoId", videoId).putExtra("nextVideoId", nextId).putExtra("startOver", startOver).putExtra("pick", pick)
-            .putExtra("background", m?.background)
+            .putExtra("background", m?.background).putExtra("tint", tint) // the player's shades in this title's colour
             .putExtra("label", listOfNotNull(m?.name ?: name, short).joinToString("  ·  "))
             // For the sources page: the title's logo, the episode's still and "S1 E3 · OutKast".
             .putExtra("logo", m?.logo).putExtra("still", video?.thumbnail).putExtra("runtime", m?.runtime)
@@ -926,5 +929,6 @@ class DetailsActivity : Screen() {
         const val STARTED = 60_000L // ms watched before a title counts as started
         const val RATING_ALPHA = 0.65f // the age rating capsule: present, not loud
         const val AIRS_ALPHA = 0.65f // an episode not out yet sits back in the list
+        const val ORB = 36 // dp, the small frosted circles under the disc
     }
 }
