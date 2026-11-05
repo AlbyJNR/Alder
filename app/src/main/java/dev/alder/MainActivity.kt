@@ -100,7 +100,7 @@ internal fun catalogAnswerKey(page: String, title: String, genre: String?, sourc
 class MainActivity : Screen() {
     private enum class Page(val label: String, val icon: Int) {
         HOME("Home", R.drawable.ic_home), SHOWS("TV", R.drawable.ic_tv), MOVIES("Movies", R.drawable.ic_movie),
-        LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
+        IMDB("IMDb", R.drawable.ic_star), LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
     }
     private enum class Mode { CINEMA, BROWSE }
     private enum class ListFilter { ALL, MOVIES, SHOWS }
@@ -238,6 +238,8 @@ class MainActivity : Screen() {
         val finished: Boolean = false,
         val note: String? = null, // leads the title line: "In cinemas 20 Nov" on a coming-soon title
         newEpisodes: Int = 0, // new episodes out (NewEpisodes), for the mark on the card and the hero line
+        val corner: String? = null, // a wide card's corner label ("2:14" on a trailer) in place of the time left
+        val play: (() -> Unit)? = null, // OK does this (plays the trailer) instead of opening the title page
     ) {
         var newCount = newEpisodes
         val newEpisode get() = newCount > 0
@@ -384,7 +386,7 @@ class MainActivity : Screen() {
 
     /** A page by its name on screen or in code; "My List" is what Search and older callers call the Library. */
     private fun pageNamed(name: String?) = name?.let { n ->
-        Page.entries.firstOrNull { it.label.equals(n, true) || it.name.equals(n, true) } ?: Page.LIBRARY.takeIf { n.equals("My List", true) }
+        Page.entries.firstOrNull { it != Page.IMDB && (it.label.equals(n, true) || it.name.equals(n, true)) } ?: Page.LIBRARY.takeIf { n.equals("My List", true) }
     }
 
     /**
@@ -587,7 +589,7 @@ class MainActivity : Screen() {
     }
 
     private fun dimHome(on: Boolean) {
-        if ((page != Page.HOME && !page.isCatalog && page != Page.LIBRARY) || mode != Mode.BROWSE || homeDimmed == on) return
+        if ((page != Page.HOME && !page.isCatalog && page != Page.LIBRARY && page != Page.IMDB) || mode != Mode.BROWSE || homeDimmed == on) return
         homeDimmed = on
         val alpha = if (on) 0.3f else 1f
         header.animate().alpha(alpha).setDuration(400).start()
@@ -1195,6 +1197,7 @@ class MainActivity : Screen() {
             refreshLibrary = { ask() }
         }
         if (p == Page.LIBRARY) return
+        if (p == Page.IMDB) return buildImdb(g)
 
         var built = false
         var builtFrom: List<String>? = null // the add-ons the rows came from, to tell when Stremio's fresh list differs
@@ -1611,7 +1614,7 @@ class MainActivity : Screen() {
                     if (it == 1) { Settings.setHiddenRows(this, Settings.hiddenRows(this) + "${page.label}|${r.title}"); showPage(page) }
                 }
             }) } ?: emptyList()
-        val own = listOwn + when {
+        val own = listOwn + (if (item.play != null) listOf("Title page" to { openDetails(item) }) else emptyList()) + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
@@ -1927,7 +1930,7 @@ class MainActivity : Screen() {
                 }, LayoutParams(-1, dp(cardH * (if (wide) 6 else 4) / 10), Gravity.BOTTOM))
                 if (wide) name.visibility = View.VISIBLE
                 // Time left as a quiet label in the corner, where the eye checks before choosing what to resume.
-                val timeLeft = item.left?.split(DOT)?.lastOrNull { it.endsWith("left") }
+                val timeLeft = item.corner ?: item.left?.split(DOT)?.lastOrNull { it.endsWith("left") }
                 if (wide && timeLeft != null) face.addView(text(timeLeft, SMALL, bold = true).apply {
                     background = rounded(0x99000000.toInt(), 8)
                     setPadding(dp(8), dp(3), dp(8), dp(4))
@@ -1956,7 +1959,7 @@ class MainActivity : Screen() {
                         showHero(item)
                     } else main.post { if (!view.hasFocus()) pendingUpdate?.let { pendingUpdate = null; it() } }
                 }
-                setOnClickListener { openDetails(item) }
+                setOnClickListener { item.play?.invoke() ?: openDetails(item) }
                 // Hold OK: the title's own options first (My List, Continue Watching), then the viewer's lists.
                 setOnLongClickListener { holdMenu(item); true }
             }
@@ -2066,6 +2069,56 @@ class MainActivity : Screen() {
 
     /** Monday of this week, ISO: the coming-soon list is asked from there, so one kept answer serves the whole week. */
     private fun comingSoonFrom(): String = java.time.LocalDate.now().with(java.time.DayOfWeek.MONDAY).toString()
+
+    /**
+     * The IMDb page: IMDb's own lists, each a row. The four from imdb.com/trailers first (trending, most anticipated,
+     * popular, newest), as wide cards of the trailer's still: OK plays the trailer in the box, hold OK offers the
+     * title page. Then its charts (Top 250 films and TV, most popular films and TV) as posters, numbered, OK opening
+     * the title page as anywhere. Last time's lists first, from disk; today's replace them when they differ.
+     */
+    private fun buildImdb(g: Int) {
+        val today = java.time.LocalDate.now().toString()
+        ImdbList.entries.forEach { list ->
+            val slot = slot()
+            var shownIds = emptyList<String>()
+            fun show(picks: List<ImdbPick>) {
+                val ids = picks.map { it.id }
+                if (g != generation || picks.isEmpty() || ids == shownIds) return
+                shownIds = ids
+                rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
+                slot.removeAllViews()
+                val items = picks.map { imdbItem(it, list, today) }
+                slot.addView(row(list.title, items.take(START), later(items), wide = list.trailers).view)
+            }
+            background({ savedImdbList(list, today) }) { r -> r.getOrNull()?.let(::show) }
+            background({ imdbList(list, today) }) { r ->
+                r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
+                r.getOrNull()?.let(::show)
+            }
+        }
+    }
+
+    private fun imdbItem(pk: ImdbPick, list: ImdbList, today: String): Item {
+        val note = when {
+            pk.rank != null -> "No. ${pk.rank}"
+            pk.date != null && pk.date > today -> shortDay(pk.date, today)?.let { if (pk.type == "movie") "In cinemas $it" else "From $it" }
+            else -> null
+        }
+        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
+        val trailer = pk.trailerId?.takeIf { list.trailers }
+        lateinit var item: Item
+        item = Item(pk.id, pk.type, pk.name, pk.poster, if (list.trailers) pk.still else null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+            null, 0f, resume = false, left = null, note = note,
+            corner = pk.seconds?.takeIf { list.trailers }?.let { "%d:%02d".format(it / 60, it % 60) },
+            play = trailer?.let { id -> { playImdbTrailer(item, id) } })
+        return item
+    }
+
+    /** The trailer in the box, its files asked for now (they are signed for a few hours); the title page is a hold away. */
+    private fun playImdbTrailer(item: Item, videoId: String) =
+        showTrailerClip(item.name, { imdbVideoStreams(videoId) }) {
+            choose("Trailer unavailable", listOf("Title page", "OK"), "IMDb couldn't play this trailer right now.") { if (it == 0) openDetails(item) }
+        }
 
     private fun upcomingItem(u: Upcoming, p: Page): Item {
         val today = java.time.LocalDate.now().toString()

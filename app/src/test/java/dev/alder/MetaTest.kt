@@ -2,6 +2,7 @@ package dev.alder
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MetaTest {
@@ -77,6 +78,46 @@ class MetaTest {
              "playbackURLs":[{"displayName":{"value":"720p"},"url":"https://c/c1.mp4","videoMimeType":"MP4"}]}}
         ]}}}}""")
         assertEquals(emptyList<Stream>(), parseImdbTrailerStreams(json))
+    }
+
+    @Test fun imdbListsParseTrailersAndCharts() {
+        val trending = JSONObject("""{"data":{"trendingTitles":{"titles":[
+            {"id":"tt1","titleText":{"text":"Lords of War"},"titleType":{"id":"movie"},"primaryImage":null,"releaseYear":{"year":2027},"releaseDate":{"day":5,"month":2,"year":2027},
+             "ratingsSummary":{"aggregateRating":null},"plot":{"plotText":{"plainText":"Arms."}},"genres":{"genres":[{"text":"Action"}]},
+             "latestTrailer":{"id":"vi1","name":{"value":"Teaser"},"runtime":{"value":43},"thumbnail":{"url":"https://m/x._V1_.jpg"}}},
+            {"id":"tt2","titleText":{"text":"No trailer"},"titleType":{"id":"tvSeries"},"latestTrailer":null}
+        ]}}}""")
+        val picks = parseImdbList(ImdbList.TRENDING, trending)
+        assertEquals(listOf("tt1"), picks.map { it.id })
+        assertEquals("vi1", picks[0].trailerId)
+        assertEquals(43, picks[0].seconds)
+        assertEquals("https://m/x._V1_QL80_UX640_.jpg", picks[0].still)
+        assertEquals("2027-02-05", picks[0].date)
+        assertEquals(null, picks[0].rating)
+
+        val top = JSONObject("""{"data":{"titleChartRankings":{"edges":[
+            {"node":{"item":{"id":"tt0111161","titleText":{"text":"The Shawshank Redemption"},"titleType":{"id":"movie"},"releaseYear":{"year":1994},"ratingsSummary":{"aggregateRating":9.3}}}},
+            {"node":{"item":{"id":"tt0903747","titleText":{"text":"Breaking Bad"},"titleType":{"id":"tvSeries"},"releaseYear":{"year":2008},"ratingsSummary":{"aggregateRating":9.5}}}}
+        ]}}}""")
+        val chart = parseImdbList(ImdbList.TOP_MOVIES, top)
+        assertEquals(listOf(1, 2), chart.map { it.rank })
+        assertEquals(listOf("movie", "series"), chart.map { it.type })
+        assertEquals("9.3", chart[0].rating)
+        assertEquals("1994", chart[0].year)
+
+        val hot = JSONObject("""{"data":{"chartTitles":{"edges":[{"currentRank":7,"node":{"id":"tt3","titleText":{"text":"Nocturne"},"titleType":{"id":"tvMiniSeries"}}}]}}}""")
+        assertEquals(7, parseImdbList(ImdbList.HOT_TV, hot)[0].rank)
+        val recent = JSONObject("""{"data":{"recentVideos":{"videos":[{"id":"vi9","name":{"value":"Trailer"},"runtime":{"value":130},"thumbnail":{"url":"https://m/t._V1_.jpg"},
+            "primaryTitle":{"id":"tt4","titleText":{"text":"Bachelor Party"},"titleType":{"id":"movie"}}}]}}}""")
+        val r = parseImdbList(ImdbList.RECENT, recent)[0]
+        assertEquals("tt4" to "vi9", r.id to r.trailerId)
+    }
+
+    @Test fun imdbListQueriesNameTheirRootsAndDates() {
+        assertTrue(imdbListQuery(ImdbList.ANTICIPATED, "2026-11-05").contains("start:\\\"2026-11-05\\\",end:\\\"2027-02-03\\\""))
+        assertTrue(imdbListQuery(ImdbList.TOP_TV, "2026-11-05").contains("rankingsChartType:TOP_250_TV"))
+        assertTrue(imdbListQuery(ImdbList.HOT_MOVIES, "2026-11-05").contains("MOST_POPULAR_MOVIES"))
+        assertTrue(imdbListQuery(ImdbList.RECENT, "2026-11-05").contains("contentTypes:[TRAILER]"))
     }
 
     @Test fun imdbTrailerEmptyWhenNoVideos() {

@@ -304,14 +304,120 @@ internal fun parseImdbTrailerStreams(json: JSONObject): List<Stream> {
         .filter { node -> node.optJSONArray("playbackURLs").objects().any { it.text("url") != null } }
     val best = nodes.filter { trailerRank(it) < 9 }.sortedWith(compareBy<JSONObject> { trailerRank(it) }.thenByDescending { it.text("createdDate").orEmpty() }).firstOrNull()
         ?: return emptyList()
-    val name = best.optJSONObject("name")?.text("value")?.ifBlank { null } ?: "Trailer"
+    return playbackStreams(best)
+}
+
+/** One IMDb video's files as streams, best quality first (1080p, then the adaptive stream, then down). */
+internal fun playbackStreams(video: JSONObject): List<Stream> {
+    val name = video.optJSONObject("name")?.text("value")?.ifBlank { null } ?: "Trailer"
     val order = listOf("1080p", "auto", "720p", "480p", "sd")
-    return best.optJSONArray("playbackURLs").objects()
+    return video.optJSONArray("playbackURLs").objects()
         .mapNotNull { u -> u.text("url")?.let { url -> (u.optJSONObject("displayName")?.text("value") ?: u.text("videoMimeType") ?: "") to url } }
         .sortedBy { (quality, _) -> order.indexOf(quality.lowercase()).let { if (it < 0) order.size else it } }
         .distinctBy { it.second }
         .map { (quality, url) -> Stream(if (quality.isNotBlank() && !quality.equals("auto", true)) "$name ($quality)" else name, quality, url, emptyMap(), 0L, null, null) }
 }
+
+/**
+ * The files of one IMDb video by its id ("vi…"), fetched when it is about to play: the links are signed and expire
+ * within hours, so a list kept from this morning can't carry them. Empty when the call fails. Blocks.
+ */
+internal fun imdbVideoStreams(videoId: String): List<Stream> {
+    if (!videoId.startsWith("vi")) return emptyList()
+    return runCatching {
+        val query = JSONObject().put("query", "{video(id:\"$videoId\"){name{value}playbackURLs{displayName{value}url videoMimeType}}}").toString()
+        val raw = Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
+        JSONObject(raw).optJSONObject("data")?.optJSONObject("video")?.let(::playbackStreams) ?: emptyList()
+    }.getOrDefault(emptyList())
+}
+
+// ---------- IMDb's own lists: the IMDb page ----------
+
+/**
+ * A title on one of IMDb's lists. The trailer lists carry the title's latest trailer ([trailerId], [still], [seconds]);
+ * the charts carry its [rank]. [type] is Stremio's: "movie" or "series".
+ */
+class ImdbPick(
+    val id: String, val name: String, val type: String, val poster: String?, val year: String?, val plot: String?,
+    val genres: List<String>, val rating: String?, val rank: Int?, val date: String?,
+    val trailerId: String?, val still: String?, val seconds: Int?,
+)
+
+/** IMDb's lists on the IMDb page, in the order they sit down it: the trailer lists from imdb.com/trailers, then its charts. */
+enum class ImdbList(val title: String, val trailers: Boolean) {
+    TRENDING("Trending trailers", true), ANTICIPATED("Most anticipated", true), POPULAR("Popular trailers", true), RECENT("New trailers", true),
+    TOP_MOVIES("Top 250 films", false), TOP_TV("Top 250 TV", false), HOT_MOVIES("Most popular films", false), HOT_TV("Most popular TV", false);
+}
+
+private const val IMDB_TITLE_FIELDS = "id titleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}"
+private const val IMDB_CLIP_FIELDS = "id name{value}runtime{value}description{value}thumbnail{url}"
+
+/** The list's query, as imdb.com asks it ([today] ISO: the trailer lists split on the release date). */
+internal fun imdbListQuery(list: ImdbList, today: String): String {
+    val ahead = java.time.LocalDate.parse(today).plusDays(90).toString()
+    val titleWithTrailer = "$IMDB_TITLE_FIELDS latestTrailer{$IMDB_CLIP_FIELDS}"
+    val body = when (list) {
+        ImdbList.TRENDING -> "trendingTitles(limit:$IMDB_LIST_SIZE){titles{$titleWithTrailer}}"
+        ImdbList.ANTICIPATED -> "popularTitles(limit:$IMDB_LIST_SIZE,queryFilter:{releaseDateRange:{start:\"$today\",end:\"$ahead\"}}){titles{$titleWithTrailer}}"
+        ImdbList.POPULAR -> "popularTitles(limit:$IMDB_LIST_SIZE,queryFilter:{releaseDateRange:{end:\"$today\"}}){titles{$titleWithTrailer}}"
+        ImdbList.RECENT -> "recentVideos(limit:$IMDB_LIST_SIZE,queryFilter:{contentTypes:[TRAILER]}){videos{$IMDB_CLIP_FIELDS primaryTitle{$IMDB_TITLE_FIELDS}}}"
+        ImdbList.TOP_MOVIES -> "titleChartRankings(first:$IMDB_LIST_SIZE,input:{rankingsChartType:TOP_250}){edges{node{item{$IMDB_TITLE_FIELDS}}}}"
+        ImdbList.TOP_TV -> "titleChartRankings(first:$IMDB_LIST_SIZE,input:{rankingsChartType:TOP_250_TV}){edges{node{item{$IMDB_TITLE_FIELDS}}}}"
+        ImdbList.HOT_MOVIES -> "chartTitles(first:$IMDB_LIST_SIZE,chart:{chartType:MOST_POPULAR_MOVIES}){edges{currentRank node{$IMDB_TITLE_FIELDS}}}"
+        ImdbList.HOT_TV -> "chartTitles(first:$IMDB_LIST_SIZE,chart:{chartType:MOST_POPULAR_TV_SHOWS}){edges{currentRank node{$IMDB_TITLE_FIELDS}}}"
+    }
+    return JSONObject().put("query", "{$body}").toString()
+}
+
+private val imdbListCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<ImdbPick>>>()
+
+/** One of IMDb's lists, fresh: an hour in memory, kept on disk for the next cold start ([savedImdbList]). Blocks. */
+internal fun imdbList(list: ImdbList, today: String): List<ImdbPick> {
+    val k = "$list/$today"
+    imdbListCache[k]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.let { return it.second }
+    val raw = Http.post("https://api.graphql.imdb.com/", imdbListQuery(list, today), keep = true, timeoutMs = 15_000,
+        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
+    return parseImdbList(list, JSONObject(raw)).also { imdbListCache[k] = System.currentTimeMillis() to it }
+}
+
+/** Last time's list from disk, or null; no network. */
+internal fun savedImdbList(list: ImdbList, today: String): List<ImdbPick>? =
+    Http.savedAnswer("https://api.graphql.imdb.com/", imdbListQuery(list, today))?.let { runCatching { parseImdbList(list, JSONObject(it)) }.getOrNull() }
+
+/** The titles in IMDb's answer to [list], in its order; charts numbered from one, trailer lists only where a trailer exists. */
+internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
+    val data = json.optJSONObject("data") ?: return emptyList()
+    fun title(t: JSONObject, clip: JSONObject?, rank: Int?): ImdbPick? {
+        val id = t.text("id")?.takeIf { it.startsWith("tt") } ?: return null
+        val name = t.optJSONObject("titleText")?.text("text") ?: return null
+        val kind = t.optJSONObject("titleType")?.text("id").orEmpty()
+        val d = t.optJSONObject("releaseDate")
+        val date = d?.takeIf { it.optInt("year") > 0 && it.optInt("month") > 0 && it.optInt("day") > 0 }
+            ?.let { "%04d-%02d-%02d".format(it.optInt("year"), it.optInt("month"), it.optInt("day")) }
+        val rating = t.optJSONObject("ratingsSummary")?.optDouble("aggregateRating", 0.0)?.takeIf { it > 0 }?.let { "%.1f".format(Locale.US, it) }
+        return ImdbPick(
+            id, name, if (kind.startsWith("tv") && kind != "tvMovie" && kind != "tvSpecial") "series" else "movie",
+            t.optJSONObject("primaryImage")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX360_.jpg"),
+            t.optJSONObject("releaseYear")?.optInt("year", 0)?.takeIf { it > 0 }?.toString(),
+            t.optJSONObject("plot")?.optJSONObject("plotText")?.text("plainText"),
+            t.optJSONObject("genres")?.optJSONArray("genres").objects().mapNotNull { it.text("text") },
+            rating, rank, date,
+            clip?.text("id"), clip?.optJSONObject("thumbnail")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX640_.jpg"),
+            clip?.optJSONObject("runtime")?.optInt("value", 0)?.takeIf { it > 0 },
+        )
+    }
+    return when (list) {
+        ImdbList.TRENDING -> data.optJSONObject("trendingTitles")?.optJSONArray("titles").objects().mapNotNull { t -> t.optJSONObject("latestTrailer")?.let { title(t, it, null) } }
+        ImdbList.ANTICIPATED, ImdbList.POPULAR -> data.optJSONObject("popularTitles")?.optJSONArray("titles").objects().mapNotNull { t -> t.optJSONObject("latestTrailer")?.let { title(t, it, null) } }
+        ImdbList.RECENT -> data.optJSONObject("recentVideos")?.optJSONArray("videos").objects().mapNotNull { v -> v.optJSONObject("primaryTitle")?.let { title(it, v, null) } }
+        ImdbList.TOP_MOVIES, ImdbList.TOP_TV -> data.optJSONObject("titleChartRankings")?.optJSONArray("edges").objects()
+            .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.optJSONObject("item")?.let { title(it, null, i + 1) } }
+        ImdbList.HOT_MOVIES, ImdbList.HOT_TV -> data.optJSONObject("chartTitles")?.optJSONArray("edges").objects()
+            .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.let { title(it, null, e.optInt("currentRank", 0).takeIf { r -> r > 0 } ?: (i + 1)) } }
+    }.distinctBy { it.id }
+}
+
+private const val IMDB_LIST_SIZE = 50
 
 /**
  * Where a video stands as the title's trailer: 0 a full-length official trailer, 1 another full-length trailer,

@@ -11,7 +11,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.19.0
+Put changes that are not released under `## 1.20.0
+
+- An IMDb page in the rail, between Movies and Library, with IMDb's own lists as rows. First the four from imdb.com/trailers: Trending trailers, Most anticipated, Popular trailers and New trailers, as wide cards of each trailer's still with its length in the corner. OK plays the trailer in the box; hold OK offers the title page and your lists. Then IMDb's charts: Top 250 films, Top 250 TV, Most popular films and Most popular TV, as numbered posters that open the title page as anywhere.
+- Last time's lists show at once from disk; today's replace them when they differ. Not shown to a Kids profile.
+
+## 1.19.0
 
 - Trailer plays the real trailer. IMDb's featured videos lead with whatever is newest, so CAS was playing a 30-second spot for one film and a mid-season clip for a series whose trailer sat elsewhere. CAS now asks for the title's latest trailer as well as its ten featured videos, keeps only trailers and teasers, and plays the newest full-length official trailer; a short spot or a teaser only when that is all IMDb has, and never a clip or interview. Titles IMDb has no trailer for still take the YouTube route.
 
