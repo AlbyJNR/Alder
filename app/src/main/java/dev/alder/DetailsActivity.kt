@@ -101,6 +101,11 @@ class DetailsActivity : Screen() {
         hero = FrameLayout(this).apply { clipChildren = false }
         root = FrameLayout(this).apply {
             clipChildren = false
+            // A soft shade over the art's left, the block's side, as Home's art carries: the story reads over a bright
+            // backdrop, and the words do not stand on a face. It fades out before the middle, where the art is.
+            addView(View(this@DetailsActivity).apply {
+                background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xCC08090B.toInt(), 0x7308090B, 0x0008090B))
+            }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 62 / 100, -1))
             addView(hero, FrameLayout.LayoutParams(-1, -1))
             addView(TextClock(this@DetailsActivity).apply {
                 format12Hour = "h:mm a"
@@ -309,9 +314,10 @@ class DetailsActivity : Screen() {
 
     /** The year, a genre, the length, then IMDb's number and Rotten Tomatoes' two: refilled as each arrives. */
     /**
-     * Two lines under the name, each its own. First the age rating and the facts (year · genre · length), which wrap
-     * to a second line rather than give way. Then the scores, on a line kept a line tall even while empty: Rotten
-     * Tomatoes, looked up a moment after the page opens, fills it without the facts shrinking or the plot moving down.
+     * The facts (age rating, year · genre · length) and the scores, beside each other on one line when it has room
+     * for the most they can come to hold, under each other otherwise. The room is decided once, from the widest an
+     * age rating still being looked up, IMDb's number and both meters can be, so Rotten Tomatoes, answering a moment
+     * after the page opens, lands in space already its own: the facts do not shrink and the plot does not move.
      */
     private fun fillFacts(block: LinearLayout, m: Meta) {
         block.removeAllViews()
@@ -319,40 +325,68 @@ class DetailsActivity : Screen() {
             .takeIf { it > 0 }?.let(::seasons) else m.runtime
         // Where it was made and in what language first, for a title that came from the Foreign page.
         val facts = listOfNotNull(origin?.takeIf { it.isNotBlank() }, m.year, m.genres.firstOrNull(), length).joinToString(DOT)
+        val ratingOn = Settings.titlePage(this, SettingsActivity.TITLE_RATING)
+        val tomatoesOn = Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)
+        val cert = certificate?.takeIf { ratingOn }
+        val meters = tomatoes?.let { rt -> listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ").ifEmpty { null } }
+        val factsView = text(facts, SMALL, color = TEXT_2).onArt().apply { ellipsize = TextUtils.TruncateAt.END }
+        val certRoom = when {
+            cert != null -> widest(capsule(cert)) + dp(8)
+            ratingOn && certificate == null -> widest(capsule("PG-13")) + dp(8) // still being looked up
+            else -> 0
+        }
+        val scoreRoom = if (m.rating != null || tomatoesOn)
+            widest(scoresLine(m.rating?.let { "10.0" }, "C100% A100%".takeIf { tomatoesOn }, lead = true)) else 0
+        val beside = certRoom + factsView.paint.measureText(facts) + scoreRoom <= dp(HERO_W - 10)
         val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        // The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it.
-        val cert = certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
-        if (cert != null) line.addView(text(cert, 10.5f, bold = true, color = TEXT_2).apply {
-            letterSpacing = 0.04f
-            setPadding(dp(5), dp(2), dp(5), dp(2))
-            background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
-            alpha = RATING_ALPHA
-        }, wrap().apply { marginEnd = dp(8) })
-        line.addView(text(facts, SMALL, color = TEXT_2).onArt().apply {
-            maxLines = 2; ellipsize = TextUtils.TruncateAt.END
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        block.addView(line, LinearLayout.LayoutParams(-1, -2))
-        val scores = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        m.rating?.let { rating ->
-            scores.addView(text("IMDb", 9f, bold = true, color = BASE).apply {
-                setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
-            })
-            scores.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+        if (cert != null) line.addView(capsule(cert), wrap().apply { marginEnd = dp(8) })
+        val scores = scoresLine(m.rating, meters, lead = beside)
+        if (beside) {
+            factsView.maxLines = 1
+            line.addView(factsView)
+            line.addView(scores.apply { minimumWidth = scoreRoom })
+            block.addView(line, LinearLayout.LayoutParams(-1, -2))
+        } else {
+            // Long facts wrap to a second line rather than give way; the scores take a line kept a line tall while empty.
+            factsView.maxLines = 2
+            line.addView(factsView, LinearLayout.LayoutParams(0, -2, 1f))
+            block.addView(line, LinearLayout.LayoutParams(-1, -2))
+            if (scoreRoom > 0) {
+                scores.minimumHeight = text("", SMALL).lineHeight
+                block.addView(scores, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+            }
         }
-        // Rotten Tomatoes after IMDb, the same way: its badge, then C for critics and A for audience, as percentages.
-        tomatoes?.takeIf { it.critics != null || it.audience != null }?.let { rt ->
-            if (scores.childCount > 0) scores.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
-            scores.addView(text("RT", 9f, bold = true, color = BASE).apply {
-                setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
-            })
-            val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ")
-            scores.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+    }
+
+    /** The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it. */
+    private fun capsule(cert: String) = text(cert, 10.5f, bold = true, color = TEXT_2).apply {
+        letterSpacing = 0.04f
+        setPadding(dp(5), dp(2), dp(5), dp(2))
+        background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
+        alpha = RATING_ALPHA
+    }
+
+    /**
+     * IMDb's badge and [rating], then Rotten Tomatoes' badge and [meters] ("C92% A86%"), a dot between them and,
+     * with [lead], a dot before the first: the line continues the facts it follows.
+     */
+    private fun scoresLine(rating: String?, meters: String?, lead: Boolean): LinearLayout {
+        val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        fun dot() = line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
+        fun badge(name: String) = text(name, 9f, bold = true, color = BASE).apply {
+            setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
         }
-        // No line is kept when nothing can come to it: no rating, and Rotten Tomatoes off in Settings.
-        if (scores.childCount > 0 || Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)) {
-            scores.minimumHeight = text("", SMALL).lineHeight
-            block.addView(scores, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        rating?.let {
+            if (lead) dot()
+            line.addView(badge("IMDb"))
+            line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
         }
+        meters?.let {
+            if (lead || line.childCount > 0) dot()
+            line.addView(badge("RT"))
+            line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+        }
+        return line
     }
 
     /** The critics' consensus, one line in their words under the plot: what the meters mean, in a sentence. */

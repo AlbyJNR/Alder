@@ -277,6 +277,12 @@ abstract class Screen : Activity() {
 
     protected fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    /** The width [v] asks for on its own, before any layout: what a line must keep for it. */
+    protected fun widest(v: View): Int {
+        v.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        return v.measuredWidth
+    }
+
     private var windowShade: View? = null
     private var windowArt: ImageView? = null
     private var shadeSource: Bitmap? = null

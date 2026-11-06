@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.39.0
+
+- The facts and the scores share one line when the line has room for them. Before, they always took two lines.
+- The line keeps room for the scores before they arrive. A late Rotten Tomatoes score does not move the text.
+- A soft shade sits over the left side of the art on a title page. The text reads clearly and does not cover the picture.
+
 ## 1.38.0
 
 - The scores have a line of their own under the facts, on Home and on a title page. Before, a late Rotten Tomatoes score made the facts line too wide and cut the words you saw first.
