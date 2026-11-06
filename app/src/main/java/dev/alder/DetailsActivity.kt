@@ -159,7 +159,10 @@ class DetailsActivity : Screen() {
             if (type == "movie" && !similarRequested) { similarRequested = true; loadSimilar() }
         }
         background({
-            (Stremio.savedAddons(key) ?: Stremio.addons(key)).savedMeta(type, metaId) to Stremio.savedLibrary(key)?.firstOrNull { it.optString("_id") == metaId }
+            // The library Home holds in memory first: parsing the saved library (megabytes) again for one item held the
+            // first block back, and the block was then built once more when the item came.
+            (Stremio.savedAddons(key) ?: Stremio.addons(key)).savedMeta(type, metaId) to
+                (Stremio.knownLibrary(key) ?: Stremio.savedLibrary(key))?.firstOrNull { it.optString("_id") == metaId }
         }) { result ->
             result.getOrNull()?.let { (saved, libraryItem) ->
                 if (!itemChangedHere && item == null) item = libraryItem
@@ -974,6 +977,7 @@ class DetailsActivity : Screen() {
             .putExtra("videoId", videoId).putExtra("nextVideoId", nextId).putExtra("startOver", startOver).putExtra("pick", pick)
             .putExtra("background", m?.background).putExtra("tint", tint) // the player's shades in this title's colour
             .putExtra("label", listOfNotNull(m?.name ?: name, short).joinToString("  ·  "))
+            .putExtra("origin", origin) // the title's language, for subtitles that follow the sound
             // For the sources page: the title's logo, the episode's still and "S1 E3 · OutKast".
             .putExtra("logo", m?.logo).putExtra("still", video?.thumbnail).putExtra("runtime", m?.runtime)
             .putExtra("episode", video?.let { v -> listOfNotNull("S${v.season} E${v.episode}", v.title.takeIf { it.isNotBlank() }).joinToString("  ·  ") }))
@@ -982,15 +986,26 @@ class DetailsActivity : Screen() {
     // Back from the player: progress, the resume point and My List may have changed.
     override fun onRestart() {
         super.onRestart()
+        // What the player saved is known here already (Stremio.savingItem): the block takes it now, before the screen
+        // shows. Stremio's answer, usually the same, then redraws nothing, and the controls stay where the remote left them.
+        Stremio.savingItem(key, metaId)?.takeIf { s -> item?.let { s.optString("_mtime") > it.optString("_mtime") } ?: true }?.let { item = it }
+        refreshWatch()
         background({ runCatching { Stremio.library(key, listOf(metaId)).firstOrNull() }.getOrNull() }) { result ->
             item = result.getOrNull() ?: item
-            val wasGuide = guideOpen
-            if (infoOpen) { root.removeView(infoOverlay); infoOpen = false }
-            hero.visibility = View.VISIBLE
-            showHero(meta)
-            meta?.videos?.takeIf { type == "series" && it.isNotEmpty() }?.let(::buildGuide)
-            if (wasGuide) showGuide()
+            refreshWatch()
         }
+    }
+
+    /** The watch block and the guide drawn again only when the item changed what they show (a resume point, My List, a tick). */
+    private fun refreshWatch() {
+        if (infoOpen) { root.removeView(infoOverlay); infoOpen = false }
+        hero.visibility = View.VISIBLE
+        val m = meta ?: return
+        if (watchKey(m) == watchState) return
+        val wasGuide = guideOpen
+        showHero(m)
+        m.videos.takeIf { type == "series" && it.isNotEmpty() }?.let(::buildGuide)
+        if (wasGuide) showGuide()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

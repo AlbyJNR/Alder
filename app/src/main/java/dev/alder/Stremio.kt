@@ -64,21 +64,33 @@ object Stremio {
     fun library(authKey: String, ids: List<String> = emptyList()): List<JSONObject> {
         val body = libraryBody(authKey, ids)
         val answer = Http.post(API + "datastoreGet", body)
-        if (ids.isEmpty()) Http.keep(API + "datastoreGet", body, answer)
-        return newest(authKey, libraryItems(answer))
+        val items = newest(authKey, libraryItems(answer))
+        if (ids.isEmpty()) { Http.keep(API + "datastoreGet", body, answer); known[authKey] = items }
+        return items
     }
+
+    // The whole library as last fetched or read from disk, per auth key: a title page opened from Home reads its item
+    // here instead of parsing the saved library (megabytes) again before its first block.
+    private val known = java.util.concurrent.ConcurrentHashMap<String, List<JSONObject>>()
+
+    /** The library as this process last had it, or null before any fetch. */
+    fun knownLibrary(authKey: String): List<JSONObject>? = known[authKey]
 
     // Items saved here whose save may not have reached Stremio yet: the player saves as it closes, and the page behind
     // it asks Stremio at the same moment, so without this it showed the progress from before.
     private val saving = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
 
-    private fun newest(authKey: String, items: List<JSONObject>) = items.map { item ->
+    /** The copy of [id] saved from here that Stremio may not have answered with yet, or null. */
+    fun savingItem(authKey: String, id: String): JSONObject? = saving["$authKey/$id"]
+
+    /** [items] with any newer copy saved from here in place of Stremio's: what a screen may draw before Stremio answers. */
+    internal fun newest(authKey: String, items: List<JSONObject>) = items.map { item ->
         saving["$authKey/${item.optString("_id")}"]?.takeIf { it.optString("_mtime") > item.optString("_mtime") } ?: item
     }
 
     /** The whole library as it was last time, from disk, or null. */
     fun savedLibrary(authKey: String): List<JSONObject>? = Http.savedAnswer(API + "datastoreGet", libraryBody(authKey, emptyList()))
-        ?.let { runCatching { newest(authKey, libraryItems(it)) }.getOrNull() }
+        ?.let { runCatching { newest(authKey, libraryItems(it)) }.getOrNull() }?.also { known.putIfAbsent(authKey, it) }
 
     private fun libraryBody(authKey: String, ids: List<String>) = JSONObject().put("authKey", authKey)
         .put("collection", "libraryItem").put("ids", JSONArray(ids)).put("all", ids.isEmpty()).toString()

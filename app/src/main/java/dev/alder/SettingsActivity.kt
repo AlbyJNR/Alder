@@ -83,7 +83,15 @@ object Settings {
     fun alwaysList(c: Context) = prefs(c).getBoolean("alwaysList", false)
     fun matchFrameRate(c: Context) = prefs(c).getBoolean("matchFrameRate", true)
     fun passthrough(c: Context) = prefs(c).getBoolean("passthrough", false)
-    fun subtitles(c: Context) = prefs(c).getBoolean("subtitles", true)
+    /** When subtitles start with the video: "foreign" (the sound is not in your language), "always" or "off". */
+    fun subtitleMode(c: Context): String {
+        val p = prefs(c)
+        p.getString("subtitlesWhen", null)?.let { return it }
+        // Before 1.37.0 the setting was on or off: off stays off, and on becomes the new default, which follows the sound.
+        val mode = if (p.contains("subtitles") && !p.getBoolean("subtitles", true)) "off" else "foreign"
+        p.edit().putString("subtitlesWhen", mode).apply()
+        return mode
+    }
     /** Two-letter code of the dub to start with: the TV's language unless one is picked. */
     fun audioLanguage(c: Context): String = prefs(c).getString(profileKey(c, "audioLang"), prefs(c).getString("audioLang", ""))
         .orEmpty().ifEmpty { Languages.code(Locale.getDefault().toLanguageTag()) ?: "en" }
@@ -204,7 +212,7 @@ class SettingsActivity : Screen() {
         Choice("blurThumbnails", "Blur unwatched episodes", "Pictures of episodes you have not watched are blurred in the episode guide, against spoilers.", listOf(false to "Off", true to "On")),
     )
     private val pictureAndSound = listOf(
-        Choice("homeCinema", "Screensaver", "After five minutes without a key on Home, one of your Continue Watching titles fills the screen with its art and a clock. Any key returns.", listOf(true to "On", false to "Off")),
+        Choice("homeCinema", "Screensaver", "After five minutes without a key on Home, your Continue and New episodes titles fill the screen in turn, with a clock, for ten minutes; then the TV's own screensaver or sleep follows. Any key returns.", listOf(true to "On", false to "Off")),
         Choice("hdrPref", "HDR and Dolby Vision", "Which goes first when a title has both. Off picks plain releases.",
             listOf("" to "On", "dv" to "Dolby Vision first", "hdr10" to "HDR10 first", "off" to "Off")),
         Choice("matchFrameRate", "Match frame rate", "The TV switches to the film's rate so pans don't judder.",
@@ -221,8 +229,8 @@ class SettingsActivity : Screen() {
             listOf("" to "No preference", "original" to "Original first", "mine" to "My language first"), true),
     )
     private val subtitles = listOf(
-        Choice("subtitles", "Subtitles by default", "Subtitles in your subtitle language start with the video when available.",
-            listOf(true to "On", false to "Off")),
+        Choice("subtitlesWhen", "Subtitles by default", "With foreign sound: subtitles in your subtitle language start when the sound is not in your language, as Netflix does. Always: with every video that has them. A choice made while watching a title is kept for that title.",
+            listOf("foreign" to "With foreign sound", "always" to "Always", "off" to "Off")),
     )
     private val subtitleLooks = listOf(
         Choice("subSize", "Subtitle size", "How big subtitles are on screen.",

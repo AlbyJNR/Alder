@@ -13,6 +13,16 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.37.0
+
+- Subtitles follow the sound. When the sound of a video is not in your language, subtitles in your subtitle language start with it, as on Netflix. When the sound is in your language, they stay off. Settings › Subtitles › **Subtitles by default** has the three options: **With foreign sound** (the default now), **Always** and **Off**. A choice you make while you watch a title is kept for that title, as before.
+- Home stands still. When you add a title to a list, or take one out, only that list's row changes. Before, CAS asked Stremio for the library again and built all the rows again, and every row moved.
+- When you come back from the player, Continue and the title page already show the new position before the screen appears. Before, they changed in front of you a moment after the screen came back, and the title page built its buttons again on each return. Now the buttons change only when the resume point, My List or the next episode changed.
+- The title page opens faster: it reads your library from memory. Before, it read the saved library file (megabytes) for one title before it drew its first block.
+- The country picker on Foreign is a new design: the countries in a list down the left, each with a swatch of its flag, and on the right the country under the remote before you open it: its name, its five highest rated series as posters, and the services its top tens come from. Press OK to open it. Before, the countries were a grid of coloured tiles.
+- The screensaver keeps the screen awake for ten minutes, so the TV's own screensaver does not cut it short. Then the TV's own screensaver or sleep follows.
+- If Android stops CAS in the background to free memory, CAS comes back to the page and the title you were on, not to the top of Home.
+
 ## 1.36.0
 
 - Home has a new row, **New episodes**, under Continue. It shows the series in My List with an episode out since you watched them, the newest first. Each poster has a mark with the number of new episodes. Select a poster to open the title page on the new episode. Continue now holds only the titles you are part-way through.

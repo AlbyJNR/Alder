@@ -215,6 +215,17 @@ class ScreenDesignTest {
         assertEquals(480, Stream("480p", "", "https://example.invalid/low", emptyMap(), 175_000_000L, null, null).height)
     }
 
+    @Test fun subtitlesFollowTheSoundWhenItIsNotTheViewersLanguage() {
+        // The player's rule: a track tagged in another language turns subtitles on; the same language (from another
+        // country too) leaves them off; an untagged track decides nothing.
+        assertEquals(0, Languages.match("ita", "en"))
+        assertEquals(2, Languages.match("eng", "en"))
+        assertEquals(1, Languages.match("pt", "pt-BR"))
+        assertEquals(0, Languages.match("und", "en"))
+        assertEquals("it", Languages.code("Italian"))
+        assertEquals(null, Languages.code("Neapolitan"))
+    }
+
     @Test fun everySourceSaysWhyItStandsWhereItDoes() {
         val tv = Device(hevc = true, av1 = false, dolbyVision = false, hdr = false, height = 1080)
         val tastes = Tastes(limit = 1080, maxGb = 10, hdrOn = true, release = "web", hdrPref = "", dub = "", language = "en", receiver = false)

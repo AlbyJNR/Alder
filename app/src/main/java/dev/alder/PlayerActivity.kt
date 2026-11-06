@@ -101,6 +101,9 @@ class PlayerActivity : Screen() {
     private var wantAudio = ""
     private var wantSub = ""
     private var subsOn = true
+    private var subsIfForeign = false // decided once the tracks are known: on when the sound is not in the viewer's language
+    // The title's own language as the rows knew it ("Italy · Italian" from Foreign), for sound the file leaves untagged.
+    private val titleLanguage by lazy { intent.getStringExtra("origin")?.substringAfterLast('·')?.trim()?.let(Languages::code) }
     private var viewerAddonSub = false // the viewer chose the addon file, over the file's own in the same language
     // Timing for an addon subtitle file that runs early or late: the file is fetched, its times moved, and attached
     // from the app's cache instead of its URL. ponytail: SRT and VTT only; ASS and the file's own subtitles can't move.
@@ -171,7 +174,11 @@ class PlayerActivity : Screen() {
         player = ExoPlayer.Builder(this, renderers).build()
         val remembered = Settings.titleChoice(this, metaId)
         wantAudio = remembered?.audio ?: Settings.audioLanguage(this)
-        subsOn = remembered?.subtitles?.isNotEmpty() ?: Settings.subtitles(this)
+        // A choice made for this title while watching stands; else Settings: always, never, or (Netflix's way) only
+        // when the sound turns out not to be in the viewer's language, decided once the file's tracks are known.
+        val subMode = Settings.subtitleMode(this)
+        subsOn = remembered?.subtitles?.isNotEmpty() ?: (subMode == "always")
+        subsIfForeign = remembered?.subtitles == null && subMode == "foreign"
         wantSub = remembered?.subtitles?.ifEmpty { null } ?: Settings.subtitleLanguage(this)
         // Release files carry many dubs; start in the chosen language (the TV's unless Settings says) instead of the first.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -343,6 +350,15 @@ class PlayerActivity : Screen() {
                 // English audio): start with subtitles only in the profile's subtitle language, whatever the sound, else
                 // none. The file's own come first, then the addon file attached at the start, then the file's own from
                 // another country (Portugal's for Brazil's). Once per video, like audio.
+                if (!subsPicked && best != null && subsIfForeign) {
+                    subsIfForeign = false
+                    // The sound's language from its track (most releases tag it), else what the rows knew of the title;
+                    // untagged sound in a title of unknown language counts as the viewer's own.
+                    val sound = Languages.code(best.getTrackFormat(0).language) ?: titleLanguage
+                    val mine = wantAudio.ifEmpty { Locale.getDefault().language }
+                    subsOn = sound != null && Languages.match(sound, mine) == 0
+                    if (subsOn) android.util.Log.i("CAS", "Sound in $sound, not $mine: subtitles on")
+                }
                 if (!subsPicked && best != null) {
                     subsPicked = true
                     val texts = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isTrackSupported(0) }
@@ -367,7 +383,7 @@ class PlayerActivity : Screen() {
         val known = if (intent.getBooleanExtra("startOver", false)) 0L else intent.getLongExtra("resumeAt", -1L).takeIf { it >= 0 }
         // The addon's subtitles are waited for (SUB_WAIT at most) so a file in the profile's language is attached from
         // the start: attaching one later means loading the source again. The latest resume point asked for wins.
-        var subsAnswered = !subsOn
+        var subsAnswered = !(subsOn || subsIfForeign) // with foreign sound the files are fetched ahead too, in case
         var waiting: Long? = null
         fun begin(resume: Long) {
             if (prepared) return

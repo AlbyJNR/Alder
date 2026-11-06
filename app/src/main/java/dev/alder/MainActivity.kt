@@ -383,7 +383,10 @@ class MainActivity : Screen() {
             // Rows settle after a focus move (the next heading can peek in): name it once, whichever shows.
             main.removeCallbacks(nextRowCheck); main.postDelayed(nextRowCheck, 300)
         }
-        showPage(pageNamed(intent.getStringExtra("page")) ?: Page.HOME)
+        // Back after Android let the process go (memory, a long sit in another app): the same page, and the remote
+        // on the title it was on once its row is in, rather than Home's top as if CAS had been opened afresh.
+        restoreCard = savedInstanceState?.getString("card")
+        showPage(pageNamed(savedInstanceState?.getString("page") ?: intent.getStringExtra("page")) ?: Page.HOME)
         main.postDelayed(::warmPages, WARM_AFTER)
     }
 
@@ -446,6 +449,13 @@ class MainActivity : Screen() {
     // the library's rows are redrawn, so the remote stays where it was on the rest of the page.
     override fun onRestart() {
         super.onRestart()
+        // What the player or the title page saved is known here already (Stremio.newest): Continue takes it now,
+        // before the screen shows, so a title moves to its new place out of sight, and Stremio's answer, the same,
+        // then redraws nothing. The network work itself still waits until the screen is drawn.
+        if (::profile.isInitialized && (page == Page.HOME || page == Page.LIBRARY) && library.isNotEmpty()) {
+            val local = Stremio.newest(profile.authKey, library)
+            if (local.indices.any { local[it] !== library[it] }) showLibraryNow?.invoke(local)
+        }
         // After the screen is back and drawn, not during the return: the library and add-on checks start network
         // work and can rebuild rows, which made coming back from Settings feel like a pause.
         main.removeCallbacks(refreshOnReturn)
@@ -456,6 +466,7 @@ class MainActivity : Screen() {
         if (isFinishing || isDestroyed) return@Runnable
         // A row shown again in Settings › Profile › Hidden rows: the page is built afresh with it.
         if (hiddenSeen != null && Settings.hiddenRows(this) != hiddenSeen) return@Runnable showPage(page)
+        if (page == Page.HOME && Lists.signature(this) != listsSeen) redrawLists() // edited in Settings › Lists, or from a title page
         refreshLibrary?.invoke()
         // The add-on list rarely changes while CAS is open: asked again at most every few minutes, not on every return.
         if (android.os.SystemClock.uptimeMillis() - lastAddonCheck > ADDON_RECHECK) refreshAddons?.invoke()
@@ -465,6 +476,11 @@ class MainActivity : Screen() {
     private var refreshAddons: (() -> Unit)? = null // the open page's add-on check, run again on coming back to CAS
 
     private var refreshLibrary: (() -> Unit)? = null // the open page's library rows (Home, Library), asked again
+    private var showLibraryNow: ((List<JSONObject>) -> Unit)? = null // the open page's library rows drawn from a list in hand
+    private var homeSlot: LinearLayout? = null // Home's slot of Continue, New episodes and the viewer's lists
+    private var listsSeen = "" // the lists as drawn (Lists.signature); drawn again in place when they change
+    private var restoreCard: String? = null // the card the remote was on when Android let the process go (onSaveInstanceState)
+    private val cinemaRest = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } // ten minutes in: the TV's own screensaver or sleep may follow
     private var newsChecking = false // NewEpisodes.refresh is running for Home
     private var hiddenSeen: Set<String>? = null // the hidden rows the open page was built without; changed in Settings → rebuilt
     private var last: View? = null // where the remote last was in the rows
@@ -493,6 +509,14 @@ class MainActivity : Screen() {
         main.removeCallbacks(idleDim)
         main.removeCallbacks(advance)
         main.removeCallbacks(refreshOnReturn)
+        main.removeCallbacks(cinemaRest)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("page", page.name)
+        outState.putString("card", (currentFocus?.tag as? String)?.takeIf { it.startsWith("card:") })
     }
 
     /** The screensaver's clock: IDLE from the last key, while Settings wants it. */
@@ -879,6 +903,11 @@ class MainActivity : Screen() {
         cinemaWakeKey = -1
         cinemaPlay.isFocusable = false
         mode = Mode.CINEMA
+        // The TV's own screensaver would cut in at its own time (ten minutes on a Fire TV) and end this one early: the
+        // screen is kept awake for CINEMA_RUN, then let go, and the TV's screensaver or sleep follows as it would have.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        main.removeCallbacks(cinemaRest)
+        main.postDelayed(cinemaRest, CINEMA_RUN)
         stage.isFocusable = true
         stage.requestFocus()
         scroller.animate().translationY(dp(RISE).toFloat()).alpha(0f).setDuration(300).withEndAction {
@@ -893,6 +922,8 @@ class MainActivity : Screen() {
         mode = Mode.BROWSE
         dimHome(false)
         main.removeCallbacks(advance)
+        main.removeCallbacks(cinemaRest)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         scroller.visibility = View.VISIBLE
         scroller.animate().translationY(0f).alpha(1f).setDuration(300).setInterpolator(DecelerateInterpolator()).start()
         chrome()
@@ -1141,6 +1172,8 @@ class MainActivity : Screen() {
         webRowsMore = null
         val opened = android.os.SystemClock.uptimeMillis()
         refreshLibrary = null
+        showLibraryNow = null
+        homeSlot = null
         touched = false
         styleNav()
         content.removeAllViews()
@@ -1199,7 +1232,7 @@ class MainActivity : Screen() {
                 val cw = Library.continueWatching(list, news)
                 val what = (if (p == Page.HOME) cw else list).joinToString {
                     it.optString("_id") + it.optString("_mtime") + it.optBoolean("removed") + it.optJSONObject("state")?.optLong("timeOffset") + (news[it.optString("_id")]?.count ?: 0)
-                } + (if (p == Page.HOME) Lists.signature(this) else "")
+                } // the viewer's lists are not part of it: they change in place (redrawLists), the rest standing still
                 // Saved copies wait once the remote is in use; Stremio's own answer always goes in (focus stays on
                 // its title below), or a stale disk copy could hide a show for the whole visit.
                 if (what == shown || (shown != null && touched && !force)) return
@@ -1227,10 +1260,9 @@ class MainActivity : Screen() {
                     // The screensaver shows both rows' titles, as it showed Continue when the news sat in it.
                     (items + fresh).distinctBy { it.id }.takeIf { it.isNotEmpty() }?.let { startCinema(it.take(CINEMA_MAX)) }
                     // The viewer's own lists, each a row under those, newest additions first.
-                    lists.forEach { l ->
-                        val listItems = l.items.map { e -> Item(e.id, e.type, e.name, e.poster, null, Images.logoFor(e.id), "", emptyList(), null, 0f, resume = false, left = null) }
-                        slot.addView(row(l.name, listItems.take(START), later(listItems), listId = l.id).view)
-                    }
+                    lists.forEach { l -> slot.addView(listRow(l).view) }
+                    homeSlot = slot
+                    listsSeen = Lists.signature(this)
                     // New episodes of the series in My List, looked for behind the row; the row is drawn again if any turned up.
                     if (!newsChecking) {
                         newsChecking = true
@@ -1257,6 +1289,7 @@ class MainActivity : Screen() {
             }
             ask()
             refreshLibrary = { ask() }
+            showLibraryNow = { show(it, force = true) }
         }
         if (p == Page.LIBRARY) return
         if (p == Page.IMDB) return buildImdb(g)
@@ -1591,50 +1624,104 @@ class MainActivity : Screen() {
      * series. Any of twenty is at most a few presses away, where the strip asked for up to nineteen; the remote starts
      * on the one in use. OK enters it, Back leaves things as they were.
      */
+    /**
+     * The country picker: the countries down the left (World, then A to Z, each with a swatch of its flag) and, on
+     * the right, the one under the remote before it is entered: its name in the serif, its five highest rated series
+     * as posters, and the services its top tens come from. The side-panel pattern of Prime Video and Plex: the eye
+     * moves one way, the preview answers "what is in there" before OK. OK enters; Back closes.
+     */
     private fun countryPicker() {
         if (isFinishing || isDestroyed) return
         val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
         val current = foreignCountry()
         val entries = listOf(WORLD to "World") + JW_COUNTRIES.map { it.code to it.label }
-        var start: View? = null
-        val grid = column(Gravity.START).apply { setPadding(dp(20), dp(18), dp(20), dp(20)); clipChildren = false }
-        grid.addView(text("Countries", BODY, bold = true).apply { setPadding(dp(5), 0, 0, dp(10)) })
-        entries.chunked(PICKER_COLUMNS).forEach { line ->
-            val row = LinearLayout(this).apply { clipChildren = false }
-            line.forEach { (code, label) ->
-                val c = jwCountry(code)
-                val sub = if (c == null) "Every country's best TV"
-                    else cachedBest(c, true)?.take(2)?.joinToString(DOT) { it.name }?.ifEmpty { null } ?: "Highest rated ${c.demonym} TV and films"
-                val tile = countryTile(code, label, sub, chosen = code == current).apply { setOnClickListener { dialog.dismiss(); switchCountry(code) } }
-                if (code == current) start = tile
-                row.addView(tile, LinearLayout.LayoutParams(dp(PICKER_TILE_W), dp(PICKER_TILE_H)).apply { setMargins(dp(5), dp(5), dp(5), dp(5)) })
-            }
-            grid.addView(row)
+        // The preview, right.
+        val kicker = caps("", TEXT_2).onArt()
+        val heading = text("", SERIF_TITLE, serif = true).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+        val posters = LinearLayout(this).apply { clipChildren = false }
+        val services = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 3; ellipsize = TextUtils.TruncateAt.END }
+        val preview = column(Gravity.START, kicker, heading.marginTop(2), posters.marginTop(14), services.marginTop(12)).apply {
+            setPadding(dp(26), dp(22), dp(24), dp(20))
         }
-        dialog.setContentView(grid.apply { background = glassOver(this, 16) })
+        var wanted = current
+        var previewTask: Runnable? = null
+        fun poster(url: String?): View = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(0x1FFFFFFF)
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) = outline.setRoundRect(0, 0, view.width, view.height, dp(6).toFloat())
+            }
+            Images.load(url, this, dp(PREVIEW_POSTER_W))
+        }
+        fun fillPreview(code: String, picks: List<ImdbPick>?) {
+            if (wanted != code) return
+            val c = jwCountry(code)
+            kicker.text = (if (c == null) "Every country's best TV" else "Highest rated ${c.demonym} TV").uppercase()
+            heading.text = c?.label ?: "World"
+            services.text = if (c == null) "${JW_COUNTRIES.size} countries, one row each, their highest rated series. Open a country for its films too, and the top tens on its own services."
+                else "Top tens on " + c.services.joinToString("  ·  ") { it.name }
+            posters.removeAllViews()
+            picks?.take(PREVIEW_POSTERS)?.forEach { pick ->
+                posters.addView(poster(pick.poster), LinearLayout.LayoutParams(dp(PREVIEW_POSTER_W), dp(PREVIEW_POSTER_W * 3 / 2))
+                    .apply { if (posters.childCount > 0) marginStart = dp(8) })
+            }
+        }
+        fun showPreview(code: String) {
+            wanted = code
+            val c = jwCountry(code)
+            // World: the first title of a handful of countries; a country: its own five, fetched now when not kept yet.
+            val picks = if (c == null) JW_COUNTRIES.mapNotNull { cachedBest(it, true)?.firstOrNull() }.take(PREVIEW_POSTERS) else cachedBest(c, true)
+            fillPreview(code, picks)
+            if (c != null && picks == null) background({ bestList(c, true) }) { r -> r.getOrNull()?.let { fillPreview(code, it) } }
+        }
+        // The list, left.
+        var start: View? = null
+        val list = column(Gravity.START).apply { setPadding(dp(10), dp(12), dp(10), dp(12)) }
+        entries.forEach { (code, label) ->
+            val name = text(label, BODY, bold = code == current, color = if (code == current) TEXT else TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+            val row = LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), 0, dp(12), 0)
+                addView(View(context).apply {
+                    background = GradientDrawable(GradientDrawable.Orientation.TL_BR, flagColours(code)).apply { cornerRadius = dp(2).toFloat() }
+                }, LinearLayout.LayoutParams(dp(16), dp(11)).apply { marginEnd = dp(12) })
+                addView(name, LinearLayout.LayoutParams(0, -2, 1f))
+                if (code == current) addView(text("\u25CF", 9f, color = TEXT).apply { alpha = 0.9f })
+                rowFocus(8) { has ->
+                    name.setTextColor(if (has || code == current) TEXT else TEXT_2)
+                    if (has) {
+                        // A moment after the remote stops, not for every row it glides past.
+                        previewTask?.let(main::removeCallbacks)
+                        previewTask = Runnable { showPreview(code) }.also { main.postDelayed(it, PREVIEW_WAIT) }
+                    }
+                }
+                setOnClickListener { dialog.dismiss(); switchCountry(code) }
+            }
+            if (code == current) start = row
+            list.addView(row, LinearLayout.LayoutParams(-1, dp(PICKER_ROW_H)))
+        }
+        val listScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            isVerticalFadingEdgeEnabled = true
+            setFadingEdgeLength(dp(28))
+            addView(list)
+        }
+        val body = LinearLayout(this).apply {
+            addView(listScroll, LinearLayout.LayoutParams(dp(PICKER_LIST_W), -1))
+            addView(View(context).apply { setBackgroundColor(GLASS_EDGE) }, LinearLayout.LayoutParams(dp(1), -1).apply { topMargin = dp(14); bottomMargin = dp(14) })
+            addView(preview, LinearLayout.LayoutParams(0, -1, 1f))
+        }
+        dialog.setContentView(body.apply { background = glassOver(this, 16) })
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
-            setLayout(-2, -2)
+            setLayout(dp(PICKER_W), dp(PICKER_H))
             setDimAmount(0.7f)
         }
+        dialog.setOnDismissListener { previewTask?.let(main::removeCallbacks) }
         dialog.show()
-        (start ?: grid).requestFocus()
-    }
-
-    /** A country as a tile: its flag's colours, dusked so white words read on them, its name in the serif, a line under. */
-    private fun countryTile(code: String, label: String, sub: String?, chosen: Boolean = false): FrameLayout = FrameLayout(this).apply {
-        background = flagGradient(code)
-        clipToOutline = true
-        outlineProvider = object : android.view.ViewOutlineProvider() {
-            override fun getOutline(view: View, outline: android.graphics.Outline) = outline.setRoundRect(0, 0, view.width, view.height, dp(TILE_RADIUS).toFloat())
-        }
-        val words = column(Gravity.START).apply { setPadding(dp(12), dp(8), dp(12), dp(10)) }
-        words.addView(text(label, BODY, bold = true, serif = true).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END })
-        sub?.let { words.addView(text(it, 11f, color = TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) }) }
-        addView(words, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.START))
-        if (chosen) addView(text("\u25CF", 9f, color = TEXT).apply { alpha = 0.9f }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(8), dp(10), 0) })
-        isFocusable = true
-        setOnFocusChangeListener { v, has -> v.lift(has, TILE_RADIUS) }
+        showPreview(current)
+        (start ?: list.getChildAt(0)).let { v -> v.post { v.requestFocus() } }
     }
 
     /** The flag's colours corner to corner, at dusk. */
@@ -1701,6 +1788,34 @@ class MainActivity : Screen() {
     /** A page's place for rows that come and go (the library, the viewer's lists): they stack, one under the other. */
     private fun slot() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also { content.addView(it, LinearLayout.LayoutParams(-1, -2)) }
 
+    /** One of the viewer's lists as a row: its titles, newest additions first. */
+    private fun listRow(l: Lists.ListDef): Row {
+        val items = l.items.map { e -> Item(e.id, e.type, e.name, e.poster, null, Images.logoFor(e.id), "", emptyList(), null, 0f, resume = false, left = null) }
+        return row(l.name, items.take(START), later(items), listId = l.id)
+    }
+
+    /**
+     * The viewer's lists changed (hold OK → Add to…, Settings › Lists, a title page): their rows are drawn again where
+     * they stand, and Continue and the rest do not move. The remote stays on its card, or on the same place in a list
+     * that lost one. Before, the whole slot was fetched and built again, and every row jumped.
+     */
+    private fun redrawLists() {
+        val slot = homeSlot?.takeIf { page == Page.HOME && it.isAttachedToWindow } ?: return
+        listsSeen = Lists.signature(this)
+        val focused = currentFocus
+        val wasTag = focused?.takeIf { isInside(it, slot) }?.tag
+        val wasRow = rows.firstOrNull { it.listId != null && focused != null && isInside(focused, it.view) }
+        val wasAt = wasRow?.selected ?: 0
+        rows.filter { it.listId != null && isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r); slot.removeView(r.view) }
+        Lists.all(this).filter { it.items.isNotEmpty() }.forEach { l -> slot.addView(listRow(l).view) }
+        homeEmptyNote?.visibility = if (rows.none { isInside(it.view, slot) }) View.VISIBLE else View.GONE
+        if (wasTag == null) return
+        val back = slot.findViewWithTag<View>(wasTag)
+            ?: wasRow?.let { r -> rows.firstOrNull { it.listId == r.listId }?.let { it.cards.getOrNull(minOf(wasAt, it.cards.lastIndex)) } }
+            ?: rows.filter { isInside(it.view, slot) }.minByOrNull { offsetIn(it.view) }?.let { it.cards.getOrNull(it.selected) }
+        back?.requestFocus()
+    }
+
     private fun redrawLibrary() {
         val slot = librarySlot ?: return
         val was = currentFocus?.takeIf { isInside(it, slot) }?.tag
@@ -1762,7 +1877,7 @@ class MainActivity : Screen() {
         if (item.type == COUNTRY) return
         // Held in one of the viewer's own rows: that list can be edited from here, not only in Settings › Lists.
         val inList = rows.firstOrNull { r -> r.listId != null && r.cards.any { it.item === item } }?.listId?.let { id -> Lists.all(this).firstOrNull { it.id == id } }
-        val redraw = { refreshLibrary?.invoke() ?: Unit }
+        val redraw = { redrawLists() }
         val listOwn = inList?.let { l -> listOfNotNull(
             // Held on a title further along the row: brings it to the front, where the remote lands first.
             if (l.items.firstOrNull()?.id == item.id) null else "Move to the front" to { Lists.toFront(this, l.id, item.id); redraw() },
@@ -1790,7 +1905,7 @@ class MainActivity : Screen() {
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
             else -> emptyList()
         } + hideRow
-        listsMenu(Lists.Entry(item.id, item.type, item.name, item.poster), own, skip = inList?.id) { if (page == Page.HOME) refreshLibrary?.invoke() }
+        listsMenu(Lists.Entry(item.id, item.type, item.name, item.poster), own, skip = inList?.id) { redrawLists() }
     }
 
     private fun libraryEdit(item: Item, selected: Int) {
@@ -1912,7 +2027,9 @@ class MainActivity : Screen() {
         focusedSomething = true
         if (header.hasFocus() && !jump) return@Runnable
         jump = false
-        firstRow()?.focusFirst()
+        val back = restoreCard?.let { tag -> rows.firstNotNullOfOrNull { r -> r.cards.firstOrNull { it.tag == tag } } }
+        restoreCard = null
+        if (back != null) back.requestFocus() else firstRow()?.focusFirst()
     }
 
     private val heroTop = Runnable {
@@ -2646,9 +2763,13 @@ class MainActivity : Screen() {
         const val NEW_ROW = "New episodes" // Home's row of the series in My List with an episode out since they were watched
         const val PICK = "pick" // the top line's second control: the country in use, which opens the picker
         const val COUNTRY = "country" // an Item's type for a country's door card
-        const val PICKER_COLUMNS = 5
-        const val PICKER_TILE_W = 164 // dp: five across with their gaps sit inside the screen's width
-        const val PICKER_TILE_H = 74
+        const val PICKER_W = 860 // dp, the picker's width (the screen is 960 dp wide at 1080p)
+        const val PICKER_H = 440 // dp, its height
+        const val PICKER_LIST_W = 290 // dp, the list of countries down the left
+        const val PICKER_ROW_H = 36 // dp a country in the list: twenty rows scroll in the picker's height
+        const val PREVIEW_POSTER_W = 92 // dp a poster in the preview; five fit beside the list
+        const val PREVIEW_POSTERS = 5
+        const val PREVIEW_WAIT = 140L // ms the remote rests on a country before its preview is drawn
         const val TILE_RADIUS = 10
         const val RANK_SIZE = 30f // sp, the numeral on a ranked card
         const val LOGO_W = 360 // the cinema's title logo
@@ -2681,6 +2802,7 @@ class MainActivity : Screen() {
         const val GENRE_ROWS = 6 // genre rows (and chips) at most on Shows and Movies
         const val CATALOG_WAIT = 6_000
         const val ADVANCE = 20_000L // ms each cinema title shows
+        const val CINEMA_RUN = 10 * 60_000L // ms the cinema keeps the screen awake before the TV's own screensaver or sleep may follow
         const val REVEAL_WAIT = 1200L // ms the cinema waits for a title's art and logo before showing its words anyway
     }
 }
