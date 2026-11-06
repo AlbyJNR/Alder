@@ -11,7 +11,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.34.0
+Put changes that are not released under `## 1.35.0
+
+- Foreign has a new way to choose a country. The top line has two controls: **World** and the country in use. Select the country control to open a grid of all the countries, five across, each tile in the colours of its flag with its two best series under its name. Select a tile to enter the country. Before, the countries were a line of twenty chips.
+- In World, each country's row starts with a door card in the colours of its flag. Select it to enter the country from the row you are on.
+- A country no longer changes as the remote passes over it. It changes when you select it.
+
+## 1.34.0
 
 - Foreign opens on a new first chip, World: one row for each country, its highest rated TV, to scroll down through. The countries you chose last come next on the chips, then the rest A to Z. The chip in use stays in view.
 - A ranked row (a top ten, a highest rated list) shows its number large in the corner of each poster.

@@ -978,7 +978,7 @@ class MainActivity : Screen() {
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
     private val scoresAhead = Runnable {
         val item = heroItem ?: return@Runnable
-        if (mode != Mode.BROWSE) return@Runnable
+        if (mode != Mode.BROWSE || item.type == COUNTRY) return@Runnable
         val tomatoes = Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)
         val hasRt = item.facts.any { it.matches(Regex("[CA]\\d+%.*")) } || item.id in heroRtScores
         if (tomatoes && !hasRt) {
@@ -1121,7 +1121,6 @@ class MainActivity : Screen() {
             genreStrip.removeAllViews()
             genreChips.clear()
             countryChips.clear()
-            foreignOrder = emptyList()
         }
         val switched = p != page
         page = p
@@ -1534,7 +1533,7 @@ class MainActivity : Screen() {
     /** The chip the page's top line returns to: Library's last filter, a catalog page's genre, the Foreign page's country. */
     private fun topChip(): TextView? = when (page) {
         Page.LIBRARY -> lastListChip ?: listFilterChips[listFilter]
-        Page.FOREIGN -> countryChips[foreignCountry()]
+        Page.FOREIGN -> countryChips[if (foreignCountry() == WORLD) WORLD else PICK]
         else -> genreChips[genre]
     }
 
@@ -1544,21 +1543,19 @@ class MainActivity : Screen() {
     /** The Foreign page's choice, kept across visits: a country's code, or [WORLD] (every country's best, one row each). */
     private fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> c == WORLD || JW_COUNTRIES.any { it.code == c } } ?: WORLD
 
-    private var foreignOrder: List<JwCountry> = emptyList() // the chips' order for this visit: the recent ones first, then A to Z
 
-    private var pendingCountry = ""
-    // As the rail's pages: a country opens once the remote rests on its chip, so passing along the chips opens nothing.
-    private val countrySwitch = Runnable {
-        if (pendingCountry != foreignCountry() && countryChips[pendingCountry]?.isFocused == true) {
-            Settings.setForeignCountry(this, pendingCountry)
-            showPage(Page.FOREIGN)
-        }
+    /** The Foreign page's choice changes: kept, the page rebuilt for it, the remote on the top line's control for it. */
+    private fun switchCountry(code: String) {
+        if (code == foreignCountry()) return
+        Settings.setForeignCountry(this, code)
+        showPage(Page.FOREIGN)
+        countryChips[if (code == WORLD) WORLD else PICK]?.requestFocus()
     }
 
     /**
-     * The Foreign page's top line: one chip per country, alphabetical, the dot on the one in use. Resting on another
-     * keeps it and rebuilds the page's rows for that country (its services differ: Stan in Australia, Canal+ in
-     * France), with the remote staying on that chip; OK goes down into the rows.
+     * The Foreign page's top line: two controls, not a strip of twenty. World (every country's best, one row each) and
+     * the country in use, which opens the picker, a grid of them all one press away. In World a row's first card is
+     * that country's door as well, so a country is entered from where the remote already is.
      */
     private fun showCountryChips() {
         val hadFocus = genreStrip.hasFocus()
@@ -1570,32 +1567,84 @@ class MainActivity : Screen() {
             setPadding(dp(EDGE), dp(2), dp(PAD), dp(2))
         }
         val current = foreignCountry()
-        // World first, then the three countries chosen most recently, then the rest A to Z. The order is set when the
-        // page is entered and kept while on it, so a chip never moves under the remote as it rests there.
-        if (foreignOrder.isEmpty()) {
-            val recent = Settings.foreignRecent(this).mapNotNull(::jwCountry)
-            foreignOrder = recent + JW_COUNTRIES.filter { it !in recent }
+        val country = jwCountry(current)
+        val world = chip("World", current == WORLD).apply {
+            setOnClickListener { if (current == WORLD) firstRow()?.focusFirst() else switchCountry(WORLD) }
         }
-        (listOf(WORLD to "World") + foreignOrder.map { it.code to it.label }).forEach { (code, label) ->
-            val control = chip(label, code == current).apply {
-                setOnFocusChangeListener { _, has ->
-                    main.removeCallbacks(countrySwitch)
-                    if (has && code != foreignCountry()) { pendingCountry = code; main.postDelayed(countrySwitch, SWITCH_WAIT) }
-                }
-                setOnClickListener {
-                    main.removeCallbacks(countrySwitch)
-                    if (foreignCountry() == code) firstRow()?.focusFirst()
-                    else { pendingCountry = code; countrySwitch.run() }
-                }
-            }
-            countryChips[code] = control
-            line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
-        }
+        val pick = chip((country?.label ?: "Countries") + "  \u25BE", country != null).apply { setOnClickListener { countryPicker() } }
+        countryChips[WORLD] = world
+        countryChips[PICK] = pick
+        line.addView(world, LinearLayout.LayoutParams(-2, dp(CHIP_H)))
+        line.addView(pick, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { marginStart = dp(6) })
         genreStrip.addView(line)
-        if (hadFocus) countryChips[current]?.requestFocus()
-        // The chosen chip in view, however far along the line it sits.
-        genreStrip.post { countryChips[current]?.let { v -> genreStrip.smoothScrollTo((v.left + v.width / 2 - genreStrip.width / 2).coerceAtLeast(0), 0) } }
+        if (hadFocus) (if (current == WORLD) world else pick).requestFocus()
     }
+
+    /**
+     * Every country as a tile in a grid, five across: its flag's colours, dusked, behind its name and its two best
+     * series. Any of twenty is at most a few presses away, where the strip asked for up to nineteen; the remote starts
+     * on the one in use. OK enters it, Back leaves things as they were.
+     */
+    private fun countryPicker() {
+        if (isFinishing || isDestroyed) return
+        val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
+        val current = foreignCountry()
+        val entries = listOf(WORLD to "World") + JW_COUNTRIES.map { it.code to it.label }
+        var start: View? = null
+        val grid = column(Gravity.START).apply { setPadding(dp(20), dp(18), dp(20), dp(20)); clipChildren = false }
+        grid.addView(text("Countries", BODY, bold = true).apply { setPadding(dp(5), 0, 0, dp(10)) })
+        entries.chunked(PICKER_COLUMNS).forEach { line ->
+            val row = LinearLayout(this).apply { clipChildren = false }
+            line.forEach { (code, label) ->
+                val c = jwCountry(code)
+                val sub = if (c == null) "Every country's best TV"
+                    else cachedBest(c, true)?.take(2)?.joinToString(DOT) { it.name }?.ifEmpty { null } ?: "Highest rated ${c.demonym} TV and films"
+                val tile = countryTile(code, label, sub, chosen = code == current).apply { setOnClickListener { dialog.dismiss(); switchCountry(code) } }
+                if (code == current) start = tile
+                row.addView(tile, LinearLayout.LayoutParams(dp(PICKER_TILE_W), dp(PICKER_TILE_H)).apply { setMargins(dp(5), dp(5), dp(5), dp(5)) })
+            }
+            grid.addView(row)
+        }
+        dialog.setContentView(grid.apply { background = glassOver(this, 16) })
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+            setLayout(-2, -2)
+            setDimAmount(0.7f)
+        }
+        dialog.show()
+        (start ?: grid).requestFocus()
+    }
+
+    /** A country as a tile: its flag's colours, dusked so white words read on them, its name in the serif, a line under. */
+    private fun countryTile(code: String, label: String, sub: String?, chosen: Boolean = false): FrameLayout = FrameLayout(this).apply {
+        background = flagGradient(code)
+        clipToOutline = true
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) = outline.setRoundRect(0, 0, view.width, view.height, dp(TILE_RADIUS).toFloat())
+        }
+        val words = column(Gravity.START).apply { setPadding(dp(12), dp(8), dp(12), dp(10)) }
+        words.addView(text(label, BODY, bold = true, serif = true).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END })
+        sub?.let { words.addView(text(it, 11f, color = TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) }) }
+        addView(words, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.START))
+        if (chosen) addView(text("\u25CF", 9f, color = TEXT).apply { alpha = 0.9f }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(8), dp(10), 0) })
+        isFocusable = true
+        setOnFocusChangeListener { v, has -> v.lift(has, TILE_RADIUS) }
+    }
+
+    /** The flag's colours corner to corner, at dusk. */
+    private fun flagGradient(code: String) = GradientDrawable(GradientDrawable.Orientation.TL_BR, flagColours(code).map(::dusk).toIntArray())
+        .apply { cornerRadius = dp(TILE_RADIUS).toFloat() }
+
+    /** A flag's colour as it reads at dusk: half way to the page's dark, so white words sit on it and it is still itself. */
+    private fun dusk(c: Int): Int {
+        fun part(shift: Int, dark: Int) = (((c shr shift) and 255) * 0.5f + dark * 0.5f).toInt()
+        return (0xFF shl 24) or (part(16, 0x14) shl 16) or (part(8, 0x16) shl 8) or part(0, 0x1A)
+    }
+
+    /** A World row's first card: the country itself, which OK enters. */
+    private fun doorItem(c: JwCountry) = Item("country:${c.code}", COUNTRY, c.label, null, null, null,
+        "Highest rated ${c.demonym} TV and films, and the top tens on ${c.services.joinToString { it.name }}.",
+        listOf("${c.services.size} services", "Open for the lot"), null, 0f, resume = false, left = null).apply { filled = true; settled = true }
 
     private fun markChip(rowTitle: String) {
         val open = rowTitle.takeIf { it in genreChips }
@@ -1704,6 +1753,7 @@ class MainActivity : Screen() {
 
     /** Hold OK on any card: what the row offers for the title, then the viewer's own lists. */
     private fun holdMenu(item: Item) {
+        if (item.type == COUNTRY) return
         // Held in one of the viewer's own rows: that list can be edited from here, not only in Settings › Lists.
         val inList = rows.firstOrNull { r -> r.listId != null && r.cards.any { it.item === item } }?.listId?.let { id -> Lists.all(this).firstOrNull { it.id == id } }
         val redraw = { refreshLibrary?.invoke() ?: Unit }
@@ -2076,6 +2126,15 @@ class MainActivity : Screen() {
                 clipToOutline = true
                 setBackgroundColor(BASE)
                 face.addView(image, LayoutParams(-1, -1))
+                // A country's door (a World row's first card): its flag's colours at dusk, its name in the serif, no
+                // picture to wait for.
+                if (item.type == COUNTRY) {
+                    face.background = flagGradient(item.id.substringAfter(':'))
+                    face.alpha = 1f
+                    face.addView(caps("Open  \u203A", TEXT_2).onArt(), LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(dp(12), dp(12), 0, 0) })
+                    face.addView(text(item.name, BODY, bold = true, serif = true).onArt().apply { maxLines = 2 },
+                        LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.START).apply { setMargins(dp(12), 0, dp(12), dp(12)) })
+                }
                 // A dark foot under the words or the progress bar; a plain poster needs none.
                 if (wide || item.progress > 0) face.addView(View(context).apply {
                     background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xE6000000.toInt(), 0x66000000, 0x00000000))
@@ -2142,6 +2201,7 @@ class MainActivity : Screen() {
             /** On screen (or nearly): the poster (the wide art cropped for a title without one, else its name). */
             fun load() {
                 wanted = true
+                if (item.type == COUNTRY) return // drawn already; nothing to fetch
                 // A wide card waits for the title's art (it comes with its details) and takes the poster only if there's none.
                 val pick = if (wide) item.art ?: item.poster?.takeIf { item.settled } else item.poster ?: item.art
                 if (pick == null || (wide && item.art == null)) fill(item)
@@ -2275,7 +2335,7 @@ class MainActivity : Screen() {
             // World: every country's highest rated TV, one row each, to scroll down through rather than hop chips.
             Page.FOREIGN -> if (foreignCountry() == WORLD) JW_COUNTRIES.map { c ->
                 val title = "${c.label}: highest rated TV"
-                title to { slot: LinearLayout, g: Int -> bestRow(slot, c, true, g, title) }
+                title to { slot: LinearLayout, g: Int -> bestRow(slot, c, true, g, title, lead = doorItem(c)) }
             } else jwCountry(foreignCountry())?.let { c ->
                 listOf(true, false).map { tv -> c.bestTitle(tv) to { slot: LinearLayout, g: Int -> bestRow(slot, c, tv, g) } } +
                     c.services.flatMap { s -> listOf(JwList(s, false), JwList(s, true)) }.map { l -> l.title to { slot: LinearLayout, g: Int -> jwRow(slot, l, g) } }
@@ -2344,8 +2404,8 @@ class MainActivity : Screen() {
     private fun jwItem(t: JwTitle) = rankedItem(t.title, t.rank, t.poster)
 
     /** IMDb's highest rated series or films from the Foreign page's country, numbered from one. */
-    private fun bestRow(slot: LinearLayout, c: JwCountry, tv: Boolean, g: Int, title: String = c.bestTitle(tv)) =
-        fetchedRow(slot, title, g, country = c.code, cached = { cachedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } },
+    private fun bestRow(slot: LinearLayout, c: JwCountry, tv: Boolean, g: Int, title: String = c.bestTitle(tv), lead: Item? = null) =
+        fetchedRow(slot, title, g, country = c.code, lead = lead, cached = { cachedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } },
             saved = { savedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } }) { bestList(c, tv).map { rankedItem(it, it.rank ?: 0) } }
 
     private fun rankedItem(pk: ImdbPick, rank: Int, poster: String? = null): Item {
@@ -2365,7 +2425,8 @@ class MainActivity : Screen() {
      * or asked; otherwise the one file the last run kept ([saved]) fills it, and [fetch] runs live behind it. Each
      * answer replaces the row only when its titles differ from those shown.
      */
-    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, country: String = imdbCountry(), cached: (String) -> List<Item>?, saved: (String) -> List<Item>?, fetch: (String) -> List<Item>) {
+    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, country: String = imdbCountry(), lead: Item? = null,
+                           cached: (String) -> List<Item>?, saved: (String) -> List<Item>?, fetch: (String) -> List<Item>) {
         var shownIds = emptyList<String>()
         fun show(items: List<Item>) {
             val ids = items.map { it.id }
@@ -2373,7 +2434,8 @@ class MainActivity : Screen() {
             shownIds = ids
             rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
             slot.removeAllViews()
-            slot.addView(row(title, items.take(START), later(items)).view)
+            val all = listOfNotNull(lead) + items // a World row opens with its country's door
+            slot.addView(row(title, all.take(START), later(all)).view)
         }
         cached(country)?.let { show(it); return }
         background({ saved(country) }) { r -> r.getOrNull()?.let(::show) }
@@ -2446,6 +2508,7 @@ class MainActivity : Screen() {
     }
 
     private fun openDetails(item: Item) {
+        if (item.type == COUNTRY) return switchCountry(item.id.substringAfter(':'))
         startActivity(Intent(this, DetailsActivity::class.java)
             .putExtra("type", item.type).putExtra("id", item.id).putExtra("name", item.name)
             .putExtra("poster", item.poster).putExtra("background", item.art).putExtra("videoId", item.videoId)
@@ -2567,6 +2630,12 @@ class MainActivity : Screen() {
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
         const val FOREIGN_AHEAD_WAIT = 2500L // ms after the Foreign page opens before the other countries are fetched behind it
         const val WORLD = "ALL" // the Foreign page's first chip: every country's best, one row each
+        const val PICK = "pick" // the top line's second control: the country in use, which opens the picker
+        const val COUNTRY = "country" // an Item's type for a country's door card
+        const val PICKER_COLUMNS = 5
+        const val PICKER_TILE_W = 164 // dp: five across with their gaps sit inside the screen's width
+        const val PICKER_TILE_H = 74
+        const val TILE_RADIUS = 10
         const val RANK_SIZE = 30f // sp, the numeral on a ranked card
         const val LOGO_W = 360 // the cinema's title logo
         const val LOGO_H = 100

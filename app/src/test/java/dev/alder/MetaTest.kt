@@ -233,6 +233,8 @@ class MetaTest {
         assertEquals(JW_COUNTRIES.map { it.label }.sorted(), JW_COUNTRIES.map { it.label })
         assertEquals(JW_COUNTRIES.size, JW_COUNTRIES.map { it.code }.distinct().size)
         assertTrue(JW_COUNTRIES.all { it.services.size >= 3 && it.langs.isNotEmpty() && it.demonym.isNotEmpty() })
+        assertTrue(JW_COUNTRIES.all { flagColours(it.code).size in 2..3 && flagColours(it.code) !== flagColours("ALL") })
+        assertEquals(2, flagColours("ALL").size)
         // IMDb's best-of-a-country request: the country, its primary languages, the kind, the floors, no variety.
         val italy = JW_COUNTRIES.first { it.code == "IT" }
         val best = JSONObject(bestQuery(italy, tv = true)).getString("query")

@@ -51,6 +51,20 @@ val JW_COUNTRIES = listOf(
 
 fun jwCountry(code: String): JwCountry? = JW_COUNTRIES.firstOrNull { it.code == code }
 
+/** Each flag's colours, for the tiles and the World rows' doors; the World itself deep blue to sea green. */
+private val FLAG_COLOURS = mapOf(
+    "AR" to intArrayOf(0x74ACDF, 0xFFFFFF, 0x74ACDF), "AU" to intArrayOf(0x012169, 0xFFFFFF, 0xE4002B), "BR" to intArrayOf(0x009C3B, 0xFFDF00, 0x002776),
+    "DK" to intArrayOf(0xC8102E, 0xFFFFFF), "FR" to intArrayOf(0x0055A4, 0xFFFFFF, 0xEF4135), "DE" to intArrayOf(0x2B2B2B, 0xDD0000, 0xFFCE00),
+    "IN" to intArrayOf(0xFF9933, 0xFFFFFF, 0x138808), "IL" to intArrayOf(0x0038B8, 0xFFFFFF), "IT" to intArrayOf(0x009246, 0xFFFFFF, 0xCE2B37),
+    "JP" to intArrayOf(0xFFFFFF, 0xBC002D), "MX" to intArrayOf(0x006847, 0xFFFFFF, 0xCE1126), "NL" to intArrayOf(0xAE1C28, 0xFFFFFF, 0x21468B),
+    "NO" to intArrayOf(0xBA0C2F, 0xFFFFFF, 0x00205B), "PL" to intArrayOf(0xFFFFFF, 0xDC143C), "KR" to intArrayOf(0xFFFFFF, 0x0047A0, 0xCD2E3A),
+    "ES" to intArrayOf(0xAA151B, 0xF1BF00, 0xAA151B), "SE" to intArrayOf(0x006AA7, 0xFECC02), "TR" to intArrayOf(0xE30A17, 0xFFFFFF),
+    "US" to intArrayOf(0xB22234, 0xFFFFFF, 0x3C3B6E),
+)
+
+/** A country's flag colours, RGB without alpha, two or three of them; the World's for any other code. */
+fun flagColours(code: String): IntArray = FLAG_COLOURS[code] ?: intArrayOf(0x0B3D91, 0x1B998B)
+
 /** One row: a service's ten films or ten series. */
 class JwList(val service: JwService, val tv: Boolean) {
     val title: String get() = "Top 10 ${if (tv) "TV" else "films"} on ${service.name}"
