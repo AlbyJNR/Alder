@@ -169,7 +169,7 @@ class MainActivity : Screen() {
      * and the long one down to the cards. As views over the art they were two more layers the GPU blended every frame,
      * a third of this TV's frame time.
      */
-    private val shaded = Images.Look("shaded") { src ->
+    private val shaded = Images.Look("shaded-wide") { src ->
         val w = artW
         val h = resources.displayMetrics.heightPixels
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -182,13 +182,13 @@ class MainActivity : Screen() {
         val bright = pixels?.let { brightLeft(it, 16) } ?: false
         // The shades in the title's own colour ([filmTint]): each picture brings its room with it.
         val wall = pixels?.let(::filmTint) ?: BASE
-        // Dense behind the title's words (the left third), then letting go, so the art stays sharp on the right.
+        // Dense behind the title's words (the left half), then letting go, so the art stays sharp on the right.
         val shade = Paint().apply {
-            shader = LinearGradient(0f, 0f, w * 0.62f, 0f,
+            shader = LinearGradient(0f, 0f, w * 0.74f, 0f,
                 intArrayOf(withAlpha(wall, if (bright) 0xF7 else 0xF2), withAlpha(wall, if (bright) 0xD0 else 0xA0), withAlpha(wall, 0)),
                 floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
         }
-        canvas.drawRect(0f, 0f, w * 0.62f, h.toFloat(), shade)
+        canvas.drawRect(0f, 0f, w * 0.74f, h.toFloat(), shade)
         shade.shader = LinearGradient(0f, h.toFloat(), 0f, h * 0.55f, withAlpha(wall, 0xF7), withAlpha(wall, 0), Shader.TileMode.CLAMP)
         canvas.drawRect(0f, h * 0.55f, w.toFloat(), h.toFloat(), shade)
         shade.shader = LinearGradient(0f, 0f, 0f, h * 0.14f, withAlpha(wall, 0x8C), withAlpha(wall, 0), Shader.TileMode.CLAMP)
@@ -208,13 +208,11 @@ class MainActivity : Screen() {
     private lateinit var heroName: TextView
     private lateinit var heroLogo: ImageView
     private lateinit var heroFacts: TextView
-    private lateinit var factsLine: LinearLayout // the facts, and the scores beside them when the line has room
     private lateinit var heroScores: LinearLayout // IMDb, RT, Added: beside the facts or on the line under them
-    private var scoresBeside = true // the scores on the facts line (placeScores), else on the line under
     private val smallLine by lazy { text("", SMALL).lineHeight }
     // The widest the scores can be (IMDb's widest number, both meters at 100%), measured once: building the line on
     // every focus move was a handful of views per card.
-    private val scoresMost by lazy { widest(scoresLine("10.0", "C100% A100%", lead = true)) }
+    private var heroSynopsis = "" // the focused title's whole description; heroAbout shows what fits, cut at a sentence
     private val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
     private val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
     private var heroBottom = 0 // px from the screen's foot to the hero block, for a poster row
@@ -946,7 +944,7 @@ class MainActivity : Screen() {
         heroLogo = ImageView(this).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START; maxHeight = dp(55) }
         heroFacts = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         heroAdded = text("", SMALL, color = TEXT_3).onArt()
-        heroAbout = text("", BODY, color = TEXT).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
+        heroAbout = text("", BODY, color = TEXT).onArt().apply { maxLines = ABOUT_LINES; ellipsize = TextUtils.TruncateAt.END }
         heroResume = pill("Resume", R.drawable.ic_play).apply {
             setOnClickListener { heroItem?.let(::play) }
             setOnLongClickListener { heroItem?.let { play(it, pick = true) }; true }
@@ -954,16 +952,16 @@ class MainActivity : Screen() {
         // Only Resume: OK on any card already opens its title page. It shows only for a title in progress, which lives in
         // the first row, so Up from any other row goes straight to the row above.
         heroActions = LinearLayout(this).apply { clipChildren = false; addView(heroResume); visibility = View.GONE } // shown per title
-        heroScores = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL } // filled by showScores
-        factsLine = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; addView(heroFacts) }
+        // Filled by showScores; a line tall while empty, so a late Rotten Tomatoes answer lands in space already its own.
+        heroScores = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = smallLine }
         // No progress line here: the focused card already shows it, right below.
         browseInfo = column(Gravity.START,
             FrameLayout(this).apply {
                 addView(heroName, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
                 addView(heroLogo, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
             },
-            // The facts, with the scores beside them or on the line under: placeScores decides per title.
-            factsLine.marginTop(12),
+            // The facts on one line and the scores on their own under them: a row each, as the title page sets them.
+            heroFacts.marginTop(12),
             heroScores.marginTop(6),
             heroAbout.marginTop(12),
             heroActions.marginTop(20),
@@ -976,7 +974,7 @@ class MainActivity : Screen() {
             addOnLayoutChangeListener { _, _, top, _, _, _, _, _, _ ->
                 if (page == Page.HOME || page == Page.LIBRARY) return@addOnLayoutChangeListener
                 val lines = heroAbout.maxLines
-                if (top < dp(HEADER_H - 12) && lines > 0) heroAbout.post { heroAbout.setLines(lines - 1) }
+                if (top < dp(HEADER_H - 12) && lines > 0) heroAbout.post { heroAbout.maxLines = lines - 1; fitSynopsis() }
             }
         }
         return browseInfo
@@ -998,29 +996,7 @@ class MainActivity : Screen() {
         heroAdded.text = addedLine
         val tail = heroAdded.takeIf { page == Page.LIBRARY && addedLine.isNotEmpty() }
         heroScores.removeAllViews()
-        heroScores.addView(scoresLine(rating, rt, lead = scoresBeside, tail = tail))
-    }
-
-    /**
-     * The scores beside the facts when the line has room for the most they can be (IMDb's widest number, both meters
-     * at 100%, the library's Added), under them otherwise on a line kept a line tall while empty. Decided from the
-     * most, not from what is known now, so Rotten Tomatoes answering a moment later lands in space already its own.
-     */
-    private fun placeScores() {
-        val facts = heroFacts.paint.measureText(heroFacts.text.toString())
-        // The library's Added is measured with the hero's own paint (its dot and margins as dp(14)), not built as views.
-        val tail = if (page == Page.LIBRARY && addedLine.isNotEmpty()) (heroAdded.paint.measureText("·  " + addedLine) + dp(14)).toInt() else 0
-        val most = scoresMost + tail
-        scoresBeside = facts + most <= dp(HERO_W)
-        heroFacts.maxLines = if (scoresBeside) 1 else 2
-        val want: android.view.ViewGroup = if (scoresBeside) factsLine else browseInfo
-        if (heroScores.parent !== want) {
-            (heroScores.parent as? android.view.ViewGroup)?.removeView(heroScores)
-            if (scoresBeside) factsLine.addView(heroScores, wrap())
-            else browseInfo.addView(heroScores, browseInfo.indexOfChild(factsLine) + 1, wrap().apply { topMargin = dp(6) })
-        }
-        heroScores.minimumWidth = if (scoresBeside) most else 0
-        heroScores.minimumHeight = if (scoresBeside) 0 else smallLine
+        heroScores.addView(scoresLine(rating, rt, lead = false, tail = tail))
     }
 
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
@@ -1082,22 +1058,14 @@ class MainActivity : Screen() {
         heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
             else listOfNotNull(item.original, note, year, genre, length, item.origin)).joinToString(DOT)
         addedLine = item.addedAt?.let { "Added ${addedAgo(it)}" } ?: ""
-        placeScores()
         showScores(item)
         main.removeCallbacks(scoresAhead)
         main.postDelayed(scoresAhead, SCORES_WAIT)
-        heroAbout.maxLines = 2
+        heroAbout.maxLines = ABOUT_LINES
         heroAbout.visibility = if (page == Page.LIBRARY) View.GONE else View.VISIBLE
-        val description = episode(item)?.overview?.takeIf { it.isNotBlank() } ?: item.about
-        heroAbout.text = description
-        heroAbout.post {
-            if (heroItem !== item || heroAbout.text.toString() != description) return@post
-            val layout = heroAbout.layout ?: return@post
-            if (layout.lineCount >= 2 && layout.getEllipsisCount(1) > 0) {
-                val end = layout.getLineStart(1) + layout.getEllipsisStart(1)
-                heroAbout.text = synopsisAtSentence(description, end)
-            }
-        }
+        heroSynopsis = episode(item)?.overview?.takeIf { it.isNotBlank() } ?: item.about
+        heroAbout.text = heroSynopsis
+        fitSynopsis()
         heroActions.visibility = if (page != Page.HOME && page != Page.LIBRARY && item.resume) View.VISIBLE else View.GONE
         if (page == Page.HOME || page.isCatalog) showCaption(item)
         if (mode == Mode.BROWSE) {
@@ -1105,6 +1073,20 @@ class MainActivity : Screen() {
             browseInfo.animate().alpha(target).setInterpolator(if (newTitle) FOCUS_OUT else null).setDuration(if (newTitle) 280 else 150).start()
         }
         showArt(item)
+    }
+
+    /** The description ends at a sentence where its lines run out, never mid-word with dots; measured once laid out. */
+    private fun fitSynopsis() {
+        val full = heroSynopsis
+        heroAbout.post {
+            if (heroSynopsis != full) return@post
+            val layout = heroAbout.layout ?: return@post
+            val last = minOf(layout.lineCount, heroAbout.maxLines) - 1
+            if (last >= 0 && layout.getEllipsisCount(last) > 0) {
+                val end = layout.getLineStart(last) + layout.getEllipsisStart(last)
+                heroAbout.text = synopsisAtSentence(full, end)
+            }
+        }
     }
 
     private fun showCaption(item: Item) {
@@ -1351,8 +1333,15 @@ class MainActivity : Screen() {
                 else emptyList()).toMutableList()
             val genreResults = mutableMapOf<String, Boolean>()
             if (p.isCatalog && genreNames.isEmpty()) showGenreChips(emptyList()) // nothing to show: the strip stays out of the way
-            // The page's rows from the web above the catalogs (see webRows); the Content page has them all.
-            if (p.isCatalog && !profile.kids) buildWebRows(webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }, g)
+            // The page's rows from the web above the catalogs (see webRows), bar the Top 250s, which close the page
+            // under them: the catalogs' slots go in between now, so the page's order is fixed before any row fills.
+            var sectionSlots = emptyList<LinearLayout>()
+            val catalogSlots = { sectionSlots = sections.map { slot() } }
+            if (p.isCatalog && !profile.kids) {
+                val web = webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }
+                val (last, first) = web.partition { it.first in TAIL_ROWS }
+                buildWebRows(first, g, tail = last, between = catalogSlots)
+            } else catalogSlots()
             // Keep request and view work bounded even when an account has many catalogs.
             var batchPending = 0
             fun buildSection(i: Int) {
@@ -1360,7 +1349,7 @@ class MainActivity : Screen() {
                 val (title, sources, picked) = section
                 if (p.isCatalog && genres.any { it.equals(title, true) } && title !in genreNames) genreNames += title
                 val rowCatalogs = sources.map { it.first }
-                val slot = slot()
+                val slot = sectionSlots[i]
                 val key = catalogAnswerKey(p.label, title, picked, rowCatalogs.map { c ->
                     "${c.addon.transportUrl}/${c.type}/${c.id}"
                 })
@@ -2456,8 +2445,11 @@ class MainActivity : Screen() {
      * first few fill at once, the rest three at a time as the page scrolls or every couple of seconds, whichever
      * comes first. A cold Content page then costs a handful of requests before it's usable, not a hundred.
      */
-    private fun buildWebRows(rows: List<Pair<String, (LinearLayout, Int) -> Unit>>, g: Int) {
+    private fun buildWebRows(rows: List<Pair<String, (LinearLayout, Int) -> Unit>>, g: Int,
+        tail: List<Pair<String, (LinearLayout, Int) -> Unit>> = emptyList(), between: () -> Unit = {}) {
         val pending = rows.map { it.second to slot() }.toMutableList()
+        between() // the catalogs' slots, so the tail rows close the page under them
+        pending += tail.map { it.second to slot() }
         fun fill(n: Int) { repeat(n) { pending.removeFirstOrNull()?.let { (build, slot) -> build(slot, g) } } }
         fill(WEB_ROWS_FIRST)
         webRowsMore = { if (g == generation && pending.isNotEmpty()) fill(WEB_ROWS_WAVE) else if (pending.isEmpty()) webRowsMore = null }
@@ -2467,8 +2459,9 @@ class MainActivity : Screen() {
 
     /**
      * The rows read from the web, by page and in order (Alan's, 2026-11-05): title to builder. Movies opens with
-     * RogerEbert.com's reviews and Rotten Tomatoes' Certified Fresh, then IMDb's box office, popular films and Top 250.
-     * TV opens with Rotten Tomatoes' popular series, then IMDb's new series, popular TV and Top 250. Content has
+     * RogerEbert.com's reviews and Rotten Tomatoes' Certified Fresh, then IMDb's box office and popular films.
+     * TV opens with Rotten Tomatoes' popular series, then IMDb's new series and popular TV. On both, the Top 250
+     * ([TAIL_ROWS]) closes the page under the add-ons' catalogs (Alan, 2026-11-06). Content has
      * everything: the trailer lists (with this month's most anticipated), the reviews and Rotten Tomatoes, what's
      * popular on each streaming service, the charts, and the two Top 250s at the bottom.
      */
@@ -2803,6 +2796,7 @@ class MainActivity : Screen() {
         // Building every row's 25 cards at once held the main thread for over a second on a page switch (about 3.6 ms
         // a card), so the first row's posters, already decoded, didn't show until every row was made.
         const val FOCUS_ROOM = 8 // dp around the title block for a focused pill to grow into
+        const val ABOUT_LINES = 4 // the description's most lines on Home: a synopsis whole, at HERO_W's measure
         const val START = 12 // cards a row starts with: past the screen's edge, so the first move right has somewhere to go
         const val ROW_LATER = 350L // ms after a page opens before its rows out of sight are made
         const val ROW_STAGGER = 60L // ms between them
@@ -2823,7 +2817,8 @@ class MainActivity : Screen() {
 }
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
-private val RT_METERS = Regex("[CA]\\d+%.*") // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
+private val RT_METERS = Regex("[CA]\\d+%.*")
+private val TAIL_ROWS = setOf(ImdbList.TOP_MOVIES.title, ImdbList.TOP_TV.title) // web rows that close a page under its catalogs // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
 private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
 private const val WEB_ROWS_FIRST = 5 // web rows filled as a page opens
 private const val WEB_ROWS_WAVE = 3 // and how many more each wave brings

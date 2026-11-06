@@ -203,7 +203,6 @@ class SettingsActivity : Screen() {
     private val titlePage = listOf(
         Choice(TITLE_TRAILER, "Trailer button", "The title's trailer, in a box over the page.", onOff),
         Choice(TITLE_PREVIEW, "Preview button", "Plays a minute of the title itself in a box over the page, from a little way in, through the same sources as Play.", onOff),
-        Choice(TITLE_RECAP, "Recap button", "For series: opens a search for the season's recap in the TV's video app, which may show its own adverts.", onOff),
         Choice(TITLE_CAST, "Cast", "The leads under the description. Select a name to find more of their films and shows.", onOff),
         Choice(TITLE_DIRECTOR, "Director", "The director under the cast, for films.", onOff),
         Choice(TRAILER_ART, "Art behind the trailer", "Keeps the title's art, dimmed, behind the trailer box. Off plays the trailer over black.", onOff),
@@ -722,7 +721,6 @@ class SettingsActivity : Screen() {
 
     companion object {
         const val TITLE_TRAILER = "titleTrailer"
-        const val TITLE_RECAP = "titleRecap"
         const val TITLE_PREVIEW = "titlePreview"
         const val TITLE_CAST = "titleCast"
         const val TITLE_DIRECTOR = "titleDirector"

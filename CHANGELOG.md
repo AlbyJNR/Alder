@@ -13,6 +13,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.43.0
+
+- Title page: one column down the left, from the top. The name top left, then the year, genre and length on one line, then IMDb and Rotten Tomatoes on their own line, then Play and its controls on one line, then the description at a wider measure with up to five lines. The art's right side stays clear.
+- Home, TV, Movies, Content, Foreign: the title's block is wider (600 dp) and the description shows up to four lines, cut at a sentence where it runs out, not mid-word with dots. The scores always have their own line under the facts.
+- TV and Movies pages: the Top 250 rows close the page under your add-ons' catalogs.
+- The Recap button and its setting are removed.
+
 ## 1.42.0
 
 - Small text is larger on every page. Facts, captions, chips, keys and hints are 14 sp. Badges are 11 sp. Chips are taller.
