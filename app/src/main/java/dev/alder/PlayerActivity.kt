@@ -122,6 +122,7 @@ class PlayerActivity : Screen() {
     // the sources page, which restarts the player, so one bad evening can't cascade past AUTO_SWITCHES.
     private val autoSwitches get() = intent.getIntExtra("autoSwitches", 0)
     private var pendingNote: String? = null // shown once the next picture is up ("Switched to a lighter source · 720p")
+    private var whyNote: String? = null // why Play chose this source ("Best match · 1080p · played last time"), for its first picture only
     private lateinit var note: TextView
     private val hideNote = Runnable { note.visibility = View.GONE }
     private val longStall = Runnable {
@@ -164,6 +165,9 @@ class PlayerActivity : Screen() {
                     override fun supportsFormat(format: Format) = getFormatSupport(format) != AudioSink.SINK_FORMAT_UNSUPPORTED
                 }
         }.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON) // ffmpeg after the TV's own decoders
+            // A decoder that won't open (a Fire TV's first HEVC decoder is busy, or refuses the profile) gives way to the
+            // TV's next one for the format before the source counts as failed.
+            .setEnableDecoderFallback(true)
         player = ExoPlayer.Builder(this, renderers).build()
         val remembered = Settings.titleChoice(this, metaId)
         wantAudio = remembered?.audio ?: Settings.audioLanguage(this)
@@ -220,6 +224,7 @@ class PlayerActivity : Screen() {
             addView(note, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { setMargins(dp(PAD), 0, 0, dp(PAD + 40)) })
         }
         intent.getStringExtra("switchedNote")?.let { pendingNote = it; intent.removeExtra("switchedNote") }
+        intent.getStringExtra("whyNote")?.let { whyNote = it; intent.removeExtra("whyNote") }
         setContentView(screen)
         background({
             Stremio.addons(key).let { it.savedMeta(type, metaId) ?: it.meta(type, metaId) }
@@ -277,7 +282,7 @@ class PlayerActivity : Screen() {
                 retries = 0
                 hideLoading()
                 main.removeCallbacks(startTimeout)
-                pendingNote?.let { pendingNote = null; showNote(it) }
+                (pendingNote ?: whyNote)?.let { pendingNote = null; whyNote = null; showNote(it) }
                 player.videoFormat?.frameRate?.let(::matchFrameRate)
                 // Next time: the same release for this video, and the same group (release and quality) for the next episode.
                 val s = sources[at]
@@ -506,6 +511,7 @@ class PlayerActivity : Screen() {
             audioPicked = false
             subsPicked = false
             failedAudio.clear()
+            whyNote = null // the reason was for the source that failed
             android.util.Log.w("CAS", "Source failed: $reason; trying another")
             return load(position, "That source failed · trying the next one")
         }

@@ -7,7 +7,7 @@ import android.media.MediaCodecList
 import android.view.Display
 
 /** What this TV can decode and show, checked once per launch (the codec list takes a few ms). */
-class Device private constructor(val hevc: Boolean, val av1: Boolean, val dolbyVision: Boolean, val hdr: Boolean, val height: Int) {
+class Device internal constructor(val hevc: Boolean, val av1: Boolean, val dolbyVision: Boolean, val hdr: Boolean, val height: Int) {
     companion object {
         @Volatile private var known: Device? = null
 

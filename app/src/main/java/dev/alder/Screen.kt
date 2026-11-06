@@ -1382,7 +1382,11 @@ abstract class Screen : Activity() {
         const val GLASS_HIGHLIGHT = 0x4DFFFFFF
         const val ROW_FOCUSED = 0x38F5F5F7 // a list row under the remote: brighter than it was, still a row not a button
         const val PROGRESS_TRACK = 0x4DFFFFFF // light enough that a short fill still reads as a bar, not a dash
-        private val pool = Executors.newFixedThreadPool(6)
+        // Fetching and parsing sit behind the main thread and the RenderThread: on a four-core stick, a page's answers
+        // parsed at the main thread's priority took frames from the row sliding in.
+        private val pool = Executors.newFixedThreadPool(6) { r ->
+            Thread { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); r.run() }
+        }
     }
 }
 

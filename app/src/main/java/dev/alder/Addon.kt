@@ -590,6 +590,27 @@ class Subtitle(val url: String, val lang: String, val addon: String) {
 class Video(val id: String, val title: String, val season: Int, val episode: Int, val thumbnail: String?,
             val overview: String?, val released: String?)
 
+// The marks a release's names are read for, compiled once. A sources page makes a few hundred Streams, and each one
+// ran Pattern.compile for every mark below before: a good part of the wait between the add-ons' answers and Play.
+private object Marks {
+    val uhd = Regex("2160|\\b4k\\b|\\buhd\\b")
+    val dolbyVision = Regex("\\b(dv|dovi|dolby.?vision)\\b")
+    val hdr = Regex("\\bhdr|\\bp8\\b|hybrid")
+    val hevc = Regex("hevc|[xh].?265")
+    val av1 = Regex("\\bav1\\b")
+    val remux = Regex("\\bremux\\b")
+    val bluray = Regex("blu.?ray|\\bbd.?rip|\\bbr.?rip")
+    val web = Regex("web.?(dl|rip)|\\bweb\\b")
+    val cam = Regex("\\b(cam|camrip|hdcam|ts|hdts|telesync|tc|telecine|scr|screener|dvdscr)\\b")
+    val threeD = Regex("\\b3d\\b")
+    val hardSubs = Regex("\\bhc\\b|hardcoded|hardsub")
+    val bigAudio = Regex("atmos|truehd|dts.?hd|dts.?x\\b")
+    val multiAudio = Regex("\\b(multi|dual)\\b")
+    val dubbed = Regex("\\bdub(bed)?\\b")
+    val dtsHd = Regex("dts.?hd")
+    val bracketed = Regex("\\s*\\((.+?)\\)\\s*$")
+}
+
 class Stream(
     val title: String, val description: String, val url: String, val headers: Map<String, String>,
     val size: Long, val filename: String?, val bingeGroup: String?,
@@ -605,7 +626,7 @@ class Stream(
      * becomes the service's name at the end, as the player shows it: "Torrentio  ·  2160p  ·  Real-Debrid".
      */
     val label get() = title.lines().joinToString(" ") { it.trim() }.replace(debridTag, "").trim()
-        .replace(Regex("\\s*\\((.+?)\\)\\s*$"), "  ·  $1") + (debrid?.let { "  ·  ${it.name}" } ?: "")
+        .replace(Marks.bracketed, "  ·  $1") + (debrid?.let { "  ·  ${it.name}" } ?: "")
 
     /** The debrid service it comes through, null for a direct link. */
     val debrid: Debrid? = debridOf(title, url)
@@ -614,7 +635,7 @@ class Stream(
     // into them; the file name says it for every addon). ponytail: name matching, not the file's real tracks.
     private val words = "$filename $title $description".lowercase()
     val height = when {
-        Regex("2160|\\b4k\\b|\\buhd\\b").containsMatchIn(words) -> 2160
+        Marks.uhd.containsMatchIn(words) -> 2160
         "1080" in words -> 1080
         "720" in words -> 720
         "576" in words -> 576
@@ -624,24 +645,24 @@ class Stream(
     val isHdr get() = hdr || dolbyVision
     /** Dolby Vision with no HDR10 base (profile 5, common on web releases): only a profile 5 decoder shows it right. */
     val dolbyVisionOnly get() = dolbyVision && !hdr
-    val dolbyVision = Regex("\\b(dv|dovi|dolby.?vision)\\b").containsMatchIn(words)
-    val hdr = Regex("\\bhdr|\\bp8\\b|hybrid").containsMatchIn(words) // P8 and hybrid DV carry an HDR10 base
-    private val hevc = Regex("hevc|[xh].?265").containsMatchIn(words)
-    private val av1 = Regex("\\bav1\\b").containsMatchIn(words)
+    val dolbyVision = Marks.dolbyVision.containsMatchIn(words)
+    val hdr = Marks.hdr.containsMatchIn(words) // P8 and hybrid DV carry an HDR10 base
+    private val hevc = Marks.hevc.containsMatchIn(words)
+    private val av1 = Marks.av1.containsMatchIn(words)
 
     // The release type and extras, for Settings' stream preferences.
-    val remux = Regex("\\bremux\\b").containsMatchIn(words)
-    val bluray = !remux && Regex("blu.?ray|\\bbd.?rip|\\bbr.?rip").containsMatchIn(words)
-    val web = Regex("web.?(dl|rip)|\\bweb\\b").containsMatchIn(words)
+    val remux = Marks.remux.containsMatchIn(words)
+    val bluray = !remux && Marks.bluray.containsMatchIn(words)
+    val web = Marks.web.containsMatchIn(words)
     /** Filmed in a cinema or a screener: never picked. */
-    val cam = Regex("\\b(cam|camrip|hdcam|ts|hdts|telesync|tc|telecine|scr|screener|dvdscr)\\b").containsMatchIn(words)
-    private val threeD = Regex("\\b3d\\b").containsMatchIn(words)
-    private val hardSubs = Regex("\\bhc\\b|hardcoded|hardsub").containsMatchIn(words)
+    val cam = Marks.cam.containsMatchIn(words)
+    private val threeD = Marks.threeD.containsMatchIn(words)
+    private val hardSubs = Marks.hardSubs.containsMatchIn(words)
     /** 3D or subtitles burnt into the picture: picked last. */
     val awkward get() = threeD || hardSubs
-    val bigAudio = Regex("atmos|truehd|dts.?hd|dts.?x\\b").containsMatchIn(words) // what a receiver gains from
-    val multiAudio = Regex("\\b(multi|dual)\\b").containsMatchIn(words)
-    val dubbed = Regex("\\bdub(bed)?\\b").containsMatchIn(words)
+    val bigAudio = Marks.bigAudio.containsMatchIn(words) // what a receiver gains from
+    val multiAudio = Marks.multiAudio.containsMatchIn(words)
+    val dubbed = Marks.dubbed.containsMatchIn(words)
     /** The audio languages the names give, as two-letter codes; empty when they give none (see [audioLanguagesIn]). */
     val audioLanguages = audioLanguagesIn(words)
     /** Whether the names mention this language ("hindi" for "hi"). */
@@ -651,7 +672,7 @@ class Stream(
     val tags get() = listOfNotNull(
         "REMUX".takeIf { remux }, "BluRay".takeIf { bluray }, "WEB".takeIf { web && !remux && !bluray },
         "DV".takeIf { dolbyVision }, "HDR".takeIf { hdr }, "Atmos".takeIf { "atmos" in words },
-        "TrueHD".takeIf { "truehd" in words }, "DTS-HD".takeIf { Regex("dts.?hd").containsMatchIn(words) },
+        "TrueHD".takeIf { "truehd" in words }, "DTS-HD".takeIf { Marks.dtsHd.containsMatchIn(words) },
         "Multi audio".takeIf { multiAudio }, "Dub".takeIf { dubbed }, "3D".takeIf { threeD }, "Hard subs".takeIf { hardSubs },
     )
 

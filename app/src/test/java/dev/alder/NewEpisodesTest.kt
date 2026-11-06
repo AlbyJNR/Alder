@@ -66,4 +66,14 @@ class NewEpisodesTest {
         val cw = Library.continueWatching(listOf(gone), mapOf("gone" to NewEpisodes.News(1, "2026-10-30", "gone:1:2")))
         assertEquals(emptyList<String>(), cw.map { it.optString("_id") })
     }
+
+    @Test fun theNewEpisodesRowListsTheNewestNewsFirstAndOnlySeriesStillInMyList() {
+        val older = series("tt1", "2026-10-20T21:00:00.000Z")
+        val newer = series("tt2", "2026-10-25T21:00:00.000Z")
+        val gone = series("tt3", "2026-10-25T21:00:00.000Z", removed = true)
+        val quiet = series("tt4", "2026-10-25T21:00:00.000Z")
+        val news = mapOf("tt1" to NewEpisodes.News(1, "2026-10-30", "tt1:1:3"), "tt2" to NewEpisodes.News(2, "2026-10-28", "tt2:1:2"),
+            "tt3" to NewEpisodes.News(1, "2026-10-31", "tt3:1:1"))
+        assertEquals(listOf("tt1", "tt2"), Library.withNewEpisodes(listOf(newer, older, gone, quiet), news).map { it.optString("_id") })
+    }
 }

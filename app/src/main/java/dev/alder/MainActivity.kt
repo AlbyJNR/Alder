@@ -1212,19 +1212,25 @@ class MainActivity : Screen() {
                 rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
                 slot.removeAllViews()
                 if (p == Page.HOME) {
-                    val items = cw.map { libraryItem(it, news[it.optString("_id")]) }
-                    homeEmptyNote?.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
+                    // Continue holds what's part-watched; a series back only for its new episode has the row below.
+                    val items = cw.filter { (it.optJSONObject("state")?.optLong("timeOffset") ?: 0L) > 0 }.map { libraryItem(it, news[it.optString("_id")]) }
+                    val fresh = Library.withNewEpisodes(list, news).map { libraryItem(it, news[it.optString("_id")]) }
+                    val lists = Lists.all(this).filter { it.items.isNotEmpty() }
+                    homeEmptyNote?.visibility = if (items.isEmpty() && fresh.isEmpty() && lists.isEmpty()) View.VISIBLE else View.GONE
                     if (items.isNotEmpty()) {
                         slot.addView(row("Continue", items.take(START), later(items)).view)
                         android.util.Log.d("CAS", "page ${p.label}: Continue in ${android.os.SystemClock.uptimeMillis() - opened} ms")
-                        startCinema(items.take(CINEMA_MAX))
                     }
-                    // The viewer's own lists, each a row under Continue, newest additions first.
-                    Lists.all(this).filter { it.items.isNotEmpty() }.forEach { l ->
+                    // New episodes of the series in My List, the newest first, each poster marked with how many. A series
+                    // part-watched keeps its place in Continue as well, with the news on its title line.
+                    if (fresh.isNotEmpty()) slot.addView(row(NEW_ROW, fresh.take(START), later(fresh), marked = true).view)
+                    // The screensaver shows both rows' titles, as it showed Continue when the news sat in it.
+                    (items + fresh).distinctBy { it.id }.takeIf { it.isNotEmpty() }?.let { startCinema(it.take(CINEMA_MAX)) }
+                    // The viewer's own lists, each a row under those, newest additions first.
+                    lists.forEach { l ->
                         val listItems = l.items.map { e -> Item(e.id, e.type, e.name, e.poster, null, Images.logoFor(e.id), "", emptyList(), null, 0f, resume = false, left = null) }
                         slot.addView(row(l.name, listItems.take(START), later(listItems), listId = l.id).view)
                     }
-                    if (items.isEmpty() && Lists.all(this).any { it.items.isNotEmpty() }) homeEmptyNote?.visibility = View.GONE
                     // New episodes of the series in My List, looked for behind the row; the row is drawn again if any turned up.
                     if (!newsChecking) {
                         newsChecking = true
@@ -1832,7 +1838,8 @@ class MainActivity : Screen() {
     private fun later(all: List<Item>): ((Int) -> List<Item>)? =
         if (all.size <= START) null else { from -> all.drop(from).take(PAGE) }
 
-    private fun row(title: String, items: List<Item>, more: ((Int) -> List<Item>)? = null, wide: Boolean = false, grid: Boolean = false, listId: String? = null): Row = Row(title, items, more, wide, grid, listId).also {
+    private fun row(title: String, items: List<Item>, more: ((Int) -> List<Item>)? = null, wide: Boolean = false, grid: Boolean = false, listId: String? = null, marked: Boolean = false): Row =
+        Row(title, items, more, wide, grid, listId, marked).also {
         rows += it
         main.post(::updateImages)
         // Its slot (the page's direct child holding it) is named for the row, so the viewer's order can place it.
@@ -1927,7 +1934,8 @@ class MainActivity : Screen() {
      * (Continue Watching) shows 16:9 art with the name, time left and progress on the card, two poster columns wide, and
      * ends on the same foot line as the poster rows.
      */
-    private inner class Row(val title: String, first: List<Item>, private var more: ((Int) -> List<Item>)?, val wide: Boolean = false, val grid: Boolean = false, val listId: String? = null) {
+    private inner class Row(val title: String, first: List<Item>, private var more: ((Int) -> List<Item>)?, val wide: Boolean = false, val grid: Boolean = false, val listId: String? = null,
+                            val marked: Boolean = false) { // marked: its posters wear the new-episode mark (New episodes)
         val cardW = if (grid) LIST_W else if (wide) WIDE_W else CARD_W
         val cardH = if (grid) LIST_H else if (wide) WIDE_H else CARD_H
         val items = first.toMutableList()
@@ -2105,17 +2113,24 @@ class MainActivity : Screen() {
             private val shade = View(context).apply { setBackgroundColor(Color.BLACK); alpha = 0f }
             // On every card in progress, as Netflix does: comparing how far along titles are is the point of the row.
             private val progress = item.progress.takeIf { it > 0 }?.let { progressBar(it) }
-            private val newBadge = caps("New", BASE).apply {
-                textSize = 9f
-                includeFontPadding = false
-                background = rounded(TEXT, 5)
-                setPadding(dp(6), dp(3), dp(6), dp(3))
-                visibility = View.GONE
-            }
+            // The new-episode mark: a small white badge in the corner, the one bright badge in the row, so it reads as
+            // news. Made the first time the card has news (a text view on every card was a good part of a row's cost).
+            private var newBadge: TextView? = null
 
             fun showNew() {
-                newBadge.text = (if (item.newCount > 1) "${item.newCount} new" else "New").uppercase()
-                newBadge.visibility = if ((wide || grid) && item.newEpisode) View.VISIBLE else View.GONE
+                if (!(wide || grid || marked)) return
+                if (!item.newEpisode && newBadge == null) return
+                val badge = newBadge ?: caps("New", BASE).apply {
+                    textSize = 9f
+                    includeFontPadding = false
+                    background = rounded(TEXT, 5)
+                    setPadding(dp(6), dp(3), dp(6), dp(3))
+                }.also { b ->
+                    newBadge = b
+                    face.addView(b, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { val m = dp(if (grid) 6 else 10); setMargins(m, m, 0, 0) })
+                }
+                badge.text = (if (item.newCount > 1) "${item.newCount} new" else "New").uppercase()
+                badge.visibility = if (item.newEpisode) View.VISIBLE else View.GONE
             }
 
             init {
@@ -2158,8 +2173,6 @@ class MainActivity : Screen() {
                     background = rounded(0x99000000.toInt(), 8)
                     setPadding(dp(8), dp(3), dp(8), dp(4))
                 }, LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(10), dp(10), 0) })
-                // A new episode: a small white mark in the corner, the one bright badge in the row, so it reads as news.
-                if (wide || grid) face.addView(newBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { val m = dp(if (grid) 6 else 10); setMargins(m, m, 0, 0) })
                 showNew()
                 addView(face, LayoutParams(-1, -1))
                 // A white bar inset and rounded inside the card's dark foot, so it reads as a bar and not a cropped edge.
@@ -2630,6 +2643,7 @@ class MainActivity : Screen() {
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
         const val FOREIGN_AHEAD_WAIT = 2500L // ms after the Foreign page opens before the other countries are fetched behind it
         const val WORLD = "ALL" // the Foreign page's first chip: every country's best, one row each
+        const val NEW_ROW = "New episodes" // Home's row of the series in My List with an episode out since they were watched
         const val PICK = "pick" // the top line's second control: the country in use, which opens the picker
         const val COUNTRY = "country" // an Item's type for a country's door card
         const val PICKER_COLUMNS = 5

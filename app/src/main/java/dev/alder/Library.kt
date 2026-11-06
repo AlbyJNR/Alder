@@ -28,6 +28,11 @@ object Library {
         return (inProgress + withNews).sortedByDescending { maxOf(it.state.text("lastWatched") ?: "", news[it.optString("_id")]?.latest ?: "") }
     }
 
+    /** The series in My List with a new episode out, the newest news first: Home's New episodes row. */
+    fun withNewEpisodes(items: List<JSONObject>, news: Map<String, NewEpisodes.News>): List<JSONObject> =
+        items.filter { it.optString("_id") in news && !it.optBoolean("removed") }
+            .sortedByDescending { news.getValue(it.optString("_id")).latest }
+
     /** A title that isn't in the library yet: Stremio keeps those as temporary, hidden items. */
     fun newItem(id: String, type: String, name: String, poster: String?): JSONObject {
         val now = now()

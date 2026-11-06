@@ -81,6 +81,53 @@ internal fun sourcePreference(c: Context): (Stream) -> Int {
     }
 }
 
+/** Settings' tastes in a source, read once for a list: what [sourceReasons] weighs a source against. */
+internal class Tastes(val limit: Int, val maxGb: Int, val hdrOn: Boolean, val release: String, val hdrPref: String,
+                      val dub: String, val language: String, val receiver: Boolean) {
+    companion object {
+        /** As Settings stand; [maxHeight] when the player asked for less than Settings allow. */
+        fun of(c: Context, maxHeight: Int = 0) = Tastes(maxHeight.takeIf { it > 0 } ?: Settings.maxHeight(c), Settings.maxSizeGb(c),
+            Settings.hdr(c), Settings.release(c), Settings.hdrPref(c), Settings.dub(c), Settings.audioLanguage(c), Settings.passthrough(c))
+    }
+}
+
+/**
+ * Why a source stands where it does, in a few words each, in the order the ranking weighs them: what set it aside (a
+ * limit in Settings, a cinema recording), what lifted it (played last time, the release the last episode used, cached
+ * on the debrid service), what holds it back on this TV, and the tastes in Settings it meets or misses. Empty when
+ * nothing tells it apart from the add-on's own order. Pure, so the tests can read it.
+ */
+internal fun sourceReasons(s: Stream, tv: Device, t: Tastes, playedLast: Boolean, sameRelease: Boolean): List<String> {
+    val out = mutableListOf<String>()
+    if (t.limit > 0 && s.height > t.limit) out += "above your ${t.limit}p limit"
+    if (t.maxGb > 0 && s.size > t.maxGb * 1_073_741_824L) out += "over your ${t.maxGb} GB limit"
+    if (!t.hdrOn && s.isHdr) out += "HDR is off in Settings"
+    if (s.cam) out += "cinema recording"
+    if (playedLast) out += "played last time"
+    if (sameRelease) out += "the release the last episode used"
+    s.debrid?.let { out += if (it.cached == true) "cached on ${it.name}" else "through ${it.name}" }
+    if ("3D" in s.tags) out += "3D"
+    if ("Hard subs" in s.tags) out += "subtitles burnt in"
+    if (s.dolbyVisionOnly && !tv.dolbyVision) out += "Dolby Vision this TV may not show"
+    if (s.height > tv.height) out += "above this TV's ${tv.height}p"
+    if (s.isHdr && !tv.hdr) out += "HDR on a screen without it"
+    when (t.release) {
+        "remux" -> if (s.remux) out += "a remux, as you prefer" else if (s.bluray) out += "a BluRay encode"
+        "encode" -> if (s.remux) out += "a remux (you prefer encodes)" else if (s.bluray || s.web) out += "an encode, as you prefer"
+        "web" -> if (s.web && !s.remux) out += "a WEB release, as you prefer" else if (s.remux) out += "a remux (you prefer WEB)"
+    }
+    when (t.hdrPref) {
+        "dv" -> if (s.dolbyVision) out += "Dolby Vision, as you prefer" else if (s.hdr) out += "HDR"
+        "hdr10" -> if (s.hdr) out += "HDR, as you prefer"
+    }
+    when (t.dub) {
+        "original" -> if (s.dubbed) out += "dubbed (you prefer the original)"
+        "mine" -> if (s.mentions(t.language)) out += "in your language" else if (s.multiAudio) out += "more than one language"
+    }
+    if (t.receiver && s.bigAudio) out += "lossless sound for your receiver"
+    return out
+}
+
 internal fun readyStreams(answers: Array<List<Stream>?>, allowGaps: Boolean): List<Stream> =
     (if (allowGaps) answers.asList() else answers.takeWhile { it != null }).flatMap { it.orEmpty() }
 
@@ -94,6 +141,10 @@ class StreamsActivity : Screen() {
     private lateinit var languageStrip: HorizontalScrollView
     private var audio: String? = null
     private var audioOpened = false // the first list opens on the profile's language (Dubbed releases: My language first)
+    // The help line under the list: the preset until a source is under the remote, then why that source stands where it does.
+    private lateinit var whyLine: android.widget.TextView
+    private var helpDefault: CharSequence = ""
+    private val tastes by lazy { Tastes.of(this, intent.getIntExtra("maxHeight", 0)) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -155,16 +206,10 @@ class StreamsActivity : Screen() {
                 background = rounded(TUNGSTEN, 3); includeFontPadding = false; setPadding(dp(4), dp(1), dp(4), dp(1))
             })
             val preset = presetName()
-            val line = "  Play this source  ·  Best match follows your stream settings: $preset."
-            addView(text("", SMALL, color = TEXT_2).onArt().apply {
-                maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-                // The preset in full-strength bold, as the mock reads it.
-                text = android.text.SpannableString(line).apply {
-                    val at = line.lastIndexOf(preset)
-                    setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), at, at + preset.length, 0)
-                    setSpan(android.text.style.ForegroundColorSpan(TEXT), at, at + preset.length, 0)
-                }
-            })
+            // The preset in full-strength bold, as the mock reads it, until a source is under the remote (whyLine).
+            helpDefault = emphasised("  Play this source  ·  Best match follows your stream settings: $preset.", preset)
+            whyLine = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; text = helpDefault }
+            addView(whyLine)
         }
         art = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0f }
         val still = intent.getStringExtra("still")
@@ -231,7 +276,7 @@ class StreamsActivity : Screen() {
                     }
                 } else {
                     val best = eligible.firstOrNull { it in shown }
-                    shown.forEach { stream -> rows.addView(streamRow(stream, providers[stream].orEmpty(), stream === best),
+                    shown.forEach { stream -> rows.addView(streamRow(stream, providers[stream].orEmpty(), stream === best, whyLine(stream === best, why(stream, tv))),
                         LinearLayout.LayoutParams(-1, dp(ROW_H)).apply { bottomMargin = dp(2) }) }
                     if (focusList) rows.getChildAt(0).requestFocus()
                 }
@@ -256,8 +301,11 @@ class StreamsActivity : Screen() {
                 if (best.isEmpty() && answers.any { it == null }) return
                 if (best.isEmpty()) return showList()
                 started = true
+                // The player says why this one once its picture is up: a word on its place, then what lifted it.
+                val first = best.first()
+                val note = (listOfNotNull("Best match", "${first.height}p".takeIf { first.height > 0 }) + why(first, tv).take(2)).joinToString("  ·  ")
                 startActivity(Intent(this, PlayerActivity::class.java).putExtras(intent)
-                    .putExtra("sources", JSONArray(best.take(TRY).map { it.toJson() }).toString()))
+                    .putExtra("sources", JSONArray(best.take(TRY).map { it.toJson() }).toString()).putExtra("whyNote", note))
                 finish()
             }
 
@@ -369,7 +417,33 @@ class StreamsActivity : Screen() {
     /** Within Settings' limits (quality, file size, HDR), and never a cam or screener. Unknown sizes and resolutions pass. */
     private fun wanted(s: Stream) = wantedSource(this, s, intent.getIntExtra("maxHeight", 0))
 
-    private fun streamRow(s: Stream, addon: String, best: Boolean): View {
+    /** [line] with [strong] in full-strength bold. */
+    private fun emphasised(line: String, strong: String): CharSequence = android.text.SpannableString(line).apply {
+        val at = line.lastIndexOf(strong)
+        if (at < 0) return@apply
+        setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), at, at + strong.length, 0)
+        setSpan(android.text.style.ForegroundColorSpan(TEXT), at, at + strong.length, 0)
+    }
+
+    /**
+     * The help line for the source under the remote: "Best match  ·  played last time  ·  cached on Real-Debrid", or
+     * for any other source what lifts or holds it ("above your 1080p limit"). Nothing told apart reads as the add-on's order.
+     */
+    private fun whyLine(best: Boolean, reasons: List<String>): CharSequence {
+        val parts = listOfNotNull("Best match".takeIf { best }) + reasons.ifEmpty { listOf(if (best) "the add-on's first" else "the add-on's order") }
+        val line = "  " + parts.joinToString("  ·  ").replaceFirstChar { it.uppercase() }
+        return if (best) emphasised(line, "Best match") else line
+    }
+
+    /** [sourceReasons] for [s], against this title's history and Settings as they stand. */
+    private fun why(s: Stream, tv: Device): List<String> {
+        val prefs = getSharedPreferences("sources", Context.MODE_PRIVATE)
+        val file = prefs.getString("file:${intent.getStringExtra("videoId")}", null)
+        val binge = prefs.getString("binge:${intent.getStringExtra("id")}", null)
+        return sourceReasons(s, tv, tastes, file != null && s.filename == file, binge != null && s.bingeGroup == binge)
+    }
+
+    private fun streamRow(s: Stream, addon: String, best: Boolean, why: CharSequence): View {
         val quality = text(if (s.height > 0) "${s.height}p" else "Auto", BODY, bold = true).onArt()
         val detail = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         if (best) detail.addView(text("BEST MATCH", 9f, bold = true, color = BASE).apply {
@@ -391,7 +465,7 @@ class StreamsActivity : Screen() {
             }, wrap().apply { marginEnd = dp(5) })
         }
         val provider = s.title.lineSequence().firstOrNull().orEmpty().substringBefore('(')
-            .replace(Regex("^\\[[^]]+]\\s*"), "").trim().takeIf { it.isNotBlank() && !it.matches(Regex("\\d+p")) } ?: addon
+            .replace(LEADING_TAG, "").trim().takeIf { it.isNotBlank() && !it.matches(HEIGHT_ONLY) } ?: addon
         detail.addView(text(provider, SMALL, color = TEXT_3).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -405,6 +479,7 @@ class StreamsActivity : Screen() {
             rowFocus(8) { focused ->
                 alpha = if (!focused && s.height in 1..719) 0.48f else 1f
                 elevation = if (focused) dp(5).toFloat() else 0f
+                if (focused) whyLine.text = why
             }
             alpha = if (s.height in 1..719) 0.48f else 1f
             setOnClickListener {
@@ -433,6 +508,8 @@ class StreamsActivity : Screen() {
         const val NAME_SIZE = 23f // sp, the title or episode name in the header
         const val QUALITY_W = 76 // dp, wide enough for "QUALITY" in spaced capitals
         const val ROW_H = 38 // dp a source row: eight fit above the help line, as on the mock
+        val LEADING_TAG = Regex("^\\[[^]]+]\\s*") // "[RD+] Torrentio" reads as the add-on's name alone
+        val HEIGHT_ONLY = Regex("\\d+p")
     }
 }
 
@@ -440,6 +517,16 @@ internal fun sourceSize(size: Long): String = when {
     size <= 0 -> "—"
     size >= 1_000_000_000 -> String.format(Locale.US, "%.1f GB", size / 1_000_000_000.0)
     else -> "${(size / 1_000_000.0).toInt()} MB"
+}
+
+// The source list's marks, compiled once rather than once per row drawn.
+private object Summary {
+    val av1 = Regex("\\bav1\\b")
+    val hevc = Regex("hevc|[xh].?265")
+    val avc = Regex("avc|[xh].?264")
+    val dd51 = Regex("\\b(dd|ac3|eac3|e-ac3)[ ._-]?5[ ._-]?1\\b")
+    val five1 = Regex("\\b5[ ._-]?1\\b")
+    val stereo = Regex("\\b2[ ._-]?0\\b|stereo")
 }
 
 internal fun sourceSummary(s: Stream): String {
@@ -452,16 +539,16 @@ internal fun sourceSummary(s: Stream): String {
         else -> "Source"
     }
     val codec = when {
-        Regex("\\bav1\\b").containsMatchIn(words) -> "AV1"
-        Regex("hevc|[xh].?265").containsMatchIn(words) -> "HEVC"
-        Regex("avc|[xh].?264").containsMatchIn(words) -> "AVC"
+        Summary.av1.containsMatchIn(words) -> "AV1"
+        Summary.hevc.containsMatchIn(words) -> "HEVC"
+        Summary.avc.containsMatchIn(words) -> "AVC"
         else -> null
     }
     val audio = when {
         "atmos" in words -> "Atmos"
-        Regex("\\b(dd|ac3|eac3|e-ac3)[ ._-]?5[ ._-]?1\\b").containsMatchIn(words) -> "DD 5.1"
-        Regex("\\b5[ ._-]?1\\b").containsMatchIn(words) -> "5.1"
-        Regex("\\b2[ ._-]?0\\b|stereo").containsMatchIn(words) -> "2.0"
+        Summary.dd51.containsMatchIn(words) -> "DD 5.1"
+        Summary.five1.containsMatchIn(words) -> "5.1"
+        Summary.stereo.containsMatchIn(words) -> "2.0"
         else -> null
     }
     return listOfNotNull(release, codec, audio).joinToString(" · ")

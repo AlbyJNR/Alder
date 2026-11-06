@@ -11,7 +11,17 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 - Use one word for one thing. Use the names that CAS shows on the screen.
 - Put the 3 most interesting changes first.
 
-Put changes that are not released under `## 1.35.0
+Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
+
+## 1.36.0
+
+- Home has a new row, **New episodes**, under Continue. It shows the series in My List with an episode out since you watched them, the newest first. Each poster has a mark with the number of new episodes. Select a poster to open the title page on the new episode. Continue now holds only the titles you are part-way through.
+- Sources: the line under the list says why the source under the remote stands where it does: "Best match · played last time · cached on Real-Debrid", or "above your 1080p limit". When Play starts a source by itself, the player shows the reason for three seconds, with the first picture.
+- Playback: when the TV's first decoder for a format does not open, the player tries the TV's other decoders for it before the source counts as failed.
+- Speed: the source list reads the marks of each source with patterns made once, not again for each source and each row. A poster makes its new-episode mark only when it has news. Work behind the screen runs at a lower priority than the picture.
+- What's new showed nothing after the last updates: the heading of the newest release was on the same line as a sentence in this file. The heading is on a line of its own again.
+
+## 1.35.0
 
 - Foreign has a new way to choose a country. The top line has two controls: **World** and the country in use. Select the country control to open a grid of all the countries, five across, each tile in the colours of its flag with its two best series under its name. Select a tile to enter the country. Before, the countries were a line of twenty chips.
 - In World, each country's row starts with a door card in the colours of its flag. Select it to enter the country from the row you are on.

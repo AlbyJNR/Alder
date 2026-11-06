@@ -215,6 +215,21 @@ class ScreenDesignTest {
         assertEquals(480, Stream("480p", "", "https://example.invalid/low", emptyMap(), 175_000_000L, null, null).height)
     }
 
+    @Test fun everySourceSaysWhyItStandsWhereItDoes() {
+        val tv = Device(hevc = true, av1 = false, dolbyVision = false, hdr = false, height = 1080)
+        val tastes = Tastes(limit = 1080, maxGb = 10, hdrOn = true, release = "web", hdrPref = "", dub = "", language = "en", receiver = false)
+        val big = Stream("[RD+] Torrentio (2160p)", "", "https://example.invalid/a", emptyMap(), 20_000_000_000L, "Film.2160p.WEB-DL.DV.HEVC.mkv", null)
+        // Its limits first (why it was set aside), then what lifts it, then this TV, then Settings' tastes.
+        assertEquals(listOf("above your 1080p limit", "over your 10 GB limit", "cached on Real-Debrid", "Dolby Vision this TV may not show",
+            "above this TV's 1080p", "HDR on a screen without it", "a WEB release, as you prefer"),
+            sourceReasons(big, tv, tastes, playedLast = false, sameRelease = false))
+        val plain = Stream("x", "", "https://example.invalid/b", emptyMap(), 0, "Film.1080p.BluRay.x264.mkv", null)
+        assertEquals(listOf("played last time"), sourceReasons(plain, tv, tastes, playedLast = true, sameRelease = false))
+        assertEquals(listOf("the release the last episode used"), sourceReasons(plain, tv, tastes, playedLast = false, sameRelease = true))
+        // Nothing tells it apart: the add-on's order, and the list says so rather than inventing a reason.
+        assertEquals(emptyList<String>(), sourceReasons(plain, tv, tastes, playedLast = false, sameRelease = false))
+    }
+
     @Test fun sourceSelectionKeepsAddonOrderUntilItsShortWaitEnds() {
         val first = Stream("first", "", "https://example.invalid/first", emptyMap(), 0, null, null)
         val later = Stream("later", "", "https://example.invalid/later", emptyMap(), 0, null, null)
