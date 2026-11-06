@@ -35,6 +35,7 @@
 
         <activity
             android:name=".ProfilesActivity"
+            android:banner="@drawable/banner"
             android:exported="true"
             android:screenOrientation="landscape">
             <intent-filter>

@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.48.0
+
+- The launcher tile on the Fire TV home screen is new: it fills the whole box, as the big services' tiles do, with the mark and the wordmark large on a lit charcoal surface. The tile is a PNG now; the launcher had passed over the old one and shown the square icon with grey bars.
+- The mark's lens is lit warm, on the tile and on the app icon.
+
 ## 1.47.0
 
 - Home, TV, Movies, Content, Foreign: the description shows up to four lines whole. The name's area, the gaps around the facts and the row heading each gave up a little, so the block has the room it needs above the first row.
