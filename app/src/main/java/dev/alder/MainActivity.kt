@@ -136,6 +136,7 @@ class MainActivity : Screen() {
     private lateinit var listCount: TextView
     private lateinit var listHint: TextView
     private lateinit var heroAdded: TextView
+    private var addedLine = "" // the library's "Added 3 days ago", drawn after the scores by showScores
     private var search: View? = null
     private val rows = mutableListOf<Row>()
     private var focusedSomething = false
@@ -939,7 +940,7 @@ class MainActivity : Screen() {
         heroName = text("", SERIF_HERO, serif = true).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         // adjustViewBounds resets the scale type to FIT_CENTER, so FIT_START comes after it (logo on the margin).
         heroLogo = ImageView(this).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START; maxHeight = dp(55) }
-        heroFacts = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+        heroFacts = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         // A small tag, as tall as the letters: SMALL's leading and font padding made it a block twice the mock's.
         heroRating = imdbTag().apply { visibility = View.GONE }
         heroScore = text("", SMALL, color = TEXT_2).onArt().apply { visibility = View.GONE }
@@ -962,15 +963,19 @@ class MainActivity : Screen() {
                 addView(heroName, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
                 addView(heroLogo, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
             },
+            // The facts on their own line, wrapping to a second when long. The scores under them, on a line kept a
+            // line tall even while empty: Rotten Tomatoes, looked up a moment after a card takes focus, fills it
+            // without the facts shrinking or the description moving down.
+            heroFacts.marginTop(8),
             LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                addView(heroFacts)
-                addView(heroRating, wrap().apply { marginStart = dp(10) })
+                minimumHeight = heroScore.lineHeight
+                addView(heroRating)
                 addView(heroScore, wrap().apply { marginStart = dp(6) })
                 addView(heroRt, wrap().apply { marginStart = dp(10) })
                 addView(heroRtScore, wrap().apply { marginStart = dp(6) })
                 addView(heroAdded, wrap().apply { marginStart = dp(6) })
-            }.marginTop(8),
+            }.marginTop(5),
             heroAbout.marginTop(8),
             heroActions.marginTop(16),
         ).apply {
@@ -1004,6 +1009,13 @@ class MainActivity : Screen() {
         heroRt.visibility = if (rt == null) View.GONE else View.VISIBLE
         heroRtScore.visibility = heroRt.visibility
         heroRtScore.text = rt
+        (heroRt.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart = if (heroRating.visibility == View.VISIBLE) dp(10) else 0
+        // The library's "Added …" closes the line, led by a dot only when a score stands before it (a title with no
+        // score showed "· Added").
+        val scored = heroRating.visibility == View.VISIBLE || heroRt.visibility == View.VISIBLE
+        heroAdded.text = if (scored && addedLine.isNotEmpty()) "·  $addedLine" else addedLine
+        (heroAdded.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart = if (scored) dp(6) else 0
+        heroAdded.visibility = if (page == Page.LIBRARY && addedLine.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
@@ -1062,14 +1074,10 @@ class MainActivity : Screen() {
         val code = item.left?.split(DOT)?.firstOrNull { it.startsWith("S") && " E" in it }
         heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
             else listOfNotNull(item.original, item.note, year, genre, length, item.origin)).joinToString(DOT)
+        addedLine = item.addedAt?.let { "Added ${addedAgo(it)}" } ?: ""
         showScores(item)
         main.removeCallbacks(scoresAhead)
         main.postDelayed(scoresAhead, SCORES_WAIT)
-        // Leads with a dot only when facts or a rating sit before it (a title with no details yet showed "· Added").
-        val lead = if (heroFacts.text.isEmpty() && heroRating.visibility == View.GONE) "" else "·  "
-        heroAdded.text = item.addedAt?.let { "${lead}Added ${addedAgo(it)}" } ?: ""
-        (heroAdded.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart = if (lead.isEmpty()) 0 else dp(6)
-        heroAdded.visibility = if (page == Page.LIBRARY && heroAdded.text.isNotEmpty()) View.VISIBLE else View.GONE
         heroAbout.maxLines = 2
         heroAbout.visibility = if (page == Page.LIBRARY) View.GONE else View.VISIBLE
         val description = episode(item)?.overview?.takeIf { it.isNotBlank() } ?: item.about

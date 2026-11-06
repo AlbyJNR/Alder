@@ -86,7 +86,7 @@ class DetailsActivity : Screen() {
     private var certificateRequested = false
     private var tomatoes: RtScores? = null // Rotten Tomatoes' meters and consensus, when it has the title
     private var tomatoesRequested = false
-    private var factRow: LinearLayout? = null // the year · genre · scores line: refilled where it is as a rating or RT arrives
+    private var factRow: LinearLayout? = null // the year · genre line and the scores under it: refilled where they are as a rating or RT arrives
     private var consensusSlot: LinearLayout? = null // under the plot: the critics' sentence, filled in when RT answers
     private var watchState: String? = null // what the watch block drew from the library item: the same again redraws nothing
     private var leadControl: View? = null // Play, or Trailer for a title not out yet
@@ -226,9 +226,9 @@ class DetailsActivity : Screen() {
             if (own != null) stack.addView(text(own, SMALL, color = TEXT_2, serif = true).onArt().apply {
                 maxLines = 1; ellipsize = TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(2) })
-            val facts = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; fillFacts(this, m) }
+            val facts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; fillFacts(this, m) }
             factRow = facts
-            stack.addView(facts, wrap().apply { topMargin = dp(if (own != null) 8 else 12) })
+            stack.addView(facts, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(if (own != null) 8 else 12) })
             m.description?.takeIf { it.isNotBlank() }?.let {
                 stack.addView(text(it, BODY, color = TEXT).onArt().apply {
                     maxLines = 3; ellipsize = TextUtils.TruncateAt.END
@@ -308,38 +308,50 @@ class DetailsActivity : Screen() {
     }
 
     /** The year, a genre, the length, then IMDb's number and Rotten Tomatoes' two: refilled as each arrives. */
-    private fun fillFacts(row: LinearLayout, m: Meta) {
-        row.removeAllViews()
+    /**
+     * Two lines under the name, each its own. First the age rating and the facts (year · genre · length), which wrap
+     * to a second line rather than give way. Then the scores, on a line kept a line tall even while empty: Rotten
+     * Tomatoes, looked up a moment after the page opens, fills it without the facts shrinking or the plot moving down.
+     */
+    private fun fillFacts(block: LinearLayout, m: Meta) {
+        block.removeAllViews()
         val length = if (type == "series") m.videos.map { it.season }.filter { it > 0 }.distinct().size
             .takeIf { it > 0 }?.let(::seasons) else m.runtime
         // Where it was made and in what language first, for a title that came from the Foreign page.
         val facts = listOfNotNull(origin?.takeIf { it.isNotBlank() }, m.year, m.genres.firstOrNull(), length).joinToString(DOT)
+        val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         // The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it.
         val cert = certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
-        if (cert != null) row.addView(text(cert, 10.5f, bold = true, color = TEXT_2).apply {
+        if (cert != null) line.addView(text(cert, 10.5f, bold = true, color = TEXT_2).apply {
             letterSpacing = 0.04f
             setPadding(dp(5), dp(2), dp(5), dp(2))
             background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
             alpha = RATING_ALPHA
         }, wrap().apply { marginEnd = dp(8) })
-        row.addView(text(facts, SMALL, color = TEXT_2).onArt().apply {
-            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-        })
+        line.addView(text(facts, SMALL, color = TEXT_2).onArt().apply {
+            maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        block.addView(line, LinearLayout.LayoutParams(-1, -2))
+        val scores = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         m.rating?.let { rating ->
-            row.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
-            row.addView(text("IMDb", 9f, bold = true, color = BASE).apply {
+            scores.addView(text("IMDb", 9f, bold = true, color = BASE).apply {
                 setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
             })
-            row.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+            scores.addView(text(rating, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
         }
         // Rotten Tomatoes after IMDb, the same way: its badge, then C for critics and A for audience, as percentages.
         tomatoes?.takeIf { it.critics != null || it.audience != null }?.let { rt ->
-            row.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
-            row.addView(text("RT", 9f, bold = true, color = BASE).apply {
+            if (scores.childCount > 0) scores.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
+            scores.addView(text("RT", 9f, bold = true, color = BASE).apply {
                 setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
             })
             val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ")
-            row.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+            scores.addView(text(meters, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+        }
+        // No line is kept when nothing can come to it: no rating, and Rotten Tomatoes off in Settings.
+        if (scores.childCount > 0 || Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)) {
+            scores.minimumHeight = text("", SMALL).lineHeight
+            block.addView(scores, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
         }
     }
 

@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.38.0
+
+- The scores have a line of their own under the facts, on Home and on a title page. Before, a late Rotten Tomatoes score made the facts line too wide and cut the words you saw first.
+- The score line keeps its height while the scores load. The description does not move when a score arrives.
+- Long facts wrap to a second line. They do not get cut.
+
 ## 1.37.0
 
 - Subtitles follow the sound. When the sound of a video is not in your language, subtitles in your subtitle language start with it, as on Netflix. When the sound is in your language, they stay off. Settings › Subtitles › **Subtitles by default** has the three options: **With foreign sound** (the default now), **Always** and **Off**. A choice you make while you watch a title is kept for that title, as before.
