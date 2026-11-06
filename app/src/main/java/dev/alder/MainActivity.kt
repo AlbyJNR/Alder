@@ -1366,10 +1366,7 @@ class MainActivity : Screen() {
             val genreNames = (if (p.isCatalog) sections.take(nextCatalogSection(sections.size, 0)).map { it.first }.filter { name -> genres.any { it.equals(name, true) } }
                 else emptyList()).toMutableList()
             val genreResults = mutableMapOf<String, Boolean>()
-            if (p.isCatalog && genreNames.isEmpty()) {
-                showGenreChips(emptyList())
-                genreStrip.visibility = View.VISIBLE
-            }
+            if (p.isCatalog && genreNames.isEmpty()) showGenreChips(emptyList()) // nothing to show: the strip stays out of the way
             // The page's rows from the web above the catalogs (see webRows); the Content page has them all.
             if (p.isCatalog && !profile.kids) buildWebRows(webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }, g)
             // Keep request and view work bounded even when an account has many catalogs.
@@ -1585,10 +1582,11 @@ class MainActivity : Screen() {
             clipChildren = false
             setPadding(dp(EDGE), dp(2), dp(PAD), dp(2))
         }
-        (listOf<String?>(null) + names).forEach { value ->
-            val control = chip(value ?: "All", value == null).apply {
+        // One chip per genre row; no "All": the page's first row is where Back already goes.
+        names.forEach { value ->
+            val control = chip(value, false).apply {
                 setOnClickListener {
-                    val target = if (value == null) firstRow() else rows.firstOrNull { it.title == value && it.view.isAttachedToWindow }
+                    val target = rows.firstOrNull { it.title == value && it.view.isAttachedToWindow }
                     // Rows far down the page are still being made: the remote goes there as soon as it's in.
                     if (target != null) target.focusFirst() else jumpTo = value
                 }
@@ -1597,14 +1595,14 @@ class MainActivity : Screen() {
             line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
         }
         genreStrip.addView(line)
-        if (hadFocus) (genreChips[focusedGenre] ?: genreChips[null])?.requestFocus()
+        if (hadFocus) (genreChips[focusedGenre] ?: genreChips.values.firstOrNull())?.requestFocus()
     }
 
     /** The chip the page's top line returns to: Library's last filter, a catalog page's genre, the Foreign page's country. */
     private fun topChip(): TextView? = when (page) {
         Page.LIBRARY -> lastListChip ?: listFilterChips[listFilter]
         Page.FOREIGN -> countryChips[if (foreignCountry() == WORLD) WORLD else PICK]
-        else -> genreChips[genre]
+        else -> genreChips[genre] ?: genreChips.values.firstOrNull() // no genre open: the first chip
     }
 
     /** The country IMDb's lists are asked from: the TV's own, else the UK. (A choice of countries was tried and dropped: it changed little.) */
@@ -1773,7 +1771,7 @@ class MainActivity : Screen() {
     private fun markChip(rowTitle: String) {
         val open = rowTitle.takeIf { it in genreChips }
         genre = open // Back and Down from the top bar return to this chip
-        genreChips.forEach { (value, chip) -> chip.select(value ?: "All", value == open) }
+        genreChips.forEach { (value, chip) -> chip.select(value ?: "", value == open) }
     }
 
     /**

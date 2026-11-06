@@ -88,6 +88,8 @@ class DetailsActivity : Screen() {
     private var tomatoesRequested = false
     private var factRow: LinearLayout? = null // the year · genre line and the scores under it: refilled where they are as a rating or RT arrives
     private var consensusSlot: LinearLayout? = null // under the plot: the critics' sentence, filled in when RT answers
+    // One column for the labels (Critics, Cast, Director), as wide as the widest: the words after them start at one point.
+    private val labelW by lazy { listOf("Critics", "Cast", "Directors").maxOf { widest(caps(it, TEXT_3)) } + dp(10) }
     private var watchState: String? = null // what the watch block drew from the library item: the same again redraws nothing
     private var leadControl: View? = null // Play, or Trailer for a title not out yet
     private var lastKeyAt = 0L // the remote's last press: the hero is never rebuilt under a moving remote
@@ -260,12 +262,13 @@ class DetailsActivity : Screen() {
                 stack.addView(LinearLayout(this).apply {
                     gravity = Gravity.CENTER_VERTICAL
                     clipChildren = false
-                    addView(caps("Cast", TEXT_3).onArt(), wrap().apply { marginEnd = dp(4) })
+                    // The label takes the column less a name's own padding, so the first name's letters start at the column.
+                    addView(caps("Cast", TEXT_3).onArt(), LinearLayout.LayoutParams(labelW - dp(6), -2))
                     names.forEachIndexed { i, name ->
                         if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
                         addView(name, wrap())
                     }
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8); marginStart = -dp(6) })
+                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
             }
             if (m.director.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR)) {
                 val directors = m.director.take(2).map(::person)
@@ -273,12 +276,12 @@ class DetailsActivity : Screen() {
                 stack.addView(LinearLayout(this).apply {
                     gravity = Gravity.CENTER_VERTICAL
                     clipChildren = false
-                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), wrap().apply { marginEnd = dp(4) })
+                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), LinearLayout.LayoutParams(labelW - dp(6), -2))
                     directors.forEachIndexed { i, name ->
                         if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
                         addView(name, wrap())
                     }
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(4); marginStart = -dp(6) })
+                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(4) })
             }
             addWatch(m, stack)
         }
@@ -395,8 +398,10 @@ class DetailsActivity : Screen() {
         val rt = tomatoes?.takeIf { it.consensus != null }
         slot.visibility = if (rt == null) View.GONE else View.VISIBLE
         val line = rt?.consensus ?: return
-        slot.addView(caps(rt.season?.let { "Critics · S$it" } ?: "Critics", TEXT_3).onArt(), wrap().apply { marginEnd = dp(8); topMargin = dp(3) })
-        slot.addView(text(line, SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
+        slot.addView(caps("Critics", TEXT_3).onArt(), LinearLayout.LayoutParams(labelW, -2).apply { topMargin = dp(3) })
+        // A season's verdict names the season first, in the sentence: the label column stays one width.
+        val said = listOfNotNull(rt.season?.let { "S$it" }, line).joinToString(DOT)
+        slot.addView(text(said, SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
     }
 
     /** A late fact (the age rating, Rotten Tomatoes): its two lines refill where they are; the controls, and the remote on them, stay. */

@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.40.0
+
+- On a title page, the words after **Critics**, **Cast** and **Director** start at one point. The labels have one column.
+- The **All** chip is removed from the top of the TV and Movies pages. The first row is the page's start.
+
 ## 1.39.0
 
 - The facts and the scores share one line when the line has room for them. Before, they always took two lines.
