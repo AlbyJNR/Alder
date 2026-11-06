@@ -288,7 +288,19 @@ abstract class Screen : Activity() {
             setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
         }
         rating?.let { dot(); line.addView(badge("IMDb")); line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) }) }
-        meters?.let { dot(); line.addView(badge("RT")); line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) }) }
+        meters?.let {
+            dot(); line.addView(badge("RT"))
+            // The critics as a pen, the audience as a person: what each number is, with no letter to decode.
+            val parts = listOfNotNull(METER_C.find(it)?.groupValues?.get(1)?.let { v -> R.drawable.ic_pen to "$v%" },
+                METER_A.find(it)?.groupValues?.get(1)?.let { v -> R.drawable.ic_person to "$v%" })
+            if (parts.isEmpty()) line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
+            parts.forEachIndexed { i, (icon, value) ->
+                line.addView(android.widget.ImageView(this).apply {
+                    setImageResource(icon); imageTintList = android.content.res.ColorStateList.valueOf(TEXT_2)
+                }, LinearLayout.LayoutParams(dp(METER_ICON), dp(METER_ICON)).apply { marginStart = dp(if (i == 0) 6 else 8) })
+                line.addView(text(value, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(3) })
+            }
+        }
         tail?.let { dot(); line.addView(it, wrap()) }
         return line
     }
@@ -1351,7 +1363,8 @@ abstract class Screen : Activity() {
         const val DIALOG_DIM = 0.6f
         const val FROST_W = 360 // px the art is shrunk to before the blur: wider is less blur (240 read as fog, 480 as smeared)
         const val HERO_W = 600 // dp: a title's block on Home and its page: a measure that holds a synopsis in a few full lines
-        const val TITLE_H = 96 // dp: the name's area on Home and the title page, one height whatever the name, so what follows never moves
+        const val TITLE_H = 84 // dp: the name's area on Home and the title page, one height whatever the name, so what follows never moves
+        const val METER_ICON = 14 // dp: the pen and the person on the Rotten Tomatoes line
         const val LOGO_W = 340 // dp: the title's logo, where it has one, within that area
         const val BLOCK_W = 300 // dp: an information block down the right of a page
         const val BLOCK_RADIUS = 12
@@ -1465,3 +1478,6 @@ internal fun changeLine(change: String): CharSequence {
     }
     return out
 }
+
+private val METER_C = Regex("C(\\d+)%") // Rotten Tomatoes' critics' meter, as the rows and lookups word it
+private val METER_A = Regex("A(\\d+)%") // and the audience's

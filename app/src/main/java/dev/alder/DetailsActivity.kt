@@ -433,9 +433,9 @@ class DetailsActivity : Screen() {
 
         // The white disc: already the brightest thing on the page at rest, so the eye lands on it before the remote does.
         playButton = disc(DISC, R.drawable.ic_play, if (resumeAt > 0) "Resume" else "Play").apply {
-            setOnClickListener { if (unaired != null) notAired(unaired) else openSources(target?.first ?: metaId, startOver = false) }
+            setOnClickListener { (unaired ?: comingOut)?.let(::notAired) ?: openSources(target?.first ?: metaId, startOver = false) }
             // Held OK: every source, to choose one by hand.
-            setOnLongClickListener { if (unaired != null) notAired(unaired) else openSources(target?.first ?: metaId, startOver = false, pick = true); true }
+            setOnLongClickListener { (unaired ?: comingOut)?.let(::notAired) ?: openSources(target?.first ?: metaId, startOver = false, pick = true); true }
         }
         val startOver = if (resumeAt > 0) iconButton("↺", "Start over") {
             openSources(target?.first ?: metaId, startOver = true)
@@ -457,16 +457,15 @@ class DetailsActivity : Screen() {
             } else null
         val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW))
             glassButton("Preview") { if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) } else null
-        // One line of controls, as the Apple TV app sets them: Play's white disc first (the trailer leads for a title
-        // not out yet), the worded glass controls beside it, then the small round ones a step apart. The column is
-        // wide enough for all of them, so nothing is squeezed out of the line.
-        val lead = if (comingOut != null && trailer != null) trailer else playButton
+        // One line of controls, as the Apple TV app sets them: Play's white disc first, always (a title not out yet
+        // keeps the same order, and Play says when it is out), the worded glass controls beside it, then the small
+        // round ones a step apart. The column is wide enough for all of them, so nothing is squeezed out of the line.
+        val lead = playButton
         actionRow1 = LinearLayout(this).apply {
             clipChildren = false
             gravity = Gravity.CENTER_VERTICAL // the glass controls and the orbs sit on the disc's centre line
-            if (lead === trailer) addView(trailer, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(14) })
             addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(14) })
-            listOfNotNull(trailer.takeIf { lead !== trailer }, preview).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
+            listOfNotNull(trailer, preview).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
             listOfNotNull(startOver, listButton, infoButton).forEachIndexed { i, orb ->
                 addView(orb, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginStart = dp(if (i == 0) 6 else 10) })
             }
@@ -529,7 +528,12 @@ class DetailsActivity : Screen() {
     }
 
     /** An episode that isn't out yet: a word on when, instead of a search for sources that can't exist. */
-    private fun notAired(when_: String) = choose("Not aired yet", listOf("OK"), "This episode ${when_.replaceFirstChar { it.lowercase() }}.") {}
+    /** An episode not aired yet ("Airs 7 Nov"), or a title not out yet ("In cinemas 6 Nov", "From 6 Nov"): when, and nothing to play. */
+    private fun notAired(when_: String) {
+        val title = if (when_.startsWith("Airs")) "Not aired yet" else "Not out yet"
+        val what = if (when_.startsWith("Airs")) "This episode" else meta?.name ?: "This title"
+        choose(title, listOf("OK"), "$what ${when_.replaceFirstChar { it.lowercase() }}.") {}
+    }
 
     // ---------- episode ticks ----------
 

@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.46.0
+
+- Rotten Tomatoes line: the critics' meter has a pen before it and the audience's a person, in place of the letters C and A.
+- Title page: Play is always first on the line of controls. On a title not out yet, Play says when it is out.
+- Home, TV, Movies, Content, Foreign: the title block starts higher, the name's area is a little shorter, and the description has up to four lines, so it shows whole.
+
 ## 1.45.0
 
 - Title page: the information is back, in frosted blocks down the right, each its own thing: the critics in their words, the cast, the director. Every name selects to find more of their work, on the page and on the ⓘ page. More air between the name, the facts, the controls and the description.
