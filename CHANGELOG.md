@@ -13,6 +13,17 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.42.0
+
+- Small text is larger on every page. Facts, captions, chips, keys and hints are 14 sp. Badges are 11 sp. Chips are taller.
+- One warm accent colour marks badges, dots and selected states. Error text is coral. Before, all of these were white.
+- Menus and dialogs have one width and one padding. Controls keep clear of the screen's edges.
+- The title page: the age rating is easier to read, the episode preview pane follows the font size, season chips keep one width, and the information panel fades in.
+- Sources: taller rows, a spinner while CAS looks, and a Try again button when it finds nothing.
+- Player: the controls sit inside the safe area, the focused button is lit, Up next keeps its title to two lines, and subtitles use the app's typeface.
+- Settings, Search, Profiles and Add-ons: headings read as headings, duplicate rows are gone, keyboards match, and errors show in colour.
+- CAS compiles its text patterns once. Before, some were compiled on every card focus and every tick of the player's clock.
+
 ## 1.41.0
 
 - A title page has a new layout. The name and its facts sit over the lower part of the art. Under them, Play and its controls are on the left, and the plot, the critics and the names are on the right.

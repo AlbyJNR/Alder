@@ -20,11 +20,18 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
+// The day's shape and its formats, made once: a guide of eighty episodes asked for each of them eighty times.
+// SimpleDateFormat is not thread-safe; these are read on the main thread only (the guide, the watch block).
+private val ISO_DAY = Regex("\\d{4}-\\d{2}-\\d{2}")
+private val UTC: TimeZone = TimeZone.getTimeZone("UTC")
+private val DAY_IN = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false; timeZone = UTC }
+private val DAY_OUT = SimpleDateFormat("d MMM", Locale.US).apply { timeZone = UTC }
+private val DAY_YEAR_OUT = SimpleDateFormat("d MMM yyyy", Locale.US).apply { timeZone = UTC }
+
 internal fun episodeDate(value: String?): String? {
-    val day = value?.take(10)?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) } ?: return null
-    val source = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false; timeZone = TimeZone.getTimeZone("UTC") }
-    val parsed = runCatching { source.parse(day) }.getOrNull() ?: return null
-    return SimpleDateFormat("d MMM yyyy", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(parsed)
+    val day = value?.take(10)?.takeIf { it.matches(ISO_DAY) } ?: return null
+    val parsed = runCatching { DAY_IN.parse(day) }.getOrNull() ?: return null
+    return DAY_YEAR_OUT.format(parsed)
 }
 
 /**
@@ -32,12 +39,10 @@ internal fun episodeDate(value: String?): String? {
  * the year when it isn't this one; null once it has aired, or without a date. Text compares as time in this format.
  */
 internal fun airs(released: String?, now: String = Library.now(), word: String = "Airs"): String? {
-    val day = released?.take(10)?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) } ?: return null
+    val day = released?.take(10)?.takeIf { it.matches(ISO_DAY) } ?: return null
     if (released <= now) return null
-    val source = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false; timeZone = TimeZone.getTimeZone("UTC") }
-    val parsed = runCatching { source.parse(day) }.getOrNull() ?: return null
-    val pattern = if (day.take(4) == now.take(4)) "d MMM" else "d MMM yyyy"
-    return "$word " + SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(parsed)
+    val parsed = runCatching { DAY_IN.parse(day) }.getOrNull() ?: return null
+    return "$word " + (if (day.take(4) == now.take(4)) DAY_OUT else DAY_YEAR_OUT).format(parsed)
 }
 
 // A title stays in place over its art; episodes and related titles open over the same scene.
@@ -90,6 +95,7 @@ class DetailsActivity : Screen() {
     private var consensusSlot: LinearLayout? = null // under the plot: the critics' sentence, filled in when RT answers
     // One column for the labels (Critics, Cast, Director), as wide as the widest: the words after them start at one point.
     private val labelW by lazy { listOf("Critics", "Cast", "Directors").maxOf { widest(caps(it, TEXT_3)) } + dp(10) }
+    private val smallLine by lazy { text("", SMALL).lineHeight } // one small line's height: an empty scores line keeps it
     private var watchState: String? = null // what the watch block drew from the library item: the same again redraws nothing
     private var leadControl: View? = null // Play, or Trailer for a title not out yet
     private var lastKeyAt = 0L // the remote's last press: the hero is never rebuilt under a moving remote
@@ -272,10 +278,10 @@ class DetailsActivity : Screen() {
                     // The label takes the column less a name's own padding, so the first name's letters start at the column.
                     addView(caps("Cast", TEXT_3).onArt(), LinearLayout.LayoutParams(labelW - dp(6), -2))
                     names.forEachIndexed { i, name ->
-                        if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
+                        if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt(), wrap().apply { marginStart = dp(6); marginEnd = dp(6) })
                         addView(name, wrap())
                     }
-                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             }
             if (m.director.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR)) {
                 val directors = m.director.take(2).map(::person)
@@ -284,10 +290,10 @@ class DetailsActivity : Screen() {
                     clipChildren = false
                     addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), LinearLayout.LayoutParams(labelW - dp(6), -2))
                     directors.forEachIndexed { i, name ->
-                        if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
+                        if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt(), wrap().apply { marginStart = dp(6); marginEnd = dp(6) })
                         addView(name, wrap())
                     }
-                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
             }
             addWatch(m, doing)
             val columns = LinearLayout(this).apply {
@@ -336,7 +342,7 @@ class DetailsActivity : Screen() {
             setOnClickListener { if (hasEpisodes) showGuide() else showSimilar() }
             rowFocus(rest = { null })
         }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(PAD); bottomMargin = dp(28)
+            leftMargin = dp(PAD); bottomMargin = dp(32)
         })
     }
 
@@ -380,14 +386,14 @@ class DetailsActivity : Screen() {
             line.addView(factsView, LinearLayout.LayoutParams(0, -2, 1f))
             block.addView(line, LinearLayout.LayoutParams(-1, -2))
             if (scoreRoom > 0) {
-                scores.minimumHeight = text("", SMALL).lineHeight
+                scores.minimumHeight = smallLine
                 block.addView(scores, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             }
         }
     }
 
     /** The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it. */
-    private fun capsule(cert: String) = text(cert, 10.5f, bold = true, color = TEXT_2).apply {
+    private fun capsule(cert: String) = text(cert, RATING_SP, bold = true, color = TEXT_2).apply {
         letterSpacing = 0.04f
         setPadding(dp(5), dp(2), dp(5), dp(2))
         background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
@@ -564,7 +570,7 @@ class DetailsActivity : Screen() {
     }
 
     /** An episode that isn't out yet: a word on when, instead of a search for sources that can't exist. */
-    private fun notAired(when_: String) = choose(when_, listOf("OK"), "This episode has not aired yet.") {}
+    private fun notAired(when_: String) = choose("Not aired yet", listOf("OK"), "This episode ${when_.replaceFirstChar { it.lowercase() }}.") {}
 
     // ---------- episode ticks ----------
 
@@ -617,7 +623,7 @@ class DetailsActivity : Screen() {
         val watched = Library.watched(item, videos)
         val all = ids.all { it in watched }
         val name = if (season == 0) "Specials" else "season $season"
-        choose(if (season == 0) "Specials" else "Season $season", listOf(if (all) "Mark $name unwatched" else "Mark $name watched", "Keep")) { i ->
+        choose(if (season == 0) "Specials" else "Season $season", listOf(if (all) "Mark $name unwatched" else "Mark $name watched", "Cancel")) { i ->
             if (i == 0) tick { entry, vs -> if (all) Library.markUnwatchedMany(entry, vs, ids) else Library.markWatchedMany(entry, vs, ids) }
         }
     }
@@ -648,7 +654,6 @@ class DetailsActivity : Screen() {
         val top = dp(128)
         val width = resources.displayMetrics.widthPixels - x * 2
         val height = resources.displayMetrics.heightPixels - top - dp(27)
-        val largeText = resources.configuration.fontScale > 1.15f
         guide = FrameLayout(this).apply { visibility = View.GONE }
         val smallLogo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START }
         guide.addView(smallLogo, FrameLayout.LayoutParams(dp(150), dp(42)).apply {
@@ -692,38 +697,44 @@ class DetailsActivity : Screen() {
             background = rounded(BASE, 8)
             clipToOutline = true
         }
-        pane.addView(previewImage, FrameLayout.LayoutParams(previewWidth, dp(226)).apply {
-            leftMargin = previewX; topMargin = dp(14)
-        })
         previewProgress = FrameLayout(this)
-        pane.addView(previewProgress, FrameLayout.LayoutParams(previewWidth - dp(20), dp(3)).apply {
-            leftMargin = previewX + dp(10); topMargin = dp(229)
-        })
-        previewTitle = text("", 22f, serif = true).onArt().apply {
+        previewTitle = text("", SERIF_NAME, serif = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         }
-        pane.addView(previewTitle, FrameLayout.LayoutParams(previewWidth, -2).apply {
-            leftMargin = previewX; topMargin = dp(251)
-        })
         previewFacts = text("", SMALL, color = TEXT_2).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         }
-        pane.addView(previewFacts, FrameLayout.LayoutParams(previewWidth, -2).apply {
-            leftMargin = previewX; topMargin = dp(if (largeText) 285 else 280)
-        })
         previewAbout = text("", SMALL, color = TEXT).onArt().apply {
-            maxLines = if (largeText) 2 else 3
-            ellipsize = TextUtils.TruncateAt.END
+            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
         }
-        pane.addView(previewAbout, FrameLayout.LayoutParams(previewWidth, -2).apply {
-            leftMargin = previewX; topMargin = dp(if (largeText) 313 else 304)
-        })
         // What the remote can do on an episode, under its still: the preview is a key away, the sources a held one.
-        pane.addView(LinearLayout(this).apply {
+        val hints = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(keyHint("▸", "Preview"))
             addView(keyHint("Hold OK", "Sources"), LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(16) })
-        }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { leftMargin = previewX; bottomMargin = dp(16) })
+        }
+        hints.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val floor = height - dp(24) - hints.measuredHeight - dp(12) // where the words must stop, above the hints
+        // The still is 16:9 of the column where the pane is tall enough; on a pane too short for that and the words
+        // (a 540 dp screen), it keeps the column's width and gives up height until the name, the facts and two lines
+        // of the story fit above the hints.
+        val words = dp(6 + 3 + 14 + 4 + 8) + text("", SERIF_NAME).lineHeight + smallLine * 3
+        val stillH = minOf(previewWidth * 9 / 16, floor - dp(14) - words).coerceAtLeast(dp(120)) // never a sliver at a huge font
+        // The still, its bar, the name, the facts and the words, each under the one before: at a larger font the
+        // words move down rather than over each other.
+        val previewColumn = column(Gravity.START).apply {
+            addView(previewImage, LinearLayout.LayoutParams(previewWidth, stillH))
+            addView(previewProgress, LinearLayout.LayoutParams(previewWidth - dp(20), dp(3)).apply { topMargin = dp(6); marginStart = dp(10) })
+            addView(previewTitle, LinearLayout.LayoutParams(previewWidth, -2).apply { topMargin = dp(14) })
+            addView(previewFacts, LinearLayout.LayoutParams(previewWidth, -2).apply { topMargin = dp(4) })
+            addView(previewAbout, LinearLayout.LayoutParams(previewWidth, -2).apply { topMargin = dp(8) })
+        }
+        pane.addView(previewColumn, FrameLayout.LayoutParams(previewWidth, -2).apply { leftMargin = previewX; topMargin = dp(14) })
+        pane.addView(hints, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { leftMargin = previewX; bottomMargin = dp(24) })
+        // The column stops above the hints: a long description gives up a line rather than run into them.
+        previewColumn.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
+            if (bottom > floor && previewAbout.maxLines > 1) previewAbout.post { previewAbout.maxLines -= 1 }
+        }
         guide.addView(pane, FrameLayout.LayoutParams(width, height).apply {
             leftMargin = x; topMargin = top
         })
@@ -744,11 +755,12 @@ class DetailsActivity : Screen() {
         val seasons = videos.map { it.season }.distinct()
         seasonStrip.removeAllViews()
         seasonButtons = seasons.associateWith { season ->
-            chip(if (season == selectedSeason) {
-                if (season == 0) "Specials" else "Season $season"
-            } else if (season == 0) "Specials" else season.toString(), season == selectedSeason).apply {
+            // Every chip says "Season N", open or not: a chip that grew its word when opened moved the whole strip.
+            chip(if (season == 0) "Specials" else "Season $season", season == selectedSeason).apply {
                 // As Home's pages: landing on a season shows it, after the beat that lets the remote skate past.
-                setOnFocusChangeListener { _, has ->
+                // Keeps chip()'s white face and growth under the remote; this listener replaces the one chip() set.
+                setOnFocusChangeListener { v, has ->
+                    chipFocus(has); v.grow(has, CHIP_GROW).start()
                     main.removeCallbacks(seasonSwitch)
                     if (has && season != selectedSeason) { pendingSeason = season; main.postDelayed(seasonSwitch, SEASON_WAIT) }
                 }
@@ -759,7 +771,7 @@ class DetailsActivity : Screen() {
                 }
                 // Held: the whole season ticked as watched, or unticked.
                 setOnLongClickListener { seasonMenu(season, videos); true }
-                seasonStrip.addView(this, LinearLayout.LayoutParams(-2, dp(24)).apply {
+                seasonStrip.addView(this, LinearLayout.LayoutParams(-2, -2).apply {
                     if (seasonStrip.childCount > 0) marginStart = dp(8)
                 })
             }
@@ -884,16 +896,16 @@ class DetailsActivity : Screen() {
                     addView(text(it, BODY, color = TEXT).onArt())
                 }
                 tomatoes?.consensus?.let {
-                    addView(caps(tomatoes?.season?.let { s -> "Critics consensus · Season $s" } ?: "Critics consensus", TEXT_2).onArt(), wrap().apply { topMargin = dp(18) })
+                    addView(caps(tomatoes?.season?.let { s -> "Critics consensus · Season $s" } ?: "Critics consensus", TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
                     addView(text(it, BODY).onArt(), wrap().apply { topMargin = dp(6) })
                 }
                 if (m.cast.isNotEmpty()) {
-                    addView(caps("Cast", TEXT_2).onArt(), wrap().apply { topMargin = dp(18) })
+                    addView(caps("Cast", TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
                     addView(text(m.cast.take(12).joinToString("  ·  "), BODY).onArt(),
                         wrap().apply { topMargin = dp(6) })
                 }
                 if (m.director.isNotEmpty()) {
-                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_2).onArt(), wrap().apply { topMargin = dp(18) })
+                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
                     addView(text(m.director.take(3).joinToString("  ·  "), BODY).onArt(), wrap().apply { topMargin = dp(6) })
                 }
             })
@@ -901,13 +913,17 @@ class DetailsActivity : Screen() {
         infoOverlay.addView(column(Gravity.START,
             text(m.name, SERIF_TITLE, bold = true, serif = true).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END },
             text(facts, SMALL, color = TEXT).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }.marginTop(6),
-            text("The story", SMALL, bold = true, color = TEXT).onArt().marginTop(SECTION_GAP),
+            caps("The story", TEXT_3).onArt().marginTop(SECTION_GAP),
         ).apply {
             addView(story, LinearLayout.LayoutParams(-1, dp(180)).apply { topMargin = dp(8) })
         }, FrameLayout.LayoutParams(dp(HERO_W), -2, Gravity.BOTTOM or Gravity.START).apply {
             leftMargin = dp(PAD); bottomMargin = dp(96)
         })
         root.addView(infoOverlay, FrameLayout.LayoutParams(-1, -1))
+        // It rises in as the guide and More like this do; the page's three overlays move alike.
+        infoOverlay.alpha = 0f
+        infoOverlay.translationY = dp(20).toFloat()
+        infoOverlay.animate().alpha(1f).translationY(0f).setDuration(220).start()
         story.requestFocus()
     }
 
@@ -922,9 +938,13 @@ class DetailsActivity : Screen() {
 
     private fun hideInfo() {
         infoOpen = false
-        root.removeView(infoOverlay)
-        hero.visibility = View.VISIBLE
-        infoButton.requestFocus()
+        val overlay = infoOverlay // the one going out: a new one may be built before it has gone
+        overlay.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(180).withEndAction {
+            root.removeView(overlay)
+            if (infoOpen) return@withEndAction // opened again before this one had gone: the new one holds the page
+            hero.visibility = View.VISIBLE
+            infoButton.requestFocus()
+        }.start()
     }
 
     private fun loadSimilar() {
@@ -1110,7 +1130,8 @@ class DetailsActivity : Screen() {
         const val PANE_SHADE = 0.55f // the episode panel's frost, darkened to the mock's smoked glass
         const val GUIDE_ART = 0.6f // the film's brightness behind the episode guide
         const val STARTED = 60_000L // ms watched before a title counts as started
-        const val RATING_ALPHA = 0.65f // the age rating capsule: present, not loud
+        const val RATING_ALPHA = 0.9f // the age rating capsule: quiet in its outline, not in its letters
+        const val RATING_SP = 12f // its letters: between the badges and the label step, as a cinema listing prints it
         const val AIRS_ALPHA = 0.65f // an episode not out yet sits back in the list
         const val ORB = 36 // dp, the small frosted circles under the disc
         const val SEASON_WAIT = 300L // ms on a season chip before its episodes show (Home's pages switch the same way)
@@ -1118,7 +1139,7 @@ class DetailsActivity : Screen() {
         const val MORE_HINT = "more-hint" // the tag of the "▾ Episodes" / "▾ More like this" line
         // The band under the art, as the Apple TV app's: the name from BAND_TOP, two columns under its facts.
         const val BAND_TOP = 208 // dp from the top: the art's upper part, where the faces are, stays clear
-        const val BAND_BOTTOM = 56 // dp kept at the foot for the "▾ More like this" line
+        const val BAND_BOTTOM = 60 // dp kept at the foot for the "▾ More like this" line
         const val DOING_W = 320 // dp: the left column, Play and its controls
         const val COLUMN_GAP = 32
         const val TELLING_W = HERO_W // dp: the right column, the plot and the names, a readable measure

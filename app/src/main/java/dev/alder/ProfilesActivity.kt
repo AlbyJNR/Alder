@@ -174,16 +174,16 @@ class ProfilesActivity : Screen() {
             }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply {
                 rightMargin = dp(PAD); topMargin = dp(39)
             })
-            addView(text("Who's here tonight?", 38f, serif = true).onArt().apply { gravity = Gravity.CENTER },
+            addView(text("Who's here tonight?", SERIF_HERO, serif = true).onArt().apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { topMargin = dp(118) })
             addView(tiles, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply { topMargin = dp(190 - LIFT_ROOM) })
             addView(chip("Manage profiles").apply {
                 setOnClickListener {
                     choose("Manage profiles", profiles.map { it.name }) { i -> showMenu(profiles[i]) }
                 }
-            }, FrameLayout.LayoutParams(-2, dp(30), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(50) })
+            }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(50) }) // chip() sets its own height
             addView(keyHint("Hold OK", "Rename · PIN · Colour · Kids · Remove"),
-                FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(20) })
+                FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(28) })
         }
         setWindowed(content, art)
         tiles.getChildAt(profiles.indexOf(selected)).requestFocus()
@@ -191,6 +191,7 @@ class ProfilesActivity : Screen() {
 
     private fun tile(profile: Profile?, last: TextView?, focused: () -> Unit): View {
         val add = profile == null
+        // Glyph sizes for the fixed 100 dp disc, not text sizes: they scale with the disc, not with the type scale.
         val face = text(if (add) "+" else profile?.name?.take(1)?.uppercase().orEmpty(), if (add) 42f else 48f,
             serif = !add, color = if (add) TEXT_2 else BASE).apply {
             gravity = Gravity.CENTER
@@ -209,13 +210,16 @@ class ProfilesActivity : Screen() {
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(TUNGSTEN) }
             visibility = View.INVISIBLE
         }
-        val name = text(if (add) "Add" else profile?.name.orEmpty().replaceFirstChar { it.titlecase() } + if (profile?.pin != null && !profile.kids) "  🔒" else "",
+        val name = text(if (add) "Add" else profile?.name.orEmpty().replaceFirstChar { it.titlecase() },
             BODY, color = TEXT_2).apply { gravity = Gravity.CENTER; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
+        // A locked profile says "PIN" under the name: a word, as a lock emoji draws differently on every TV.
+        val locked = if (profile?.pin != null && !profile.kids) caps("PIN", TEXT_3).apply { gravity = Gravity.CENTER } else null
         // A child's profile says so under the name, quietly, in place of the lock (its PIN is for leaving).
         val kids = if (profile?.kids == true) caps("Kids").apply { gravity = Gravity.CENTER } else null
         return column(Gravity.CENTER_HORIZONTAL).apply {
             addView(circle, LinearLayout.LayoutParams(dp(112), dp(112)))
             addView(name, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            if (locked != null) addView(locked, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             if (kids != null) addView(kids, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             if (last != null) addView(last, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             addView(dot, LinearLayout.LayoutParams(dp(5), dp(5)).apply { topMargin = dp(8); gravity = Gravity.CENTER_HORIZONTAL })
@@ -292,7 +296,7 @@ class ProfilesActivity : Screen() {
         backTo = ::showPicker
         val previewName = text(p.name, BODY, bold = true).apply { gravity = Gravity.CENTER }
         val avatar = onboardingAvatar(p.name.firstOrNull()?.uppercase().orEmpty(), 100, p.color)
-        val error = text("", SMALL, color = TUNGSTEN)
+        val error = text("", SMALL, color = ALERT)
         val (name, keyboard, firstKey) = nameEntry(p.name) { typed ->
             previewName.text = typed
             avatar.text = typed.firstOrNull()?.uppercase().orEmpty()
@@ -329,13 +333,13 @@ class ProfilesActivity : Screen() {
         val digits = IntArray(4) { -1 }
         var at = 0
         val boxes = List(4) {
-            text("", 34f, bold = true).apply {
+            text("", CODE, bold = true).apply {
                 gravity = Gravity.CENTER
                 layoutParams = LinearLayout.LayoutParams(dp(64), dp(76)).apply { marginStart = dp(8); marginEnd = dp(8) }
             }
         }
         val row = LinearLayout(this).apply { gravity = Gravity.CENTER; isFocusable = true; boxes.forEach { addView(it) } }
-        val error = text("", BODY, color = TEXT)
+        val error = text("", BODY, color = ALERT)
         fun draw() = boxes.forEachIndexed { i, b ->
             b.text = when {
                 digits[i] < 0 -> ""
@@ -406,7 +410,7 @@ class ProfilesActivity : Screen() {
         val first = Profiles.all(this).isEmpty()
         val previewName = text(draftName, BODY, bold = true).apply { gravity = Gravity.CENTER }
         val avatar = onboardingAvatar(draftName.firstOrNull()?.uppercase().orEmpty(), 100, draftColor)
-        val error = text("", SMALL, color = TUNGSTEN)
+        val error = text("", SMALL, color = ALERT)
         val (name, keyboard, firstKey) = nameEntry(draftName) { typed ->
             previewName.text = typed
             avatar.text = typed.firstOrNull()?.uppercase().orEmpty()
@@ -485,12 +489,13 @@ class ProfilesActivity : Screen() {
             setPadding(dp(8), dp(8), dp(8), dp(8)); background = glass(10)
         }
         val keys = mutableListOf<TextView>()
-        fun key(label: String, row: LinearLayout, width: Int = 1, action: () -> Unit) = text(label, SMALL, color = TEXT_2).apply {
+        // Search's keyboard: body-size letters, the word keys a step smaller, 4 dp between keys.
+        fun key(label: String, row: LinearLayout, width: Int = 1, action: () -> Unit) = text(label, if (label.length > 1) SMALL else BODY, color = TEXT_2).apply {
             gravity = Gravity.CENTER
             rowFocus(6)
             setOnClickListener { action() }
             row.addView(this, LinearLayout.LayoutParams(0, -1, width.toFloat()).apply {
-                if (row.childCount > 0) marginStart = dp(3)
+                if (row.childCount > 0) marginStart = dp(KEY_GAP)
             })
             keys += this
         }
@@ -508,8 +513,8 @@ class ProfilesActivity : Screen() {
                     name.text.append(typed)
                 } }
                 // "yz" keeps the grid: empty cells fill the row instead of two keys stretched across it.
-                repeat(6 - letters.length) { addView(View(context), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(3) }) }
-            }, LinearLayout.LayoutParams(-1, dp(KEY_H)).apply { if (keyboard.childCount > 0) topMargin = dp(3) })
+                repeat(6 - letters.length) { addView(View(context), LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(KEY_GAP) }) }
+            }, LinearLayout.LayoutParams(-1, dp(KEY_H)).apply { if (keyboard.childCount > 0) topMargin = dp(KEY_GAP) })
         }
         keyboard.addView(LinearLayout(this).apply {
             key("⇧", this) { caps(!upper) }
@@ -521,7 +526,7 @@ class ProfilesActivity : Screen() {
                 name.post { (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
                     .showSoftInput(name, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT) }
             }
-        }, LinearLayout.LayoutParams(-1, dp(KEY_H)).apply { topMargin = dp(3) })
+        }, LinearLayout.LayoutParams(-1, dp(KEY_H)).apply { topMargin = dp(KEY_GAP) })
         caps(initial.isEmpty())
         name.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -545,7 +550,7 @@ class ProfilesActivity : Screen() {
         val status = text("Getting a sign-in code…", SMALL, color = TEXT_2)
         val countdown = ring(1f)
         val codeTiles = (0 until 4).map {
-            text("–", 36f, bold = true).apply {
+            text("–", CODE, bold = true).apply {
                 gravity = Gravity.CENTER
                 background = glass(10)
             }
@@ -574,7 +579,7 @@ class ProfilesActivity : Screen() {
             background = glass(14)
         }
         val steps = column(Gravity.START,
-            text(if (again != null) "Sign in again" else "Connect Stremio", 40f, serif = true).onArt(),
+            text(if (again != null) "Sign in again" else "Connect Stremio", SERIF_HERO, serif = true).onArt(),
             text(if (again != null) "Stremio signed $name out of this TV. Scan with $name's phone to connect again. $name's settings and PIN stay."
                 else "Scan with $name's phone. Stremio opens and asks to sign in this TV.", BODY).onArt().marginTop(10),
             text("", BODY, color = TEXT_2).onArt().apply {
@@ -599,7 +604,7 @@ class ProfilesActivity : Screen() {
         ).apply { gravity = Gravity.CENTER_VERTICAL }
         val first = Profiles.all(this).isEmpty()
         val content = onboardingFrame(if (again != null) "sign in again" else if (first) "step 2 of 2" else "step 2 of 3", left, steps, dp(55), 0f, 1f, dp(300))
-        content.addView(back, FrameLayout.LayoutParams(-2, dp(32), Gravity.BOTTOM or Gravity.START).apply {
+        content.addView(back, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply { // chip() sets its own height
             leftMargin = dp(PAD); bottomMargin = dp(40)
         })
         setWindowed(content, onboardingBackdrop())
@@ -672,6 +677,7 @@ class ProfilesActivity : Screen() {
 
     private fun onboardingButton(label: String) = pill(label)
 
+    // 48 and 19 are glyph sizes for the two fixed discs (100 and 26 dp), not text sizes: they go with the disc.
     private fun onboardingAvatar(initial: String, size: Int, color: Int = draftColor) = text(initial, if (size > 50) 48f else 19f,
         serif = true, color = BASE).apply {
         gravity = Gravity.CENTER
@@ -755,7 +761,7 @@ class ProfilesActivity : Screen() {
             text("1.  Scan with ${profile.name}'s phone to open Watchly\n" +
                 "2.  Connect ${profile.name}'s Stremio account there\n" +
                 "3.  Install it to ${profile.name}'s Stremio account\n\n" +
-                "${profile.name}'s own \"Top Picks\" then show up on Home. You can finish this later.", BODY, color = TEXT_3).marginTop(16),
+                "${profile.name}'s own \"Top Picks\" then show up on Home. You can finish this later.", BODY, color = TEXT_2).marginTop(16), // the screen's instructions, not a footnote
             done.marginTop(32),
         )
         setWindowed(onboardingFrame("step 3 of 3", column(Gravity.CENTER,
@@ -773,7 +779,7 @@ class ProfilesActivity : Screen() {
             onboardingAvatar(profile.name.take(1).uppercase(), 100, profile.color),
             text(profile.name, SERIF_TITLE, serif = true).marginTop(12)
         ).apply { gravity = Gravity.CENTER }, column(Gravity.START,
-            text("You're all set", 40f, serif = true),
+            text("You're all set", SERIF_HERO, serif = true),
             text("${profile.name}'s profile is ready. You can add more add-ons later in Settings.", BODY, color = TEXT_2).marginTop(12),
             done.marginTop(24)
         ).apply { gravity = Gravity.CENTER_VERTICAL }, dp(55), 0.9f, 1.1f), onboardingBackdrop())
@@ -797,6 +803,7 @@ class ProfilesActivity : Screen() {
 
     private companion object {
         const val LIFT_ROOM = 8 // dp above the portraits for the focused one's 10% lift and ring
-        const val KEY_H = 25 // dp a key row on the name step, so Continue fits under the colours
+        const val KEY_H = 30 // dp a key row on the name step: Search's keyboard, so the two feel like one
+        const val KEY_GAP = 4 // dp between keys and rows, as on Search
     }
 }

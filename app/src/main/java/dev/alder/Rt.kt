@@ -12,9 +12,12 @@ enum class RtList(val title: String, val path: String, val tv: Boolean, val call
     POPULAR_TV("Popular TV on Rotten Tomatoes", "tv_series_browse/sort:popular", tv = true),
 }
 
+private val YEAR = Regex("\\b(19|20)\\d{2}\\b")
+private val NOT_LETTERS = Regex("[^\\p{L}\\p{N}]+")
+
 class RtPick(val title: String, val critics: Int?, val certified: Boolean, val audience: Int?, val poster: String?, val released: String?) {
     /** The year in "Opened Oct 23, 2026"; series say only "Latest Episode: Oct 30", so none. */
-    val year: Int? get() = released?.let { Regex("\\b(19|20)\\d{2}\\b").find(it)?.value?.toIntOrNull() }
+    val year: Int? get() = released?.let { YEAR.find(it)?.value?.toIntOrNull() }
 
     fun json(): JSONObject = JSONObject().put("title", title).put("critics", critics).put("certified", certified)
         .put("audience", audience).put("poster", poster).put("released", released)
@@ -110,7 +113,7 @@ internal fun rtSearchUrl(name: String) = "https://www.rottentomatoes.com/search?
  * same name (ignoring case and punctuation), in [year] or a year either side when one is known. Null when none is.
  */
 internal fun rtSearchMatch(html: String, name: String, year: Int?, tv: Boolean): String? {
-    fun key(s: String) = plainText(s).lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+    fun key(s: String) = plainText(s).lowercase().replace(NOT_LETTERS, " ").trim()
     val wanted = key(name)
     val rows = Regex("<search-page-media-row(.*?)</search-page-media-row>", RegexOption.DOT_MATCHES_ALL).findAll(html).mapNotNull { m ->
         val row = m.groupValues[1]

@@ -212,6 +212,9 @@ class MainActivity : Screen() {
     private lateinit var heroScores: LinearLayout // IMDb, RT, Added: beside the facts or on the line under them
     private var scoresBeside = true // the scores on the facts line (placeScores), else on the line under
     private val smallLine by lazy { text("", SMALL).lineHeight }
+    // The widest the scores can be (IMDb's widest number, both meters at 100%), measured once: building the line on
+    // every focus move was a handful of views per card.
+    private val scoresMost by lazy { widest(scoresLine("10.0", "C100% A100%", lead = true)) }
     private val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
     private val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
     private var heroBottom = 0 // px from the screen's foot to the hero block, for a poster row
@@ -270,7 +273,6 @@ class MainActivity : Screen() {
     private var cinemaAwake = false
     private var cinemaWakeKey = -1
     private val idle = Runnable { enterCinema() }
-    private val idleDim = Runnable { dimHome(true) }
     private var homeDimmed = false
     private val advance = Runnable { if (mode == Mode.CINEMA && cinema.size > 1) showCinema((cinemaAt + 1) % cinema.size) }
 
@@ -355,7 +357,7 @@ class MainActivity : Screen() {
                 setPadding(dp(14), dp(4), dp(14), dp(5))
             }
             addView(listHint, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
-                rightMargin = dp(PAD); bottomMargin = dp(18)
+                rightMargin = dp(PAD); bottomMargin = dp(24)
             })
             // Sits on the row band, so a larger font size grows it upwards into the art, never down into the rows.
             addView(browseInfo(), FrameLayout.LayoutParams(dp(HERO_W + 2 * FOCUS_ROOM), -2, Gravity.BOTTOM).apply {
@@ -368,8 +370,10 @@ class MainActivity : Screen() {
                 isHorizontalScrollBarEnabled = false
                 visibility = View.GONE
             }
-            addView(genreStrip, FrameLayout.LayoutParams(-1, dp(44), Gravity.TOP).apply {
+            // Wrap height: the chips grow with the TV's font size. It ends before the wordmark at the top right.
+            addView(genreStrip, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
                 topMargin = dp(22) // level with the wordmark: no top bar above it now
+                marginEnd = dp(PAD + 100)
             })
             wordmark = brand().apply { alpha = 0f }
             addView(wordmark, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { topMargin = dp(26); rightMargin = dp(PAD) })
@@ -507,7 +511,6 @@ class MainActivity : Screen() {
     override fun onPause() {
         super.onPause()
         main.removeCallbacks(idle)
-        main.removeCallbacks(idleDim)
         main.removeCallbacks(advance)
         main.removeCallbacks(refreshOnReturn)
         main.removeCallbacks(cinemaRest)
@@ -685,11 +688,12 @@ class MainActivity : Screen() {
         profileEntry = FrameLayout(this).apply {
             isFocusable = true
             contentDescription = "Profile: ${profile.name}"
-            profileAvatar = text(profile.name.take(1).uppercase(), SMALL, bold = true, color = TUNGSTEN).apply {
+            // The same disc as the avatars on Settings and Search: 30 dp, the initial in BODY bold.
+            profileAvatar = text(profile.name.take(1).uppercase(), BODY, bold = true, color = TUNGSTEN).apply {
                 gravity = Gravity.CENTER
-                background = rounded(0x33FFFFFF, 14)
+                background = rounded(0x33FFFFFF, 15)
             }
-            addView(profileAvatar, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
+            addView(profileAvatar, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
             setOnFocusChangeListener { _, _ -> styleNav() }
             setOnClickListener { profileMenu() }
         }.inNav()
@@ -748,7 +752,7 @@ class MainActivity : Screen() {
             }
             val colour = if (focused) BASE else if (current) TEXT else TEXT_2
             railIcons[item]?.setColorFilter(colour)
-            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) 0x1F000000 else 0x33FFFFFF, 14) }
+            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) 0x1F000000 else 0x33FFFFFF, 15) }
         }
     }
 
@@ -987,7 +991,7 @@ class MainActivity : Screen() {
         val meta = metas[item.id]
         val rating = (meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ") ?: heroImdbRatings[item.id])
             ?.takeIf { it.isNotBlank() }
-        val rt = item.facts.firstOrNull { it.matches(Regex("[CA]\\d+%.*")) }
+        val rt = item.facts.firstOrNull { RT_METERS.matches(it) }
             ?: heroRtScores[item.id]?.let { s -> listOfNotNull(s.critics?.let { "C$it%" }, s.audience?.let { "A$it%" }).joinToString(" ").ifEmpty { null } }
         // Built afresh each time: a margin changed on a view already laid out is not always taken up.
         (heroAdded.parent as? android.view.ViewGroup)?.removeView(heroAdded)
@@ -1004,8 +1008,9 @@ class MainActivity : Screen() {
      */
     private fun placeScores() {
         val facts = heroFacts.paint.measureText(heroFacts.text.toString())
-        val tail = if (page == Page.LIBRARY && addedLine.isNotEmpty()) text(addedLine, SMALL, color = TEXT_3) else null
-        val most = widest(scoresLine("10.0", "C100% A100%", lead = true, tail = tail))
+        // The library's Added is measured with the hero's own paint (its dot and margins as dp(14)), not built as views.
+        val tail = if (page == Page.LIBRARY && addedLine.isNotEmpty()) (heroAdded.paint.measureText("·  " + addedLine) + dp(14)).toInt() else 0
+        val most = scoresMost + tail
         scoresBeside = facts + most <= dp(HERO_W)
         heroFacts.maxLines = if (scoresBeside) 1 else 2
         val want: android.view.ViewGroup = if (scoresBeside) factsLine else browseInfo
@@ -1023,7 +1028,7 @@ class MainActivity : Screen() {
         val item = heroItem ?: return@Runnable
         if (mode != Mode.BROWSE || item.type == COUNTRY) return@Runnable
         val tomatoes = Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)
-        val hasRt = item.facts.any { it.matches(Regex("[CA]\\d+%.*")) } || item.id in heroRtScores
+        val hasRt = item.facts.any { RT_METERS.matches(it) } || item.id in heroRtScores
         if (tomatoes && !hasRt) {
             heroRtScores[item.id] = null // asked once; replaced when it answers
             val year = metas[item.id]?.year?.take(4)?.toIntOrNull() ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }?.take(4)?.toIntOrNull()
@@ -1072,8 +1077,10 @@ class MainActivity : Screen() {
             else meta?.runtime
         // A show in progress describes its next episode, so the line names that episode rather than the show.
         val code = item.left?.split(DOT)?.firstOrNull { it.startsWith("S") && " E" in it }
+        // Not said twice: Rotten Tomatoes' meters are on the RT badge, and a rank is the numeral on the card.
+        val note = item.note?.takeUnless { RT_METERS.matches(it) || item.rank != null && it.startsWith("No. ") }
         heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
-            else listOfNotNull(item.original, item.note, year, genre, length, item.origin)).joinToString(DOT)
+            else listOfNotNull(item.original, note, year, genre, length, item.origin)).joinToString(DOT)
         addedLine = item.addedAt?.let { "Added ${addedAgo(it)}" } ?: ""
         placeScores()
         showScores(item)
@@ -1101,14 +1108,13 @@ class MainActivity : Screen() {
     }
 
     private fun showCaption(item: Item) {
+        // Time left only: "Stopped at 1:02:14" said the same thing a second way.
         val remaining = item.left?.split(DOT)?.lastOrNull { it.endsWith("left") }
-        val stop = item.stoppedAt?.takeIf { it > 0 }?.let { "Stopped at ${android.text.format.DateUtils.formatElapsedTime(it / 1000)}" }
         val meta = metas[item.id]
         val detail = if (page == Page.HOME) meta?.year ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }
             else if (item.type == "series") meta?.videos?.map { it.season }?.filter { it > 0 }?.distinct()?.size?.takeIf { it > 0 }?.let(::seasons)
             else meta?.runtime
-        cardCaption.text = listOfNotNull(remaining, stop).takeIf { it.isNotEmpty() }?.joinToString(DOT)
-            ?: listOfNotNull(item.name, detail).joinToString(DOT)
+        cardCaption.text = remaining ?: listOfNotNull(item.name, detail).joinToString(DOT)
         cardCaption.visibility = View.VISIBLE
         // Measured with its new words, so a caption near the right end stops at the margin.
         cardCaption.post(::placeCaption)
@@ -1510,12 +1516,12 @@ class MainActivity : Screen() {
         fun add(label: String, selected: Boolean, click: () -> Unit): TextView {
             val control = chip(label, selected).apply {
                 setOnFocusChangeListener { v, has ->
-                    chipFocus(has)
+                    chipFocus(has); v.grow(has, CHIP_GROW).start()
                     if (has) lastListChip = this
                 }
                 setOnClickListener { click() }
             }
-            line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
+            line.addView(control, LinearLayout.LayoutParams(-2, -2).apply { if (line.childCount > 0) marginStart = dp(6) })
             return control
         }
         listOf(ListFilter.ALL to "All", ListFilter.MOVIES to "Movies", ListFilter.SHOWS to "TV").forEach { (value, label) ->
@@ -1543,9 +1549,11 @@ class MainActivity : Screen() {
         }, value == listSort) }
     }
 
+    // Made once, not per focus move; only the main thread parses with it.
+    private val addedParser by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") } }
+
     private fun addedAgo(value: String): String {
-        val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
-        val whenAdded = runCatching { parser.parse(value)?.time }.getOrNull() ?: return "recently"
+        val whenAdded = runCatching { addedParser.parse(value)?.time }.getOrNull() ?: return "recently"
         return android.text.format.DateUtils.getRelativeTimeSpanString(whenAdded, System.currentTimeMillis(),
             android.text.format.DateUtils.DAY_IN_MILLIS).toString()
     }
@@ -1570,7 +1578,7 @@ class MainActivity : Screen() {
                 }
             }
             genreChips[value] = control
-            line.addView(control, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { if (line.childCount > 0) marginStart = dp(6) })
+            line.addView(control, LinearLayout.LayoutParams(-2, -2).apply { if (line.childCount > 0) marginStart = dp(6) })
         }
         genreStrip.addView(line)
         if (hadFocus) (genreChips[focusedGenre] ?: genreChips.values.firstOrNull())?.requestFocus()
@@ -1620,8 +1628,8 @@ class MainActivity : Screen() {
         val pick = chip((country?.label ?: "Countries") + "  \u25BE", country != null).apply { setOnClickListener { countryPicker() } }
         countryChips[WORLD] = world
         countryChips[PICK] = pick
-        line.addView(world, LinearLayout.LayoutParams(-2, dp(CHIP_H)))
-        line.addView(pick, LinearLayout.LayoutParams(-2, dp(CHIP_H)).apply { marginStart = dp(6) })
+        line.addView(world, LinearLayout.LayoutParams(-2, -2))
+        line.addView(pick, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(6) })
         genreStrip.addView(line)
         if (hadFocus) (if (current == WORLD) world else pick).requestFocus()
     }
@@ -1694,7 +1702,7 @@ class MainActivity : Screen() {
                     background = GradientDrawable(GradientDrawable.Orientation.TL_BR, flagColours(code)).apply { cornerRadius = dp(2).toFloat() }
                 }, LinearLayout.LayoutParams(dp(16), dp(11)).apply { marginEnd = dp(12) })
                 addView(name, LinearLayout.LayoutParams(0, -2, 1f))
-                if (code == current) addView(text("\u25CF", 9f, color = TEXT).apply { alpha = 0.9f })
+                if (code == current) addView(text("\u25CF", BADGE, color = TEXT).apply { alpha = 0.9f })
                 rowFocus(8) { has ->
                     name.setTextColor(if (has || code == current) TEXT else TEXT_2)
                     if (has) {
@@ -1706,7 +1714,9 @@ class MainActivity : Screen() {
                 setOnClickListener { dialog.dismiss(); switchCountry(code) }
             }
             if (code == current) start = row
-            list.addView(row, LinearLayout.LayoutParams(-1, dp(PICKER_ROW_H)))
+            // Least height, not fixed: a larger font size grows the row instead of clipping the name.
+            row.minimumHeight = dp(PICKER_ROW_H)
+            list.addView(row, LinearLayout.LayoutParams(-1, -2))
         }
         val listScroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
@@ -1723,7 +1733,7 @@ class MainActivity : Screen() {
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
             setLayout(dp(PICKER_W), dp(PICKER_H))
-            setDimAmount(0.7f)
+            setDimAmount(DIALOG_DIM)
         }
         dialog.setOnDismissListener { previewTask?.let(main::removeCallbacks) }
         dialog.show()
@@ -1860,7 +1870,7 @@ class MainActivity : Screen() {
             art.alpha = 0f
             artBack.setImageDrawable(null)
             val message = if (all.isEmpty() && listFilter == ListFilter.ALL) "Titles you save with + appear here"
-                else "No ${if (listFilter == ListFilter.MOVIES) "movies" else if (listFilter == ListFilter.SHOWS) "shows" else "unwatched titles"} in My List"
+                else "No ${if (listFilter == ListFilter.MOVIES) "movies" else if (listFilter == ListFilter.SHOWS) "TV" else "unwatched titles"} in My List"
             slot.addView(text(message, BODY, color = TEXT_2).apply { setPadding(dp(EDGE), dp(30), 0, 0) })
             return
         }
@@ -2228,6 +2238,7 @@ class MainActivity : Screen() {
             }
             private val name by nameMade
             private val inset = if (wide) 14 else 12
+            private val corner = if (grid) 6 else TILE_RADIUS // dp: the clip and the focus rim share it, so the rim follows the corners
             private var shown: String? = null
             private var wanted = false // near the screen: load when the details arrive
             // The poster appears once it's decoded; until then the card is a plain dark tile.
@@ -2245,7 +2256,7 @@ class MainActivity : Screen() {
                 if (!(wide || grid || marked)) return
                 if (!item.newEpisode && newBadge == null) return
                 val badge = newBadge ?: caps("New", BASE).apply {
-                    textSize = 9f
+                    textSize = BADGE
                     includeFontPadding = false
                     background = rounded(TEXT, 5)
                     setPadding(dp(6), dp(3), dp(6), dp(3))
@@ -2260,7 +2271,7 @@ class MainActivity : Screen() {
             init {
                 outlineProvider = object : android.view.ViewOutlineProvider() {
                     override fun getOutline(view: View, outline: android.graphics.Outline) =
-                        outline.setRoundRect(0, 0, view.width, view.height, dp(if (grid) 6 else RADIUS).toFloat())
+                        outline.setRoundRect(0, 0, view.width, view.height, dp(corner).toFloat())
                 }
                 clipToOutline = true
                 setBackgroundColor(BASE)
@@ -2313,7 +2324,7 @@ class MainActivity : Screen() {
                 setOnFocusChangeListener { _, has ->
                     // Focus grows into the gaps without moving its neighbours, and wears a white edge that reads from the
                     // couch on any poster (the clip to the card's outline keeps it inside the rounded corners).
-                    lift(has)
+                    lift(has, corner)
                     if (has) {
                         focus(index)
                         showHero(item)
@@ -2333,7 +2344,8 @@ class MainActivity : Screen() {
                 alpha = if (on) 1f else 0f
             }
 
-            fun dim(on: Boolean) = shade.animate().alpha(if (on) DIM else 0f).setDuration(200).start()
+            // One brightness for everything that is not under the remote (LIGHT_DIM); the shade is the rest.
+            fun dim(on: Boolean) = shade.animate().alpha(if (on) 1f - LIGHT_DIM else 0f).setDuration(200).start()
 
             /** On screen (or nearly): the poster (the wide art cropped for a title without one, else its name). */
             fun load() {
@@ -2362,7 +2374,7 @@ class MainActivity : Screen() {
                 Images.load(url, image, (dp(cardW) * CARD_GROW).toInt(), orElse = fallback, failed = ::failedOnce) {
                     if (nameMade.isInitialized()) name.visibility = if (wide) View.VISIBLE else View.INVISIBLE
                     if (now) face.alpha = 1f else face.animate().alpha(1f).setDuration(180).start()
-                    if (isFocused) lift(true)
+                    if (isFocused) lift(true, corner)
                 }
                 now = false
             }
@@ -2758,8 +2770,7 @@ class MainActivity : Screen() {
         const val LIST_TOP_ROOM = 8 // dp above a grid row for the focused poster's growth (4% of 180 dp) and rim
         const val LIST_TOP = 280 - LIST_TOP_ROOM
         const val INFO_W = 360 // the cinema's line
-        const val NAV_R = 18 // dp: the top bar's pills
-        const val NAV_GAP = 4 // dp between them
+        const val NAV_GAP = 4 // dp between the rail's entries
         const val RAIL_X = 16 // dp from the screen's edge to the rail
         const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
         const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
@@ -2781,12 +2792,10 @@ class MainActivity : Screen() {
         const val RANK_SIZE = 30f // sp, the numeral on a ranked card
         const val LOGO_W = 360 // the cinema's title logo
         const val LOGO_H = 100
-        const val RADIUS = 10
         const val ROW_TOP_ROOM = HEADING_GAP + 9 // dp between the row title and its cards, plus the focused card's growth (5% of 180 dp a side)
         const val ROW_BOTTOM_ROOM = 38 // room for the focused caption below the poster
         const val SAFE_BOTTOM = 27
-        const val CAPTION_BOTTOM = 16 // dp: low enough to leave the focused card a clear gap
-        const val DIM = 0.5f
+        const val CAPTION_BOTTOM = 24 // dp: inside the TV's safe area, and a clear gap under the focused card
         const val QUIET = 0.65f // the next row remains visible without competing with the active one
         const val HERO_GAP = 56 // dp between the focused title's block and the row heading below it: air, as Netflix's billboard keeps
         const val RISE = 200 // dp the rows travel when they come up from the cinema
@@ -2805,7 +2814,6 @@ class MainActivity : Screen() {
         const val SOURCES_AHEAD_WAIT = 1_500L // resting on a title this long fetches its sources ahead
         const val ADDON_RECHECK = 5 * 60_000L // ms between asking Stremio for the add-on list again on coming back to the front
         const val WARM_FIRST = 3 // titles at the top of Shows and Movies readied (details, art, logo) while Home is open
-        const val DIM_AFTER = 10_000L
         const val GENRE_ROWS = 6 // genre rows (and chips) at most on Shows and Movies
         const val CATALOG_WAIT = 6_000
         const val ADVANCE = 20_000L // ms each cinema title shows
@@ -2815,6 +2823,7 @@ class MainActivity : Screen() {
 }
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
+private val RT_METERS = Regex("[CA]\\d+%.*") // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
 private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
 private const val WEB_ROWS_FIRST = 5 // web rows filled as a page opens
 private const val WEB_ROWS_WAVE = 3 // and how many more each wave brings

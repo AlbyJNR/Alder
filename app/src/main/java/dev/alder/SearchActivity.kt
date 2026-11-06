@@ -173,7 +173,11 @@ class SearchActivity : Screen() {
         showRecent()
 
         heroLogo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_START }
-        heroName = text("", 48f, serif = true).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
+        // The title page's size, shrinking to fit two lines in the hero's box when a logo is missing and the name is long.
+        heroName = text("", SERIF_HERO, serif = true).onArt().apply {
+            maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+            setAutoSizeTextTypeUniformWithConfiguration(20, SERIF_HERO.toInt(), 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        }
         heroFacts = text("", SMALL, color = TEXT_2).onArt()
         heroTag = imdbTag()
         heroScore = text("", SMALL, color = TEXT_2).onArt()
@@ -452,15 +456,22 @@ class SearchActivity : Screen() {
         val values = recent()
         if (values.isEmpty()) return
         recentBox.addView(caps("Recent", TEXT_3), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        // The key's hint shows while the remote is on a chip, not as a permanent line under them.
+        val holdHint = text("Hold OK to remove", SMALL, color = TEXT_3).apply { visibility = View.INVISIBLE }
         values.chunked(2).forEach { pair ->
             val line = LinearLayout(this)
             pair.forEach { query ->
                 line.addView(chip(query).apply {
                     textSize = SMALL
-                    maxWidth = dp(110)
+                    maxWidth = dp(160)
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
                     contentDescription = "$query. Hold OK to remove from recent searches"
+                    val chipLook = onFocusChangeListener // chip()'s own: the white face and the growth
+                    setOnFocusChangeListener { v, has ->
+                        chipLook?.onFocusChange(v, has)
+                        holdHint.visibility = if (has) View.VISIBLE else View.INVISIBLE
+                    }
                     setOnClickListener {
                         input.setText(query)
                         input.setSelection(query.length)
@@ -468,8 +479,8 @@ class SearchActivity : Screen() {
                         search(true)
                     }
                     setOnLongClickListener {
-                        choose("Remove recent search?", listOf("Remove $query", "Cancel")) { picked ->
-                            if (picked == 0) {
+                        choose("Remove recent search?", listOf("Cancel", "Remove $query")) { picked ->
+                            if (picked == 1) {
                                 getSharedPreferences("search", MODE_PRIVATE).edit()
                                     .putString(recentKey(), recent().filterNot { it == query }.joinToString("\n")).apply()
                                 showRecent()
@@ -481,8 +492,13 @@ class SearchActivity : Screen() {
             }
             recentBox.addView(line, LinearLayout.LayoutParams(-1, dp(27)))
         }
-        recentBox.addView(text("Hold OK to remove", SMALL, color = TEXT_3),
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+        recentBox.addView(holdHint, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+    }
+
+    /** "No matches": on glass, as the other notices over the art are, rather than bare words on the picture. */
+    private fun noMatches() = text("No matches · Try a shorter title", BODY, color = TEXT_2).onArt().apply {
+        setPadding(dp(14), dp(10), dp(14), dp(10))
+        background = glassOver(this, 14)
     }
 
     private fun search(moveFocus: Boolean) {
@@ -544,7 +560,7 @@ class SearchActivity : Screen() {
                     results.removeAllViews()
                     results.addView(if (failedCount == completed && (completed > 0 || final))
                         failed("Search is unavailable right now.") { search(false) }
-                    else text("No matches · Try a shorter title", BODY, color = TEXT_2))
+                    else noMatches())
                     resultCount.text = ""
                 }
             }
@@ -579,7 +595,7 @@ class SearchActivity : Screen() {
         resultCount.text = if (total == 0 || query.isEmpty()) "" else if (total == 1) "1 title" else "$total titles" // not for Popular
         if (total == 0) {
             hero.visibility = View.INVISIBLE
-            results.addView(text("No matches · Try a shorter title", BODY, color = TEXT_2))
+            results.addView(noMatches())
             return
         }
         sections.forEach { (label, list) ->
@@ -617,12 +633,12 @@ class SearchActivity : Screen() {
             }
             list.forEachIndexed { index, meta ->
                 row.addView(card(meta, caption, scroller, index == 0), LinearLayout.LayoutParams(dp(88), dp(132)).apply {
-                    if (index > 0) marginStart = dp(14)
+                    if (index > 0) marginStart = dp(CARD_GAP) // Home's gap, so the rows here match its rows
                 })
             }
             group.addView(scroller, LinearLayout.LayoutParams(-1, dp(148)))
             group.addView(caption, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
-            results.addView(group, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(28) })
+            results.addView(group, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SECTION_GAP) })
         }
         sections.values.firstOrNull()?.firstOrNull()?.let(::show)
         if (selected != null) (cards.firstOrNull { it.first.tag == selected }?.first ?: firstResult)?.requestFocus()

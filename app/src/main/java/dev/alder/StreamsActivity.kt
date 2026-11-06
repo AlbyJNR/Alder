@@ -166,9 +166,8 @@ class StreamsActivity : Screen() {
             logo, dp(200), failed = { logo.visibility = View.GONE }) { fallback.visibility = View.GONE }
         val episodeInfo = column(Gravity.START).apply {
             addView(text(listOfNotNull(where.firstOrNull(), intent.getStringExtra("runtime"))
-                .joinToString(" · "), SMALL, bold = true, color = TEXT_2).onArt())
-            // The mock's 23 sp: the screen title's size crowded the count.
-            addView(text(where.drop(1).joinToString(" · ").ifBlank { name }, NAME_SIZE, serif = true).onArt().apply {
+                .joinToString(DOT), SMALL, bold = true, color = TEXT_2).onArt())
+            addView(text(where.drop(1).joinToString(DOT).ifBlank { name }, SERIF_TITLE, serif = true).onArt().apply {
                 maxLines = 1; ellipsize = TextUtils.TruncateAt.END
             }, wrap().apply { topMargin = dp(2) })
         }
@@ -177,9 +176,10 @@ class StreamsActivity : Screen() {
             gravity = Gravity.CENTER_VERTICAL
             addView(brand, LinearLayout.LayoutParams(dp(100), dp(40)).apply { marginEnd = dp(16) })
             addView(episodeInfo, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(count, LinearLayout.LayoutParams(dp(90), -2))
+            addView(count, LinearLayout.LayoutParams(-2, -2))
         }
         val cols = LinearLayout(this).apply {
+            visibility = View.GONE // headings over nothing: shown once a row is under them
             setPadding(dp(12), dp(8), dp(12), dp(4))
             addView(caps("Quality", TEXT_3).apply { maxLines = 1 }, LinearLayout.LayoutParams(dp(QUALITY_W), -2))
             addView(caps("Release", TEXT_3), LinearLayout.LayoutParams(0, -2, 1f))
@@ -190,7 +190,14 @@ class StreamsActivity : Screen() {
         }
         val rows = column(Gravity.START).apply { focusByLight() }
         val status = text(intent.getStringExtra("message") ?: "Finding sources…", BODY, color = TEXT_2).onArt()
-        rows.addView(status, LinearLayout.LayoutParams(-1, -2).apply { marginStart = dp(12); topMargin = dp(12) })
+        val spinner = android.widget.ProgressBar(this).apply {
+            isIndeterminate = true; indeterminateTintList = android.content.res.ColorStateList.valueOf(TEXT)
+        }
+        rows.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(spinner, LinearLayout.LayoutParams(dp(28), dp(28)))
+            addView(status, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(10) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { marginStart = dp(12); topMargin = dp(12) })
         val scroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             // The row past the panel's foot fades out above the help line instead of being cut by it.
@@ -202,12 +209,14 @@ class StreamsActivity : Screen() {
         }
         val help = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(text("OK", 9f, bold = true, color = BASE).apply {
-                background = rounded(TUNGSTEN, 3); includeFontPadding = false; setPadding(dp(4), dp(1), dp(4), dp(1))
+            visibility = View.INVISIBLE // "Play this source" waits for a source to be listed
+            // The key cap as keyHint draws it, so OK looks the same here as under the trailer box.
+            addView(text("OK", BADGE, bold = true, color = BASE).apply {
+                background = rounded(TEXT_2, 3); includeFontPadding = false; setPadding(dp(4), dp(1), dp(4), dp(1))
             })
             val preset = presetName()
             // The preset in full-strength bold, as the mock reads it, until a source is under the remote (whyLine).
-            helpDefault = emphasised("  Play this source  ·  Best match follows your stream settings: $preset.", preset)
+            helpDefault = emphasised("  Play this source${DOT}Best match follows your stream settings: $preset.", preset)
             whyLine = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; text = helpDefault }
             addView(whyLine)
         }
@@ -229,7 +238,7 @@ class StreamsActivity : Screen() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(16), dp(14), dp(16), dp(14))
                 background = glassOver(this, 14, 0.18f)
-                addView(header, LinearLayout.LayoutParams(-1, dp(58)))
+                addView(header, LinearLayout.LayoutParams(-1, -2))
                 addView(View(context).apply { setBackgroundColor(GLASS_EDGE) }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(6) })
                 addView(languageStrip, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                 addView(cols, LinearLayout.LayoutParams(-1, -2))
@@ -248,8 +257,8 @@ class StreamsActivity : Screen() {
         val tv = Device.of(this)
 
         background({ streamAddons(this, key, type, videoId) }) { result ->
-            val addons = result.getOrElse { status.text = "Couldn't load sources. Check your connection and try again."; return@background }
-            if (addons.isEmpty()) { status.text = "No stream add-ons are connected. Add one in Stremio to find sources."; return@background }
+            val addons = result.getOrElse { spinner.visibility = View.GONE; status.text = "Couldn't load sources. Check your connection and try again."; return@background }
+            if (addons.isEmpty()) { spinner.visibility = View.GONE; status.text = "No stream add-ons are connected. Add one in Stremio to find sources."; return@background }
             val answers = arrayOfNulls<List<Stream>>(addons.size)
             // Why an add-on gave nothing to play, so an empty list can say so instead of blaming the TV.
             val failures = arrayOfNulls<Throwable>(addons.size)
@@ -265,8 +274,10 @@ class StreamsActivity : Screen() {
                 val shown = audio?.let { lang -> ordered.filter { speaks(it, lang) } } ?: ordered
                 count.text = "${shown.size} " + if (shown.size == 1) "source" else "sources"
                 rows.removeAllViews()
+                cols.visibility = if (shown.isEmpty()) View.GONE else View.VISIBLE
+                help.visibility = if (shown.isEmpty()) View.INVISIBLE else View.VISIBLE
                 if (shown.isEmpty()) {
-                    rows.addView(text("No playable sources found.", BODY, color = TEXT_2).onArt().apply {
+                    rows.addView(text("No playable sources found.", BODY).onArt().apply {
                         setPadding(dp(12), dp(12), 0, 0)
                     })
                     val unplayable = answers.sumOf { a -> a.orEmpty().count { it.isVideo && !it.playableOn(tv) } }
@@ -274,10 +285,17 @@ class StreamsActivity : Screen() {
                         rows.addView(text(line, SMALL, color = TEXT_2).onArt().apply { setPadding(dp(12), dp(8), dp(12), 0) },
                             LinearLayout.LayoutParams(-1, -2))
                     }
+                    // No reload of its own: the page opens again and asks the add-ons afresh, not the answers kept from this visit.
+                    val retry = pill("Try again").apply { setOnClickListener {
+                        startActivity(Intent(intent).putExtra("retry", true).apply { removeExtra("message") })
+                        finish()
+                    } }
+                    rows.addView(retry, wrap().apply { setMargins(dp(12), dp(14), 0, dp(4)) })
+                    retry.requestFocus()
                 } else {
                     val best = eligible.firstOrNull { it in shown }
                     shown.forEach { stream -> rows.addView(streamRow(stream, providers[stream].orEmpty(), stream === best, whyLine(stream === best, why(stream, tv))),
-                        LinearLayout.LayoutParams(-1, dp(ROW_H)).apply { bottomMargin = dp(2) }) }
+                        LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(2) }) }
                     if (focusList) rows.getChildAt(0).requestFocus()
                 }
             }
@@ -303,7 +321,7 @@ class StreamsActivity : Screen() {
                 started = true
                 // The player says why this one once its picture is up: a word on its place, then what lifted it.
                 val first = best.first()
-                val note = (listOfNotNull("Best match", "${first.height}p".takeIf { first.height > 0 }) + why(first, tv).take(2)).joinToString("  ·  ")
+                val note = (listOfNotNull("Best match", "${first.height}p".takeIf { first.height > 0 }) + why(first, tv).take(2)).joinToString(DOT)
                 startActivity(Intent(this, PlayerActivity::class.java).putExtras(intent)
                     .putExtra("sources", JSONArray(best.take(TRY).map { it.toJson() }).toString()).putExtra("whyNote", note))
                 finish()
@@ -328,7 +346,7 @@ class StreamsActivity : Screen() {
             }
             // Answers fetched ahead (resting on the title on Home, or its page) are in already: no wait on those add-ons.
             addons.forEachIndexed { i, addon ->
-                val kept = Sources.saved(key, type, videoId, addon)
+                val kept = if (intent.getBooleanExtra("retry", false)) null else Sources.saved(key, type, videoId, addon)
                 if (kept != null) main.post { if (!isDestroyed) answered(i, addon, kept) }
                 else background({ runCatching { addon.streams(type, videoId) }.also { Sources.keep(key, type, videoId, addon, it) }.getOrThrow() }) { answered(i, addon, it) }
             }
@@ -431,7 +449,7 @@ class StreamsActivity : Screen() {
      */
     private fun whyLine(best: Boolean, reasons: List<String>): CharSequence {
         val parts = listOfNotNull("Best match".takeIf { best }) + reasons.ifEmpty { listOf(if (best) "the add-on's first" else "the add-on's order") }
-        val line = "  " + parts.joinToString("  ·  ").replaceFirstChar { it.uppercase() }
+        val line = "  " + parts.joinToString(DOT).replaceFirstChar { it.uppercase() }
         return if (best) emphasised(line, "Best match") else line
     }
 
@@ -446,7 +464,7 @@ class StreamsActivity : Screen() {
     private fun streamRow(s: Stream, addon: String, best: Boolean, why: CharSequence): View {
         val quality = text(if (s.height > 0) "${s.height}p" else "Auto", BODY, bold = true).onArt()
         val detail = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        if (best) detail.addView(text("BEST MATCH", 9f, bold = true, color = BASE).apply {
+        if (best) detail.addView(text("BEST MATCH", BADGE, bold = true, color = BASE).apply {
             letterSpacing = 0.04f
             background = rounded(TUNGSTEN, 3)
             setPadding(dp(5), dp(2), dp(5), dp(2))
@@ -456,7 +474,7 @@ class StreamsActivity : Screen() {
         }, wrap().apply { marginEnd = dp(6) })
         // The debrid service first ("RD ⚡": cached on Real-Debrid, starts at once), then the release's own tags.
         (listOfNotNull(s.debrid?.tag) + s.tags.filter { it !in listOf("BluRay", "WEB") }.take(if (best) 1 else 2)).forEach { tag ->
-            detail.addView(text(tag.uppercase(), 9f, bold = true, color = TUNGSTEN).apply {
+            detail.addView(text(tag.uppercase(), BADGE, bold = true, color = TUNGSTEN).apply {
                 letterSpacing = 0.03f
                 background = GradientDrawable().apply {
                     setColor(Color.TRANSPARENT); cornerRadius = dp(3).toFloat(); setStroke(dp(1), 0x80FFFFFF.toInt())
@@ -471,17 +489,18 @@ class StreamsActivity : Screen() {
         }, LinearLayout.LayoutParams(0, -2, 1f))
         return LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(ROW_H)
             setPadding(dp(12), 0, dp(12), 0)
             addView(quality, LinearLayout.LayoutParams(dp(QUALITY_W), -2))
             addView(detail, LinearLayout.LayoutParams(0, -2, 1f))
             addView(text(sourceSize(s.size), BODY, bold = true).onArt().apply { gravity = Gravity.END },
                 LinearLayout.LayoutParams(dp(72), -2))
             rowFocus(8) { focused ->
-                alpha = if (!focused && s.height in 1..719) 0.48f else 1f
+                alpha = if (!focused && s.height in 1..719) SD_DIM else 1f
                 elevation = if (focused) dp(5).toFloat() else 0f
                 if (focused) whyLine.text = why
             }
-            alpha = if (s.height in 1..719) 0.48f else 1f
+            alpha = if (s.height in 1..719) SD_DIM else 1f
             setOnClickListener {
                 startActivity(Intent(this@StreamsActivity, PlayerActivity::class.java).putExtras(intent)
                     .putExtra("sources", JSONArray(listOf(s.toJson())).toString()).putExtra("picked", true))
@@ -505,9 +524,9 @@ class StreamsActivity : Screen() {
 
     private companion object {
         const val TRY = 3
-        const val NAME_SIZE = 23f // sp, the title or episode name in the header
         const val QUALITY_W = 76 // dp, wide enough for "QUALITY" in spaced capitals
-        const val ROW_H = 38 // dp a source row: eight fit above the help line, as on the mock
+        const val ROW_H = 44 // dp a source row's least height; it grows with the TV's font size
+        const val SD_DIM = 0.6f // a source below 720p at rest; focus by light dims it again, so lower read as gone
         val LEADING_TAG = Regex("^\\[[^]]+]\\s*") // "[RD+] Torrentio" reads as the add-on's name alone
         val HEIGHT_ONLY = Regex("\\d+p")
     }

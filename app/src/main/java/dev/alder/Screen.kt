@@ -284,7 +284,7 @@ abstract class Screen : Activity() {
     protected fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null): LinearLayout {
         val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         fun dot() { if (lead || line.childCount > 0) line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) }) }
-        fun badge(name: String) = text(name, 9f, bold = true, color = BASE).apply {
+        fun badge(name: String) = text(name, BADGE, bold = true, color = BASE).apply {
             setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
         }
         rating?.let { dot(); line.addView(badge("IMDb")); line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) }) }
@@ -871,7 +871,7 @@ abstract class Screen : Activity() {
     /** "[OK] Play / pause": the key in a small box, then what it does. */
     protected fun keyHint(key: String, does: String) = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
-        addView(text(key, 9f, bold = true, color = BASE).apply {
+        addView(text(key, BADGE, bold = true, color = BASE).apply {
             background = rounded(TEXT_2, 3)
             includeFontPadding = false
             setPadding(dp(4), dp(1), dp(4), dp(1))
@@ -1170,8 +1170,8 @@ abstract class Screen : Activity() {
                          focus: Int = maxOf(checked, 0), pick: (Int) -> Unit) {
         if (isFinishing || isDestroyed) return // Back pressed while the answer was on its way: nothing to show it on
         val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
-        val list = column(Gravity.START).apply { setPadding(dp(12), dp(16), dp(12), dp(12)) }
-        val words = column(Gravity.START, text(title, BODY, bold = true)).apply { setPadding(dp(16), 0, dp(16), dp(10)) }
+        val list = column(Gravity.START).apply { setPadding(dp(DIALOG_PAD - 4), dp(DIALOG_PAD), dp(DIALOG_PAD - 4), dp(DIALOG_PAD - 4)) }
+        val words = column(Gravity.START, text(title, BODY, bold = true)).apply { setPadding(dp(16), 0, dp(16), dp(12)) }
         message?.let { words.addView(text(it, SMALL, color = TEXT_2).marginTop(6)) }
         list.addView(words, LinearLayout.LayoutParams(-1, -2))
         val rows = items.mapIndexed { i, label ->
@@ -1192,8 +1192,8 @@ abstract class Screen : Activity() {
         })
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
-            setLayout(dp(340), -2)
-            setDimAmount(0.6f)
+            setLayout(dp(DIALOG_W), -2)
+            setDimAmount(DIALOG_DIM)
         }
         dialog.show()
         rows.getOrNull(focus)?.requestFocus()
@@ -1226,13 +1226,13 @@ abstract class Screen : Activity() {
         val ok = pill("Done").apply { setOnClickListener { finish() } }
         dialog.setContentView(column(Gravity.START,
             text(title, BODY, bold = true),
-            field.apply { layoutParams = LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(12) } },
-            ok.marginTop(14),
-        ).apply { setPadding(dp(24), dp(20), dp(24), dp(20)); background = glassOver(this, 16) })
+            field.apply { minHeight = dp(44); layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) } },
+            ok.marginTop(16),
+        ).apply { setPadding(dp(DIALOG_PAD), dp(DIALOG_PAD), dp(DIALOG_PAD), dp(DIALOG_PAD)); background = glassOver(this, 16) })
         dialog.window?.apply {
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
-            setLayout(dp(360), -2)
-            setDimAmount(0.6f)
+            setLayout(dp(DIALOG_W), -2)
+            setDimAmount(DIALOG_DIM)
             setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
         }
         dialog.show()
@@ -1331,12 +1331,15 @@ abstract class Screen : Activity() {
         const val PAD = 48
         const val TILE_RADIUS = 10
         const val GLASS_INSET = 28 // dp a glass panel sits in from the screen's edges
+        const val DIALOG_W = 400 // dp: one width for the app's dialogs (menus, a name, a URL)
+        const val DIALOG_PAD = 20
+        const val DIALOG_DIM = 0.6f
         const val FROST_W = 360 // px the art is shrunk to before the blur: wider is less blur (240 read as fog, 480 as smeared)
         const val HERO_W = 480 // dp: a title's block on Home and its page, half the screen so the story reads in full lines
         const val BUTTON_H = 34
         const val SHORT_LIST = 5 // "What's new" entries shown before See all changes
         const val WHATS_NEW_W = 480 // dp
-        const val CHIP_H = 24 // the mocks' 46–48 px chips
+        const val CHIP_H = 30 // a chip's least height; it grows with the TV's font size
         // Focus motion: a little overshoot on the way in, settling over 220 ms, is most of what makes focus feel weighted.
         val FOCUS_IN: android.view.animation.Interpolator = android.view.animation.OvershootInterpolator(1.2f)
         val FOCUS_OUT: android.view.animation.Interpolator = android.view.animation.DecelerateInterpolator(1.5f)
@@ -1386,16 +1389,18 @@ abstract class Screen : Activity() {
         const val SERIF_TITLE = 28.5f
         const val SERIF_NAME = 19f
         const val BODY = 14.5f
-        const val SMALL = 12.5f
-        const val CAPS = SMALL
+        const val SMALL = 14f // the label step: facts, captions, chips, keys, hints. 12.5 read small from a sofa.
+        const val BADGE = 11f // the small white badges and key caps (IMDb, RT, NEW, OK)
+        const val CAPS = 12.5f // tracked capitals read wide, so they keep the smaller size
         const val CODE = 36f
-        val LEADING = mapOf(SERIF_HERO to 40f, SERIF_TITLE to 30f, SERIF_NAME to 21f, BODY to 20f, SMALL to 17f, CODE to 40f)
+        val LEADING = mapOf(SERIF_HERO to 40f, SERIF_TITLE to 30f, SERIF_NAME to 21f, BODY to 20f, SMALL to 19f, CAPS to 17f, CODE to 40f)
 
         const val BASE = 0xFF08090B.toInt()
         const val TEXT = 0xFFF5F5F7.toInt()
         const val TEXT_2 = 0xB8F5F5F7.toInt()
         const val TEXT_3 = 0x73F5F5F7
-        const val TUNGSTEN = 0xFFFFFFFF.toInt()
+        const val TUNGSTEN = 0xFFF3E7D3.toInt() // the accent: a warm, lit white, apart from the cool white of the words
+        const val ALERT = 0xFFF0A08C.toInt() // an error's words: a soft coral, the one colour that is not white
         const val TUNGSTEN_RIM = 0x99FFFFFF.toInt()
         const val TUNGSTEN_GLOW = 0x59FFFFFF
         const val GLASS = 0x99202226.toInt()

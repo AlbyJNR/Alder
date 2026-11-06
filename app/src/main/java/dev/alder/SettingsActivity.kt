@@ -247,7 +247,6 @@ class SettingsActivity : Screen() {
     private lateinit var profileName: TextView
     private lateinit var avatar: TextView
     private val groupViews = mutableMapOf<Group, View>()
-    private val groupDots = mutableMapOf<Group, TextView>()
     private val groupLabels = mutableMapOf<Group, TextView>()
     private val choiceRows = mutableSetOf<View>()
     private val refresh = mutableListOf<() -> Unit>()
@@ -299,7 +298,8 @@ class SettingsActivity : Screen() {
             leftMargin = dp(48); topMargin = dp(88)
         })
 
-        detailTitle = text("", BODY, bold = true).apply { setPadding(dp(12), 0, 0, 0) }
+        // Tracked capitals, so the heading reads apart from the row labels, which are the same bold body size.
+        detailTitle = caps("", TEXT_3).apply { setPadding(dp(12), 0, 0, 0) }
         detailRows = column(Gravity.START).apply { focusByLight() }
         rowsScroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
@@ -307,12 +307,13 @@ class SettingsActivity : Screen() {
             clipToPadding = false
             addView(detailRows)
         }
-        hint = text("", SMALL, color = TEXT_2).onArt().apply { setPadding(dp(12), 0, dp(20), 0) }
+        // About 70 characters a line: at the panel's full width the help ran to a hundred and was hard to follow.
+        hint = text("", SMALL, color = TEXT_2).onArt().apply { setPadding(dp(12), 0, dp(20), 0); maxWidth = dp(520) }
         // The help follows the rows, so a long group (Streams has six) never runs under it.
         val detail = column(Gravity.START).apply {
             clipChildren = false
-            addView(detailTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
-            addView(rowsScroll, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            addView(detailTitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3); bottomMargin = dp(12) })
+            addView(rowsScroll, LinearLayout.LayoutParams(-1, -2))
             addView(hint, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(20) })
         }
         root.addView(detail, FrameLayout.LayoutParams(dp((width - 328).toInt()), dp((height - 110).toInt()), Gravity.TOP or Gravity.START).apply {
@@ -361,7 +362,7 @@ class SettingsActivity : Screen() {
     }
 
     private fun addGroup(group: Group) {
-        val dot = text("•", SMALL, color = TUNGSTEN).apply { gravity = Gravity.CENTER; visibility = View.INVISIBLE }
+        // The open section is the filled, brighter row; a dot as well was a third mark for one thing.
         val icon = if (group.icon != 0) ImageView(this).apply {
             setImageResource(group.icon)
             imageTintList = ColorStateList.valueOf(TEXT_3)
@@ -369,8 +370,8 @@ class SettingsActivity : Screen() {
         val label = text(group.label, BODY, bold = true, color = TEXT_2)
         val row = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(dot, LinearLayout.LayoutParams(dp(10), -1))
-            addView(icon, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginStart = dp(4) })
+            minimumHeight = dp(36) // a least height, not a fixed one, so a larger TV font still fits
+            addView(icon, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginStart = dp(8) })
             addView(label, LinearLayout.LayoutParams(-1, -2).apply { marginStart = dp(10) })
             setPadding(dp(2), 0, dp(4), 0)
             rowFocus(8, rest = { if (selectedGroup == group) tile(8) else null }) { has ->
@@ -379,20 +380,18 @@ class SettingsActivity : Screen() {
             setOnClickListener { showGroup(group); firstDetail?.requestFocus() }
         }
         groupViews[group] = row
-        groupDots[group] = dot
         groupLabels[group] = label
-        groups.addView(row, LinearLayout.LayoutParams(-1, dp(34)).apply { bottomMargin = dp(1) })
+        groups.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(1) })
     }
 
     private fun showGroup(group: Group) {
         if (selectedGroup == group && detailRows.childCount > 0) return
         selectedGroup = group
         groupViews.forEach { (item, view) ->
-            groupDots[item]?.visibility = if (item == group) View.VISIBLE else View.INVISIBLE
             groupLabels[item]?.setTextColor(if (item == group) TEXT else if (item == Group.STORAGE || item == Group.ABOUT) TEXT_3 else TEXT_2)
             if (!view.hasFocus()) view.background = if (item == group) tile(8) else null
         }
-        detailTitle.text = group.label
+        detailTitle.text = group.label.uppercase() // caps() only uppercases the words it was made with
         detailRows.removeAllViews()
         rowsScroll.scrollTo(0, 0)
         choiceRows.clear()
@@ -482,11 +481,8 @@ class SettingsActivity : Screen() {
                 }
             }
             Group.PROFILE -> {
-                actionRow("Switch profile", "", "Choose who is watching.") {
-                    startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-                }
-                actionRow("Manage profiles", "", "Rename profiles, change PINs or add another person.") {
+                // One row: switching and managing both open the picker, where Hold OK does the managing.
+                actionRow("Profiles", "", "Choose who is watching. Rename profiles, change PINs or add another person.") {
                     startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                 }
@@ -532,14 +528,14 @@ class SettingsActivity : Screen() {
                     "A quieter way to watch. CAS connects your Stremio account to your TV.") {
                     choose("CAS", listOf("OK"), "A TV interface for your Stremio account.") {}
                 }
-                actionRow("What's new", "Version " + Updates.mine(this), "The changes in the version on this TV.") { whatsNew() }
+                actionRow("What's new", "", "The changes in the version on this TV.") { whatsNew() } // the version is on the row above
                 Crash.last(this)?.let { trace ->
                     actionRow("Last crash", Crash.lastWhen(this) ?: "", "What went wrong the last time CAS closed on its own. Photograph it to report it.") {
                         choose("Last crash", listOf("Keep", "Clear"), trace.take(1_400)) { if (it == 1) { Crash.clear(this); showGroup(Group.ABOUT) } }
                     }
                 }
                 var found: Updates.Release? = null
-                val value = actionRow("Updates", "Checking…", "New versions come from CAS's releases on GitHub.") {
+                val value = actionRow("Check for updates", "Checking…", "New versions come from CAS's releases on GitHub.") {
                     found?.let(::installUpdate) ?: run { latestChecked = null; showGroup(Group.ABOUT) }
                 }
                 // One check per visit to Settings: the group is rebuilt on every focus, and GitHub allows 60 anonymous
@@ -562,17 +558,21 @@ class SettingsActivity : Screen() {
                            focus: (Boolean) -> Unit = {}, click: () -> Unit): View {
         val line = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(text(label, BODY, bold = true), LinearLayout.LayoutParams(-2, -2))
-            if (perProfile) addView(text("THIS PROFILE", 8f, color = TUNGSTEN).apply {
+            // A least height, not a fixed one: a value that wraps makes the row taller. On the line, not the frame
+            // around it: a frame with one match-parent child doesn't pass its own least height down.
+            minimumHeight = dp(44)
+            // The label takes what the value leaves and ends in an ellipsis, so the two never run into each other.
+            addView(text(label, BODY, bold = true).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END },
+                LinearLayout.LayoutParams(0, -2, 1f))
+            if (perProfile) addView(text("THIS PROFILE", BADGE, color = TUNGSTEN).apply {
                 setPadding(dp(5), dp(2), dp(5), dp(2))
                 background = glass(6)
             }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
-            addView(View(this@SettingsActivity), LinearLayout.LayoutParams(0, 1, 1f))
-            addView(value, LinearLayout.LayoutParams(-2, -2))
+            addView(value, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(12) })
             setPadding(dp(12), 0, dp(12), 0)
         }
         val row = FrameLayout(this).apply {
-            addView(line, FrameLayout.LayoutParams(-1, -1))
+            addView(line, FrameLayout.LayoutParams(-1, -2))
             rowFocus(9) { has ->
                 if (has) hint.text = help
                 elevation = if (has) dp(8).toFloat() else 0f
@@ -581,7 +581,7 @@ class SettingsActivity : Screen() {
             }
             setOnClickListener { click() }
         }
-        detailRows.addView(row, LinearLayout.LayoutParams(-1, dp(42)))
+        detailRows.addView(row, LinearLayout.LayoutParams(-1, -2))
         if (firstDetail == null) firstDetail = row
         return row
     }
@@ -609,7 +609,8 @@ class SettingsActivity : Screen() {
     }
 
     private fun actionRow(label: String, value: String, help: String, click: () -> Unit): TextView {
-        val display = text(if (value.isEmpty()) "›" else "$value  ›", BODY, color = TEXT_2)
+        // Capped, so a long value (a list of add-ons) wraps or ellipsizes instead of squeezing the label out.
+        val display = text(if (value.isEmpty()) "›" else "$value  ›", BODY, color = TEXT_2).apply { maxWidth = dp(VALUE_W) }
         settingRow(label, display, help, focus = { display.setTextColor(if (it) TUNGSTEN else TEXT_2) }, click = click)
         return display
     }
@@ -729,6 +730,7 @@ class SettingsActivity : Screen() {
         const val TITLE_RATING = "titleRating"
         const val TITLE_TOMATOES = "titleTomatoes"
         const val TRAILER_PLAYER = "trailerPlayer" // "browser", "app" or "box"; unset: the box, except on Fire TV (Silk), where the box draws no picture
+        private const val VALUE_W = 300 // dp a row's value may take, about half the panel; the label keeps the rest
         val PRESETS = listOf(
             "Add-on's order" to mapOf("release" to "", "hdrPref" to "", "maxHeight" to 0, "maxSizeGb" to 0),
             "Best picture" to mapOf("release" to "remux", "hdrPref" to "dv", "maxHeight" to 0, "maxSizeGb" to 0),

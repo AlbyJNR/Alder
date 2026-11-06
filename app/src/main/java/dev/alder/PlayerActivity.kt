@@ -188,11 +188,14 @@ class PlayerActivity : Screen() {
             keepScreenOn = true
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-            // Settings' size and background, with a shadow so white text holds up on bright scenes either way.
+            // Settings' size and background, in the app's own face. With the box on, it carries the words and
+            // nothing is drawn under them; with it off, a soft shadow keeps white words readable on a bright scene.
+            val boxed = Settings.subtitleBackground(context)
             subtitleView?.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * Settings.subtitleSize(context) / 100f)
             subtitleView?.setStyle(CaptionStyleCompat(Color.WHITE,
-                if (Settings.subtitleBackground(context)) 0xB3000000.toInt() else Color.TRANSPARENT, Color.TRANSPARENT,
-                CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW, Color.BLACK, null))
+                if (boxed) 0xB3000000.toInt() else Color.TRANSPARENT, Color.TRANSPARENT,
+                if (boxed) CaptionStyleCompat.EDGE_TYPE_NONE else CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
+                if (boxed) Color.TRANSPARENT else 0xCC000000.toInt(), text("", SMALL).typeface))
             setBackgroundColor(Color.BLACK)
         }
         status = text("", BODY).onArt().apply {
@@ -242,9 +245,9 @@ class PlayerActivity : Screen() {
             pauseTitle.text = episode?.title?.takeIf { it.isNotBlank() } ?: m.name
             subtitle.text = episode?.let { "S${it.season} E${it.episode}" } ?: m.year.orEmpty()
             Images.load(m.logo ?: Images.logoFor(m.id), playerLogo, dp(300), urgent = true, failed = {
-                playerLogo.visibility = View.GONE; topName.visibility = View.VISIBLE
+                hasLogo = false; showBrand()
             }) {
-                playerLogo.visibility = View.VISIBLE; topName.visibility = View.GONE
+                hasLogo = true; showBrand()
             }
             nextCell.visibility = if (nextVideo() == null) View.GONE else View.VISIBLE
         }
@@ -321,6 +324,7 @@ class PlayerActivity : Screen() {
                 buttonLabels[playPause]?.text = if (playWhenReady) "Pause" else "Play"
                 pausedShade.visibility = if (playWhenReady) View.GONE else View.VISIBLE
                 pauseInfo.visibility = if (playWhenReady) View.GONE else View.VISIBLE
+                showBrand()
                 if (playWhenReady) { if (shown) showControls(null) }
                 else if (options.visibility != View.VISIBLE && upNextPanel.visibility != View.VISIBLE &&
                     stallPanel.visibility != View.VISIBLE) showControls(playPause)
@@ -447,7 +451,7 @@ class PlayerActivity : Screen() {
         loadingStart = text("", SMALL, color = TEXT_2).onArt()
         loadingLeft = text("", SMALL, color = TEXT_2).onArt()
         addView(loadingBar, FrameLayout.LayoutParams(-1, dp(12), Gravity.TOP).apply {
-            leftMargin = dp(PAD + 30); rightMargin = dp(PAD + 30); topMargin = dp(32)
+            leftMargin = dp(PAD + 60); rightMargin = dp(PAD + 60); topMargin = dp(32) // room for "1:23:45" either side
         })
         addView(loadingStart, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
             leftMargin = dp(PAD); topMargin = dp(29)
@@ -661,7 +665,7 @@ class PlayerActivity : Screen() {
         offeringLower = true
         stallPanel.removeAllViews()
         val card = column(Gravity.START).apply {
-            setPadding(dp(16), dp(15), dp(16), dp(14))
+            setPadding(dp(18), dp(16), dp(18), dp(16))
             background = glass(14)
             addView(caps("Keeps buffering", TUNGSTEN))
             addView(text("Switch to ${lower}p?", SERIF_TITLE, serif = true),
@@ -672,9 +676,9 @@ class PlayerActivity : Screen() {
             val lowerButton = pill("Switch to ${lower}p").apply { setOnClickListener { lowerQuality() } }
             actions.addView(lowerButton, wrap())
             actions.addView(chip("Keep ${height}p").apply { setOnClickListener { dismissStall() } },
-                wrap().apply { marginStart = dp(6) })
+                wrap().apply { marginStart = dp(8) })
             actions.addView(chip("Other sources").apply { setOnClickListener { changeStream() } },
-                wrap().apply { marginStart = dp(6) })
+                wrap().apply { marginStart = dp(8) })
             addView(actions, wrap().apply { topMargin = dp(12) })
             lowerButton.post { lowerButton.requestFocus() }
         }
@@ -697,7 +701,7 @@ class PlayerActivity : Screen() {
             text("Try another source", SERIF_TITLE, serif = true).marginTop(6),
             pill("Other sources").apply { setOnClickListener { changeStream() } }.marginTop(12)
         ).apply {
-            setPadding(dp(18), dp(18), dp(18), dp(18))
+            setPadding(dp(18), dp(16), dp(18), dp(16))
             background = glass(14)
         }
         stallPanel.addView(card, FrameLayout.LayoutParams(dp(310), -2, Gravity.BOTTOM or Gravity.END).apply {
@@ -731,20 +735,21 @@ class PlayerActivity : Screen() {
         val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val playNow = pill("Play now", R.drawable.ic_play).apply { setOnClickListener { playNext() } }
         actions.addView(playNow, wrap())
-        actions.addView(chip("Watch the credits").apply { setOnClickListener { dismissUpNext() } },
-            wrap().apply { marginStart = dp(8) })
+        actions.addView(glassButton("Watch the credits") { dismissUpNext() }, wrap().apply { marginStart = dp(8) })
         val content = column(Gravity.START).apply {
-            setPadding(dp(18), dp(14), dp(18), dp(14))
+            setPadding(dp(18), dp(16), dp(18), dp(16))
             // Video can't be frosted: a dark base under the glass keeps it readable over white end cards.
             background = android.graphics.drawable.LayerDrawable(arrayOf(rounded(BASE and 0xD9FFFFFF.toInt(), 14), glass(14)))
             addView(caps("Up next", TUNGSTEN).onArt())
-            addView(text(next.title.ifBlank { "Episode ${next.episode}" }, SERIF_HERO, serif = true).onArt(),
-                wrap().apply { topMargin = dp(6) })
+            // Where it sits in the season first, then its name: a long name stops at two lines rather than filling the card.
             addView(text("S${next.season} E${next.episode}", SMALL, color = TEXT_2).onArt(), wrap().apply { topMargin = dp(5) })
+            addView(text(next.title.ifBlank { "Episode ${next.episode}" }, SERIF_HERO, serif = true).onArt().apply {
+                maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             addView(actions, wrap().apply { topMargin = dp(16) })
         }
         upNextPanel.addView(content, FrameLayout.LayoutParams(dp(500), -2, Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(PAD); bottomMargin = dp(68)
+            rightMargin = dp(PAD); bottomMargin = dp(48)
         })
         upNextPanel.visibility = View.VISIBLE
         playNow.requestFocus()
@@ -753,6 +758,25 @@ class PlayerActivity : Screen() {
     private fun dismissUpNext() {
         upNextDismissed = true
         upNextPanel.visibility = View.GONE
+    }
+
+    /** A worded glass control beside a pill, as tall as it; focus lights it white as a chip's does. */
+    private fun glassButton(label: String, action: () -> Unit) = text(label, SMALL, bold = true).apply {
+        gravity = Gravity.CENTER
+        minHeight = dp(BUTTON_H)
+        setPadding(dp(16), 0, dp(16), 0)
+        lightFocus(10)
+        setOnClickListener { action() }
+    }
+
+    // The title's logo arrived (or didn't): the name stands in for it.
+    private var hasLogo = false
+
+    /** The logo or name at the top, unless the pause title is up: both say the same words, so one steps aside. */
+    private fun showBrand() {
+        val paused = ::pauseInfo.isInitialized && pauseInfo.visibility == View.VISIBLE
+        playerLogo.visibility = if (hasLogo && !paused) View.VISIBLE else View.GONE
+        topName.visibility = if (!hasLogo && !paused) View.VISIBLE else View.GONE
     }
 
     /** Hands the next episode to the sources page, which starts it (preferring this release's group) and finishes here. */
@@ -923,6 +947,9 @@ class PlayerActivity : Screen() {
     private var scrubTo = -1L
     private val hideTask = Runnable { hideControls() }
     private val progressTask = Runnable { updateProgress() }
+    // "Ends 9:40 PM" is worked out twice a second while the controls are up: one format and one date, reused.
+    private val endClock = SimpleDateFormat("h:mm a", Locale.getDefault())
+    private val endDate = Date()
     private val seekTask = Runnable { if (scrubTo >= 0) { player.seekTo(scrubTo); scrubTo = -1 } }
 
     private fun buildControls(): FrameLayout {
@@ -988,10 +1015,10 @@ class PlayerActivity : Screen() {
             addView(buttonCell(audioButton))
             addView(buttonCell(streamButton))
             addView(View(context).apply { setBackgroundColor(GLASS_EDGE) },
-                LinearLayout.LayoutParams(dp(1), dp(22)).apply { topMargin = dp(14); marginEnd = dp(10) })
+                LinearLayout.LayoutParams(dp(1), dp(22)).apply { topMargin = dp(9); marginEnd = dp(10) })
             addView(buttonCell(playPause, true))
             addView(View(context).apply { setBackgroundColor(GLASS_EDGE) },
-                LinearLayout.LayoutParams(dp(1), dp(22)).apply { topMargin = dp(14); marginStart = dp(10) })
+                LinearLayout.LayoutParams(dp(1), dp(22)).apply { topMargin = dp(9); marginStart = dp(10) })
             addView(nextCell)
             addView(buttonCell(infoButton))
         }
@@ -1024,29 +1051,30 @@ class PlayerActivity : Screen() {
                 format12Hour = "h:mm a"; format24Hour = "HH:mm"
                 textSize = SMALL; setTextColor(TEXT_2); typeface = text("", SMALL).typeface
             }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply {
-                topMargin = dp(34); rightMargin = dp(PAD)
+                topMargin = dp(36); rightMargin = dp(PAD)
             })
+            // The bottom group sits clear of a TV's overscan: the buttons 24 dp up, everything above them keeping its distance.
             addView(pauseInfo, FrameLayout.LayoutParams(dp(520), -2, Gravity.BOTTOM or Gravity.START).apply {
-                leftMargin = dp(PAD); bottomMargin = dp(148)
+                leftMargin = dp(PAD); bottomMargin = dp(161)
             })
             addView(bar, FrameLayout.LayoutParams(-1, dp(24), Gravity.BOTTOM).apply {
-                leftMargin = dp(PAD); rightMargin = dp(PAD); bottomMargin = dp(111)
+                leftMargin = dp(PAD); rightMargin = dp(PAD); bottomMargin = dp(124)
             })
             addView(elapsed, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-                leftMargin = dp(PAD); bottomMargin = dp(91)
+                leftMargin = dp(PAD); bottomMargin = dp(104)
             })
             addView(length, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
-                rightMargin = dp(PAD); bottomMargin = dp(91)
+                rightMargin = dp(PAD); bottomMargin = dp(104)
             })
             addView(trackStatus, FrameLayout.LayoutParams(dp(420), -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-                bottomMargin = dp(91)
+                bottomMargin = dp(104)
             })
             trackStatus.gravity = Gravity.CENTER
             addView(buttons, FrameLayout.LayoutParams(-1, dp(76), Gravity.BOTTOM).apply {
-                bottomMargin = dp(11)
+                bottomMargin = dp(24)
             })
             addView(column(Gravity.END, keyHint("OK", "Play / pause"), keyHint("◀ ▶", "Seek on the bar")), FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
-                rightMargin = dp(PAD); bottomMargin = dp(35)
+                rightMargin = dp(PAD); bottomMargin = dp(48)
             })
         }
     }
@@ -1072,8 +1100,14 @@ class PlayerActivity : Screen() {
                     view.grow(focused).start()
                     words.visibility = if (focused) View.VISIBLE else View.INVISIBLE
                 }
-            } else rowFocus(radius, rest = { glass(radius) }) { focused ->
-                words.visibility = if (focused) View.VISIBLE else View.INVISIBLE
+            } else {
+                // Lit as a chip is: a white face and a dark glyph. The row fill (0x38 white) read dimmer than the glass beside it.
+                background = glass(radius)
+                setOnFocusChangeListener { view, focused ->
+                    view.background = if (focused) rounded(TEXT, radius) else glass(radius)
+                    view.foreground = centred(res, 20, if (focused) BASE else TEXT)
+                    words.visibility = if (focused) View.VISIBLE else View.INVISIBLE
+                }
             }
             setOnClickListener { onClick() }
         }
@@ -1136,7 +1170,8 @@ class PlayerActivity : Screen() {
             optionsLeft.text = if (live || duration <= 0) "" else "−${clock((duration - position).coerceAtLeast(0))}"
         }
         val remaining = (duration - position).coerceAtLeast(0)
-        val end = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(System.currentTimeMillis() + remaining))
+        endDate.time = System.currentTimeMillis() + remaining
+        val end = endClock.format(endDate)
         pauseFacts.text = listOfNotNull(subtitle.text.toString().takeIf { it.isNotBlank() },
             if (live || duration <= 0) null else runtime("${(remaining / 60_000).coerceAtLeast(1)} min") + " left",
             if (live || duration <= 0) null else "Ends $end").joinToString(DOT)
@@ -1257,8 +1292,8 @@ class PlayerActivity : Screen() {
             setPadding(dp(22), dp(20), dp(22), dp(22))
             clipToPadding = false
             background = android.graphics.drawable.LayerDrawable(arrayOf(rounded(withAlpha(room, 0xF0), 14), glass(14)))
-        }, FrameLayout.LayoutParams(dp(310), resources.displayMetrics.heightPixels - dp(54)).apply {
-            leftMargin = dp(27); topMargin = dp(27)
+        }, FrameLayout.LayoutParams(dp(310), resources.displayMetrics.heightPixels - dp(64)).apply {
+            leftMargin = dp(32); topMargin = dp(32)
         })
         optionsBar = SeekBar(this).apply { isFocusable = false }
         optionsElapsed = text("", SMALL, color = TEXT_2).onArt()
@@ -1267,10 +1302,10 @@ class PlayerActivity : Screen() {
             rightMargin = dp(PAD); bottomMargin = dp(48)
         })
         options.addView(optionsElapsed, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(PAD + 246); bottomMargin = dp(27)
+            rightMargin = dp(PAD + 246); bottomMargin = dp(32)
         })
         options.addView(optionsLeft, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(PAD); bottomMargin = dp(27)
+            rightMargin = dp(PAD); bottomMargin = dp(32)
         })
         options.visibility = View.VISIBLE
         updateProgress()

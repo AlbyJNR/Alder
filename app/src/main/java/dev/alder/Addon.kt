@@ -287,9 +287,15 @@ internal fun parseImdbComingSoon(json: JSONObject): List<Upcoming> =
         Upcoming(id, name, poster, "%04d-%02d-%02d".format(d.optInt("year"), d.optInt("month"), d.optInt("day")), genres, trailer)
     }
 
+// Compiled once: these run for every episode row, every source and every tick of the player's clock.
+private val ISO_DAY = Regex("\\d{4}-\\d{2}-\\d{2}")
+private val WORDS = Regex("[a-z]+")
+private val HOURS_MINUTES = Regex("""^(\d+)\s*h\s*(\d+)\s*m(in)?$""")
+private val MINUTES = Regex("""^(\d+)\s*min""")
+
 /** "20 Nov", or "20 Nov 2027" when not this year, from an ISO date; null when it isn't one. */
 internal fun shortDay(date: String, today: String): String? {
-    if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return null
+    if (!date.matches(ISO_DAY)) return null
     val f = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false; timeZone = java.util.TimeZone.getTimeZone("UTC") }
     val parsed = runCatching { f.parse(date) }.getOrNull() ?: return null
     val pattern = if (date.take(4) == today.take(4)) "d MMM" else "d MMM yyyy"
@@ -738,7 +744,7 @@ internal fun audioLanguagesIn(text: String): Set<String> {
             i += 2
         } else i++
     }
-    Regex("[a-z]+").findAll(text.lowercase()).forEach { m -> languageWords[m.value]?.let(found::add) }
+    WORDS.findAll(text.lowercase()).forEach { m -> languageWords[m.value]?.let(found::add) }
     return found
 }
 
@@ -802,9 +808,9 @@ internal fun debridOf(name: String, url: String): Debrid? {
 
 internal fun runtime(text: String): String {
     // "147 min", or "2h35min" / "2h 35m" as some addons write it.
-    val hm = Regex("""^(\d+)\s*h\s*(\d+)\s*m(in)?$""").find(text.trim())?.groupValues
+    val hm = HOURS_MINUTES.find(text.trim())?.groupValues
     val minutes = hm?.let { it[1].toInt() * 60 + it[2].toInt() }
-        ?: Regex("""^(\d+)\s*min""").find(text.trim())?.groupValues?.get(1)?.toIntOrNull() ?: return text
+        ?: MINUTES.find(text.trim())?.groupValues?.get(1)?.toIntOrNull() ?: return text
     return if (minutes < 60) "$minutes min" else "${minutes / 60}h %02dm".format(minutes % 60)
 }
 

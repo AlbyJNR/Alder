@@ -49,20 +49,14 @@ class AddonsActivity : Screen() {
             isVerticalScrollBarEnabled = false
             addView(list)
         }
-        val footer = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(keyHint("OK", "Move or remove"))
-        }
+        // No footer hint: the focused row shows the OK key itself.
         val panel = FrameLayout(this).apply {
             background = glassOver(this, 14)
-            addView(scroll, FrameLayout.LayoutParams(-1, -1).apply { bottomMargin = dp(42) })
-            addView(footer, FrameLayout.LayoutParams(-1, dp(36), Gravity.BOTTOM).apply {
-                leftMargin = dp(24); bottomMargin = dp(8)
-            })
+            addView(scroll, FrameLayout.LayoutParams(-1, -1))
         }
         setWindowed(FrameLayout(this).apply {
             addView(panel, FrameLayout.LayoutParams(dp(panelWidth), dp(height - 54), Gravity.TOP or Gravity.START).apply {
-                leftMargin = dp(PAD); topMargin = dp(27)
+                leftMargin = dp(PAD); topMargin = dp(PANEL_TOP)
             })
             addView(TextClock(this@AddonsActivity).apply {
                 format12Hour = "h:mm a"; format24Hour = "HH:mm"
@@ -70,8 +64,9 @@ class AddonsActivity : Screen() {
             }, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply {
                 rightMargin = dp(PAD); topMargin = dp(35)
             })
+            // Level with "My add-ons": the panel's top, then the list's padding and the title's own margin.
             addView(help, FrameLayout.LayoutParams(dp((width - panelWidth - 2 * PAD - 64).coerceAtLeast(160)), -2,
-                Gravity.TOP or Gravity.END).apply { rightMargin = dp(PAD); topMargin = dp(150) })
+                Gravity.TOP or Gravity.END).apply { rightMargin = dp(PAD); topMargin = dp(PANEL_TOP + 8 + 8) })
         }, scene)
         val art = Profiles.active(this)?.let { getSharedPreferences("home", MODE_PRIVATE).getString("art:" + it.id, null) }
         if (art != null) Images.load(art, scene, metrics.widthPixels, urgent = true,
@@ -114,7 +109,7 @@ class AddonsActivity : Screen() {
                 return
             }
         }
-        else if (message != null) list.addView(text(message, SMALL, color = TUNGSTEN).onArt(),
+        else if (message != null) list.addView(text(message, SMALL, color = ALERT).onArt(),
             LinearLayout.LayoutParams(-1, -2).apply { leftMargin = dp(16); bottomMargin = dp(8) })
         if (!loading && addons.isEmpty() && message == null) list.addView(
             text("No add-ons yet. Add them in the Stremio app, then reload here.", BODY, color = TEXT_2).onArt(),
@@ -198,7 +193,7 @@ class AddonsActivity : Screen() {
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }
         dialog.setContentView(column(Gravity.START).apply {
-            setPadding(dp(20), dp(20), dp(20), dp(20))
+            setPadding(dp(DIALOG_PAD), dp(DIALOG_PAD), dp(DIALOG_PAD), dp(DIALOG_PAD))
             background = glassOver(this, 14)
             addView(text("Add an add-on", BODY, bold = true))
             addView(field, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(14) })
@@ -211,7 +206,7 @@ class AddonsActivity : Screen() {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
         })
         dialog.show()
-        dialog.window?.apply { setBackgroundDrawable(ColorDrawable(0)); setLayout(dp(400), -2); setDimAmount(0.6f) }
+        dialog.window?.apply { setBackgroundDrawable(ColorDrawable(0)); setLayout(dp(DIALOG_W), -2); setDimAmount(DIALOG_DIM) }
         field.setOnEditorActionListener { _, _, _ ->
             val url = field.text.toString().trim(); dialog.dismiss(); install(url); true
         }
@@ -244,7 +239,10 @@ class AddonsActivity : Screen() {
         }
     }
 
-    private companion object { const val ADD_URL = "add-url" }
+    private companion object {
+        const val ADD_URL = "add-url"
+        const val PANEL_TOP = 27 // dp from the top to the list panel; the side note lines up with the title inside it
+    }
 }
 
 internal fun addonShortName(name: String) = name.substringBefore('|').substringBefore('(').trim()
@@ -285,9 +283,10 @@ internal fun addonHost(addon: Addon): String {
     }
 }
 
+// The row already names the add-on's role, so the note says only what the row doesn't: its turn, and for Watchly, how it works.
 internal fun addonHelp(addon: Addon, index: Int): String = when {
     addon.id.contains("watchly", true) -> "Makes your own Top Picks from what you watch. It answers ${ordinal(index + 1)}."
-    else -> "${addonRole(addon)}. It answers ${ordinal(index + 1)}."
+    else -> "It answers ${ordinal(index + 1)}."
 }
 
 internal fun ordinal(n: Int) = listOf("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
