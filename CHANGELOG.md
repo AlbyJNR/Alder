@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.41.0
+
+- A title page has a new layout. The name and its facts sit over the lower part of the art. Under them, Play and its controls are on the left, and the plot, the critics and the names are on the right.
+- The lower part of the art shades to dark on a title page. The words read over any picture, and the faces stay bright.
+- On Home, the title's block sits higher above the rows, with more air between its lines. The scores have a dot and a space before each badge.
+
 ## 1.40.0
 
 - On a title page, the words after **Critics**, **Cast** and **Director** start at one point. The labels have one column.

@@ -72,7 +72,7 @@ class DetailsActivity : Screen() {
     private lateinit var playButton: TextView
     private lateinit var infoButton: TextView
     private lateinit var infoOverlay: FrameLayout
-    private var castNames = emptyList<View>() // the leads on the title page; Down from one goes to Play, not the episodes
+    private var aboutView: TextView? = null // the plot, in the right column: gives up a line when the column runs long
     private var guideOpen = false
     private var similarOpen = false
     private var infoOpen = false
@@ -103,11 +103,16 @@ class DetailsActivity : Screen() {
         hero = FrameLayout(this).apply { clipChildren = false }
         root = FrameLayout(this).apply {
             clipChildren = false
-            // A soft shade over the art's left, the block's side, as Home's art carries: the story reads over a bright
-            // backdrop, and the words do not stand on a face. It fades out before the middle, where the art is.
+            // The lower part of the art shades into the page's dark, as the Apple TV app's does: the band of words under
+            // the name reads over any picture, and the faces, higher up, stay bright. A lighter shade down the left
+            // keeps the name clear where a logo sits on bright art.
             addView(View(this@DetailsActivity).apply {
-                background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0xCC08090B.toInt(), 0x7308090B, 0x0008090B))
-            }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 62 / 100, -1))
+                background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                    intArrayOf(0xF508090B.toInt(), 0xE008090B.toInt(), 0x9908090B.toInt(), 0x0008090B))
+            }, FrameLayout.LayoutParams(-1, resources.displayMetrics.heightPixels * 72 / 100, Gravity.BOTTOM))
+            addView(View(this@DetailsActivity).apply {
+                background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(0x8008090B.toInt(), 0x0008090B))
+            }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 45 / 100, -1))
             addView(hero, FrameLayout.LayoutParams(-1, -1))
             addView(TextClock(this@DetailsActivity).apply {
                 format12Hour = "h:mm a"
@@ -226,27 +231,30 @@ class DetailsActivity : Screen() {
             stack.addView(error.marginTop(16))
             error.post { error.getChildAt(2).requestFocus() }
         } else {
+            // Laid out as the Apple TV app lays a title out: the name and its facts over the lower part of the art, then
+            // two columns under them, what you can do on the left (Play and its controls) and what the title is on the
+            // right (the plot, the critics, the names). The art's faces, in the upper half, stay clear of words.
             // The facts line and the critics' line are filled apart from the block, so a late number (the age rating,
             // Rotten Tomatoes) refills them where they are instead of rebuilding the controls under the remote.
             // The title in its own language under the English one ("Gomorra"), when the rows knew it and it differs.
             val own = original?.takeIf { it.isNotBlank() && !it.equals(m.name, true) }
             if (own != null) stack.addView(text(own, SMALL, color = TEXT_2, serif = true).onArt().apply {
                 maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(2) })
+            }, LinearLayout.LayoutParams(dp(HERO_W), -2).apply { topMargin = dp(2) })
             val facts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; fillFacts(this, m) }
             factRow = facts
-            stack.addView(facts, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(if (own != null) 8 else 12) })
-            m.description?.takeIf { it.isNotBlank() }?.let {
-                stack.addView(text(it, BODY, color = TEXT).onArt().apply {
-                    maxLines = 3; ellipsize = TextUtils.TruncateAt.END
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
+            stack.addView(facts, LinearLayout.LayoutParams(dp(BAND_W), -2).apply { topMargin = dp(if (own != null) 10 else 14) })
+            val doing = column(Gravity.START)
+            val telling = column(Gravity.START)
+            aboutView = m.description?.takeIf { it.isNotBlank() }?.let {
+                text(it, BODY, color = TEXT).onArt().apply { maxLines = 3; ellipsize = TextUtils.TruncateAt.END }
+                    .also { about -> telling.addView(about, LinearLayout.LayoutParams(-1, -2)) }
             }
             val consensus = LinearLayout(this).apply { gravity = Gravity.TOP; fillConsensus(this) }
             consensusSlot = consensus
-            stack.addView(consensus, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
+            telling.addView(consensus, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             // The leads, one quiet line, each a name the remote can select to find more of their work; the full
             // list stays behind the information button. Then the director, for films.
-            castNames = emptyList()
             // A name the remote can select, for the leads and the director alike: their other work, as a search.
             fun person(person: String) = text(person, SMALL, color = TEXT_2).onArt().apply {
                 maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(150)
@@ -258,8 +266,7 @@ class DetailsActivity : Screen() {
             }
             if (m.cast.isNotEmpty() && Settings.titlePage(this, SettingsActivity.TITLE_CAST)) {
                 val names = m.cast.take(3).map(::person)
-                castNames = names
-                stack.addView(LinearLayout(this).apply {
+                telling.addView(LinearLayout(this).apply {
                     gravity = Gravity.CENTER_VERTICAL
                     clipChildren = false
                     // The label takes the column less a name's own padding, so the first name's letters start at the column.
@@ -268,12 +275,11 @@ class DetailsActivity : Screen() {
                         if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
                         addView(name, wrap())
                     }
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(8) })
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
             }
             if (m.director.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR)) {
                 val directors = m.director.take(2).map(::person)
-                castNames = castNames + directors // Down from a director's name goes to Play too
-                stack.addView(LinearLayout(this).apply {
+                telling.addView(LinearLayout(this).apply {
                     gravity = Gravity.CENTER_VERTICAL
                     clipChildren = false
                     addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), LinearLayout.LayoutParams(labelW - dp(6), -2))
@@ -281,12 +287,31 @@ class DetailsActivity : Screen() {
                         if (i > 0) addView(text("·", SMALL, color = TEXT_3).onArt())
                         addView(name, wrap())
                     }
-                }, LinearLayout.LayoutParams(dp(470), -2).apply { topMargin = dp(4) })
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
             }
-            addWatch(m, stack)
+            addWatch(m, doing)
+            val columns = LinearLayout(this).apply {
+                clipChildren = false
+                addView(doing, LinearLayout.LayoutParams(dp(DOING_W), -2))
+                addView(telling, LinearLayout.LayoutParams(dp(TELLING_W), -2).apply { marginStart = dp(COLUMN_GAP) })
+            }
+            stack.addView(columns, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(18) })
+            // The right column keeps above the hint line at the foot: the plot gives up a line first, then the
+            // critics, never the names. A late critics' line (Rotten Tomatoes answers after the page) is fitted the same way.
+            val floor = resources.displayMetrics.heightPixels - dp(BAND_BOTTOM)
+            telling.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
+                if (stack.top + columns.top + bottom <= floor) return@addOnLayoutChangeListener
+                val about = aboutView
+                val said = consensusSlot?.getChildAt(1) as? TextView
+                when {
+                    about != null && about.maxLines > 2 -> about.post { about.maxLines = 2 }
+                    said != null && said.maxLines > 1 -> said.post { said.maxLines = 1 }
+                    about != null && about.maxLines > 1 -> about.post { about.maxLines = 1 }
+                }
+            }
         }
-        hero.addView(stack, FrameLayout.LayoutParams(dp(HERO_W), -2, Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(PAD); bottomMargin = dp(118)
+        hero.addView(stack, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
+            leftMargin = dp(PAD); topMargin = dp(BAND_TOP)
         })
         addMoreHint()
         if (m != null && !guideOpen && !infoOpen && !similarOpen) {
@@ -340,7 +365,7 @@ class DetailsActivity : Screen() {
         }
         val scoreRoom = if (m.rating != null || tomatoesOn)
             widest(scoresLine(m.rating?.let { "10.0" }, "C100% A100%".takeIf { tomatoesOn }, lead = true)) else 0
-        val beside = certRoom + factsView.paint.measureText(facts) + scoreRoom <= dp(HERO_W - 10)
+        val beside = certRoom + factsView.paint.measureText(facts) + scoreRoom <= dp(BAND_W)
         val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         if (cert != null) line.addView(capsule(cert), wrap().apply { marginEnd = dp(8) })
         val scores = scoresLine(m.rating, meters, lead = beside)
@@ -367,29 +392,6 @@ class DetailsActivity : Screen() {
         setPadding(dp(5), dp(2), dp(5), dp(2))
         background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
         alpha = RATING_ALPHA
-    }
-
-    /**
-     * IMDb's badge and [rating], then Rotten Tomatoes' badge and [meters] ("C92% A86%"), a dot between them and,
-     * with [lead], a dot before the first: the line continues the facts it follows.
-     */
-    private fun scoresLine(rating: String?, meters: String?, lead: Boolean): LinearLayout {
-        val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        fun dot() = line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) })
-        fun badge(name: String) = text(name, 9f, bold = true, color = BASE).apply {
-            setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
-        }
-        rating?.let {
-            if (lead) dot()
-            line.addView(badge("IMDb"))
-            line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
-        }
-        meters?.let {
-            if (lead || line.childCount > 0) dot()
-            line.addView(badge("RT"))
-            line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) })
-        }
-        return line
     }
 
     /** The critics' consensus, one line in their words under the plot: what the meters mean, in a sentence. */
@@ -444,7 +446,7 @@ class DetailsActivity : Screen() {
         val where = listOfNotNull(episode?.let { "S${it.season} E${it.episode}" }, episode?.title?.takeIf { it.isNotBlank() }, remaining ?: unaired ?: comingOut).joinToString(DOT)
         if (where.isNotEmpty() && (resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text(where, SMALL, bold = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-        }.marginTop(16))
+        }.marginTop(2))
         if (remaining != null) stack.addView(progressBar(resumeAt.toFloat() / duration), LinearLayout.LayoutParams(dp(240), dp(3)).apply { topMargin = dp(8) })
 
         // The white disc: already the brightest thing on the page at rest, so the eye lands on it before the remote does.
@@ -487,7 +489,7 @@ class DetailsActivity : Screen() {
             addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(14) })
             listOfNotNull(trailer.takeIf { lead !== trailer }, preview, recap).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
         }
-        stack.addView(actionRow1, wrap().apply { topMargin = dp(16) })
+        stack.addView(actionRow1, wrap().apply { topMargin = dp(if (stack.childCount > 0) 14 else 0) })
         actionRow2 = LinearLayout(this).apply {
             clipChildren = false
             startOver?.let { addView(it, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginEnd = dp(10) }) }
@@ -1084,9 +1086,6 @@ class DetailsActivity : Screen() {
             } else if (similarOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 hideSimilar()
                 return true
-            } else if (event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN && currentFocus in castNames) {
-                if (::playButton.isInitialized) playButton.requestFocus()
-                return true
             } else if (!infoOpen && !similarOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
                 currentFocus?.let { isInside(it, hero) } == true &&
                 !(actionRow2 != null && currentFocus?.let { f -> actionRow1?.let { isInside(f, it) } } == true) &&
@@ -1117,5 +1116,12 @@ class DetailsActivity : Screen() {
         const val SEASON_WAIT = 300L // ms on a season chip before its episodes show (Home's pages switch the same way)
         const val STILL_WAIT = 400L // ms since the remote's last press before the hero may be rebuilt under it
         const val MORE_HINT = "more-hint" // the tag of the "▾ Episodes" / "▾ More like this" line
+        // The band under the art, as the Apple TV app's: the name from BAND_TOP, two columns under its facts.
+        const val BAND_TOP = 208 // dp from the top: the art's upper part, where the faces are, stays clear
+        const val BAND_BOTTOM = 56 // dp kept at the foot for the "▾ More like this" line
+        const val DOING_W = 320 // dp: the left column, Play and its controls
+        const val COLUMN_GAP = 32
+        const val TELLING_W = HERO_W // dp: the right column, the plot and the names, a readable measure
+        const val BAND_W = DOING_W + COLUMN_GAP + TELLING_W
     }
 }

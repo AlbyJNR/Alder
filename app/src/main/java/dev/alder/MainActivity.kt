@@ -210,10 +210,8 @@ class MainActivity : Screen() {
     private lateinit var heroFacts: TextView
     private lateinit var factsLine: LinearLayout // the facts, and the scores beside them when the line has room
     private lateinit var heroScores: LinearLayout // IMDb, RT, Added: beside the facts or on the line under them
-    private lateinit var heroRating: TextView
-    private lateinit var heroScore: TextView
-    private lateinit var heroRt: TextView // Rotten Tomatoes' badge and "C78% A94%", after IMDb's
-    private lateinit var heroRtScore: TextView
+    private var scoresBeside = true // the scores on the facts line (placeScores), else on the line under
+    private val smallLine by lazy { text("", SMALL).lineHeight }
     private val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
     private val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
     private var heroBottom = 0 // px from the screen's foot to the hero block, for a poster row
@@ -943,14 +941,7 @@ class MainActivity : Screen() {
         // adjustViewBounds resets the scale type to FIT_CENTER, so FIT_START comes after it (logo on the margin).
         heroLogo = ImageView(this).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START; maxHeight = dp(55) }
         heroFacts = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
-        // A small tag, as tall as the letters: SMALL's leading and font padding made it a block twice the mock's.
-        heroRating = imdbTag().apply { visibility = View.GONE }
-        heroScore = text("", SMALL, color = TEXT_2).onArt().apply { visibility = View.GONE }
-        heroRt = text("RT", 9f, bold = true, color = BASE).apply {
-            setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3); visibility = View.GONE
-        }
-        heroRtScore = text("", SMALL, color = TEXT_2).onArt().apply { visibility = View.GONE }
-        heroAdded = text("", SMALL, color = TEXT_3).onArt().apply { visibility = View.GONE }
+        heroAdded = text("", SMALL, color = TEXT_3).onArt()
         heroAbout = text("", BODY, color = TEXT).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         heroResume = pill("Resume", R.drawable.ic_play).apply {
             setOnClickListener { heroItem?.let(::play) }
@@ -959,14 +950,7 @@ class MainActivity : Screen() {
         // Only Resume: OK on any card already opens its title page. It shows only for a title in progress, which lives in
         // the first row, so Up from any other row goes straight to the row above.
         heroActions = LinearLayout(this).apply { clipChildren = false; addView(heroResume); visibility = View.GONE } // shown per title
-        heroScores = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(heroRating)
-            addView(heroScore, wrap().apply { marginStart = dp(6) })
-            addView(heroRt, wrap().apply { marginStart = dp(10) })
-            addView(heroRtScore, wrap().apply { marginStart = dp(6) })
-            addView(heroAdded, wrap().apply { marginStart = dp(6) })
-        }
+        heroScores = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL } // filled by showScores
         factsLine = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; addView(heroFacts) }
         // No progress line here: the focused card already shows it, right below.
         browseInfo = column(Gravity.START,
@@ -975,10 +959,10 @@ class MainActivity : Screen() {
                 addView(heroLogo, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
             },
             // The facts, with the scores beside them or on the line under: placeScores decides per title.
-            factsLine.marginTop(8),
-            heroScores.marginTop(5),
-            heroAbout.marginTop(8),
-            heroActions.marginTop(16),
+            factsLine.marginTop(12),
+            heroScores.marginTop(6),
+            heroAbout.marginTop(12),
+            heroActions.marginTop(20),
         ).apply {
             alpha = 0f
             setPadding(dp(FOCUS_ROOM), 0, dp(FOCUS_ROOM), 0)
@@ -1001,22 +985,16 @@ class MainActivity : Screen() {
      */
     private fun showScores(item: Item) {
         val meta = metas[item.id]
-        val rating = meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ") ?: heroImdbRatings[item.id]
-        heroRating.visibility = if (rating.isNullOrBlank()) View.GONE else View.VISIBLE
-        heroScore.visibility = heroRating.visibility
-        heroScore.text = rating
+        val rating = (meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ") ?: heroImdbRatings[item.id])
+            ?.takeIf { it.isNotBlank() }
         val rt = item.facts.firstOrNull { it.matches(Regex("[CA]\\d+%.*")) }
             ?: heroRtScores[item.id]?.let { s -> listOfNotNull(s.critics?.let { "C$it%" }, s.audience?.let { "A$it%" }).joinToString(" ").ifEmpty { null } }
-        heroRt.visibility = if (rt == null) View.GONE else View.VISIBLE
-        heroRtScore.visibility = heroRt.visibility
-        heroRtScore.text = rt
-        (heroRt.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart = if (heroRating.visibility == View.VISIBLE) dp(10) else 0
-        // The library's "Added …" closes the line, led by a dot only when a score stands before it (a title with no
-        // score showed "· Added").
-        val scored = heroRating.visibility == View.VISIBLE || heroRt.visibility == View.VISIBLE
-        heroAdded.text = if (scored && addedLine.isNotEmpty()) "·  $addedLine" else addedLine
-        (heroAdded.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.marginStart = if (scored) dp(6) else 0
-        heroAdded.visibility = if (page == Page.LIBRARY && addedLine.isNotEmpty()) View.VISIBLE else View.GONE
+        // Built afresh each time: a margin changed on a view already laid out is not always taken up.
+        (heroAdded.parent as? android.view.ViewGroup)?.removeView(heroAdded)
+        heroAdded.text = addedLine
+        val tail = heroAdded.takeIf { page == Page.LIBRARY && addedLine.isNotEmpty() }
+        heroScores.removeAllViews()
+        heroScores.addView(scoresLine(rating, rt, lead = scoresBeside, tail = tail))
     }
 
     /**
@@ -1026,18 +1004,18 @@ class MainActivity : Screen() {
      */
     private fun placeScores() {
         val facts = heroFacts.paint.measureText(heroFacts.text.toString())
-        val added = if (page == Page.LIBRARY && addedLine.isNotEmpty()) dp(6) + heroAdded.paint.measureText("·  $addedLine") else 0f
-        val most = widest(heroRating) + dp(6) + heroScore.paint.measureText("10.0") + dp(10) + widest(heroRt) + dp(6) +
-            heroRtScore.paint.measureText("C100% A100%") + added
-        val beside = facts + dp(10) + most <= dp(HERO_W)
-        heroFacts.maxLines = if (beside) 1 else 2
-        val want: android.view.ViewGroup = if (beside) factsLine else browseInfo
+        val tail = if (page == Page.LIBRARY && addedLine.isNotEmpty()) text(addedLine, SMALL, color = TEXT_3) else null
+        val most = widest(scoresLine("10.0", "C100% A100%", lead = true, tail = tail))
+        scoresBeside = facts + most <= dp(HERO_W)
+        heroFacts.maxLines = if (scoresBeside) 1 else 2
+        val want: android.view.ViewGroup = if (scoresBeside) factsLine else browseInfo
         if (heroScores.parent !== want) {
             (heroScores.parent as? android.view.ViewGroup)?.removeView(heroScores)
-            if (beside) factsLine.addView(heroScores, wrap().apply { marginStart = dp(10) })
-            else browseInfo.addView(heroScores, browseInfo.indexOfChild(factsLine) + 1, wrap().apply { topMargin = dp(5) })
+            if (scoresBeside) factsLine.addView(heroScores, wrap())
+            else browseInfo.addView(heroScores, browseInfo.indexOfChild(factsLine) + 1, wrap().apply { topMargin = dp(6) })
         }
-        heroScores.minimumHeight = if (beside) 0 else heroScore.lineHeight
+        heroScores.minimumWidth = if (scoresBeside) most else 0
+        heroScores.minimumHeight = if (scoresBeside) 0 else smallLine
     }
 
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
@@ -2810,7 +2788,7 @@ class MainActivity : Screen() {
         const val CAPTION_BOTTOM = 16 // dp: low enough to leave the focused card a clear gap
         const val DIM = 0.5f
         const val QUIET = 0.65f // the next row remains visible without competing with the active one
-        const val HERO_GAP = SECTION_GAP // dp between the focused title's block and the row heading below it
+        const val HERO_GAP = 56 // dp between the focused title's block and the row heading below it: air, as Netflix's billboard keeps
         const val RISE = 200 // dp the rows travel when they come up from the cinema
         // Cards a row starts with (a screenful and a bit), then how many come at a time as the remote nears its end.
         // Building every row's 25 cards at once held the main thread for over a second on a page switch (about 3.6 ms

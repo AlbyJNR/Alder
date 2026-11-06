@@ -277,6 +277,22 @@ abstract class Screen : Activity() {
 
     protected fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    /**
+     * IMDb's badge and [rating], then Rotten Tomatoes' badge and [meters] ("C92% A86%"), then [tail] (the library's
+     * "Added …"): a dot between each pair and, with [lead], before the first, so the line continues the facts it follows.
+     */
+    protected fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null): LinearLayout {
+        val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        fun dot() { if (lead || line.childCount > 0) line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) }) }
+        fun badge(name: String) = text(name, 9f, bold = true, color = BASE).apply {
+            setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
+        }
+        rating?.let { dot(); line.addView(badge("IMDb")); line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) }) }
+        meters?.let { dot(); line.addView(badge("RT")); line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) }) }
+        tail?.let { dot(); line.addView(it, wrap()) }
+        return line
+    }
+
     /** The width [v] asks for on its own, before any layout: what a line must keep for it. */
     protected fun widest(v: View): Int {
         v.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
