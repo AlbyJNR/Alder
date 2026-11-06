@@ -863,6 +863,21 @@ abstract class Screen : Activity() {
         }
     }
 
+    /**
+     * An information block, as the Apple TV app's product page sets its panels: frosted glass with a quiet label, then
+     * its content, each piece on its own line. Views that bring their own layout params keep them (a name's hug).
+     */
+    protected fun block(label: String, vararg content: View) = column(Gravity.START).apply {
+        background = glass(BLOCK_RADIUS)
+        setPadding(dp(BLOCK_PAD), dp(BLOCK_PAD - 2), dp(BLOCK_PAD), dp(BLOCK_PAD))
+        clipChildren = false
+        clipToPadding = false
+        addView(caps(label, TEXT_3))
+        content.forEachIndexed { i, v ->
+            addView(v, (v.layoutParams as? LinearLayout.LayoutParams ?: LinearLayout.LayoutParams(-1, -2)).apply { topMargin = dp(if (i == 0) 8 else 4) })
+        }
+    }
+
     protected fun caption(value: String) = text(value, SMALL).apply {
         setPadding(dp(12), dp(6), dp(12), dp(6))
         background = glassOver(this, 16)
@@ -1338,6 +1353,10 @@ abstract class Screen : Activity() {
         const val HERO_W = 600 // dp: a title's block on Home and its page: a measure that holds a synopsis in a few full lines
         const val TITLE_H = 96 // dp: the name's area on Home and the title page, one height whatever the name, so what follows never moves
         const val LOGO_W = 340 // dp: the title's logo, where it has one, within that area
+        const val BLOCK_W = 300 // dp: an information block down the right of a page
+        const val BLOCK_RADIUS = 12
+        const val BLOCK_PAD = 16
+        const val BLOCK_GAP = 12 // dp between blocks
         const val BUTTON_H = 34
         const val SHORT_LIST = 5 // "What's new" entries shown before See all changes
         const val WHATS_NEW_W = 480 // dp

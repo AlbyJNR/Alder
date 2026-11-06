@@ -96,6 +96,26 @@ object Images {
     /** An episode still with nothing to give away: shrunk to a few dozen pixels and blurred, then stretched smooth. */
     val blurred = Look("blur") { frost(it, 28) }
 
+    /** A title's logo cropped to its ink: the clear margins some carry made one sit low and another to the right. */
+    val trimmed = Look("trim") { trimClear(it) }
+
+    private fun trimClear(src: Bitmap): Bitmap {
+        if (!src.hasAlpha()) return src
+        val w = src.width
+        val h = src.height
+        val px = IntArray(w * h)
+        src.getPixels(px, 0, w, 0, 0, w, h)
+        var top = h; var bottom = -1; var left = w; var right = -1
+        for (y in 0 until h) for (x in 0 until w) if (px[y * w + x] ushr 24 > 24) {
+            if (y < top) top = y
+            if (y > bottom) bottom = y
+            if (x < left) left = x
+            if (x > right) right = x
+        }
+        if (bottom < 0 || (top == 0 && left == 0 && bottom == h - 1 && right == w - 1)) return src
+        return Bitmap.createBitmap(src, left, top, right - left + 1, bottom - top + 1).also { if (it !== src) src.recycle() }
+    }
+
     private val inFlight = ConcurrentHashMap<String, FutureTask<Bitmap?>>()
 
     /**

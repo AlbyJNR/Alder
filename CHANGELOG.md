@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.45.0
+
+- Title page: the information is back, in frosted blocks down the right, each its own thing: the critics in their words, the cast, the director. Every name selects to find more of their work, on the page and on the ⓘ page. More air between the name, the facts, the controls and the description.
+- Home and the other pages: more air between the name, the facts and the description.
+- Title logos are cropped to their ink, so each one sits at the margin and at the same height as the next.
+
 ## 1.44.0
 
 - Title page: four things and air between them. The name (or its logo, larger), its facts and scores, Play with its controls, the description. The critics' consensus, the cast and the director moved to the ⓘ page, where they show in full.

@@ -278,7 +278,7 @@ class MainActivity : Screen() {
         // Last launch's first cinema title: start its art and logo now, while the library is still being read.
         getSharedPreferences("home", MODE_PRIVATE).let { prefs ->
             Images.prefetch(prefs.getString("art:${profile.id}", null), artW, urgent = true, look = shaded)
-            Images.prefetch(prefs.getString("logo:${profile.id}", null), dp(LOGO_W), urgent = true)
+            Images.prefetch(prefs.getString("logo:${profile.id}", null), dp(LOGO_W), urgent = true, look = Images.trimmed)
         }
 
         val screenH = resources.displayMetrics.heightPixels
@@ -955,9 +955,9 @@ class MainActivity : Screen() {
                 layoutParams = LinearLayout.LayoutParams(-1, dp(TITLE_H))
             },
             // The facts on one line and the scores on their own under them: a row each, as the title page sets them.
-            heroFacts.marginTop(12),
-            heroScores.marginTop(6),
-            heroAbout.marginTop(16),
+            heroFacts.marginTop(14),
+            heroScores.marginTop(8),
+            heroAbout.marginTop(18),
         ).apply {
             alpha = 0f
             setPadding(dp(FOCUS_ROOM), 0, dp(FOCUS_ROOM), 0)
@@ -1035,7 +1035,7 @@ class MainActivity : Screen() {
         heroName.visibility = View.VISIBLE
         heroLogo.visibility = View.GONE
         heroLogo.setImageDrawable(null)
-        Images.load(item.logo, heroLogo, dp(LOGO_W), failed = { if (heroItem === item) heroName.visibility = View.VISIBLE }) {
+        Images.load(item.logo, heroLogo, dp(LOGO_W), look = Images.trimmed, failed = { if (heroItem === item) heroName.visibility = View.VISIBLE }) {
             if (heroItem === item) { heroLogo.visibility = View.VISIBLE; heroName.visibility = View.INVISIBLE }
         }
         val meta = metas[item.id]
@@ -2772,7 +2772,7 @@ class MainActivity : Screen() {
         const val SAFE_BOTTOM = 27
         const val CAPTION_BOTTOM = 24 // dp: inside the TV's safe area, and a clear gap under the focused card
         const val QUIET = 0.65f // the next row remains visible without competing with the active one
-        const val HERO_GAP = 32 // dp kept clear between the focused title's block and the row heading below it
+        const val HERO_GAP = 20 // dp kept clear between the focused title's block and the row heading below it
         const val RISE = 200 // dp the rows travel when they come up from the cinema
         // Cards a row starts with (a screenful and a bit), then how many come at a time as the remote nears its end.
         // Building every row's 25 cards at once held the main thread for over a second on a page switch (about 3.6 ms

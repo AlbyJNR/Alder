@@ -91,6 +91,9 @@ class DetailsActivity : Screen() {
     private var certificateRequested = false
     private var tomatoes: RtScores? = null // Rotten Tomatoes' meters and consensus, when it has the title
     private var tomatoesRequested = false
+    private var criticsSlot: LinearLayout? = null // the critics' block, refilled where it is when Rotten Tomatoes answers
+    private var sideColumn: View? = null // the information blocks down the right: Down moves within them before the episodes
+    private var plotFull: String? = null // the whole description; the plot shows what fits, cut at a sentence
     private var factRow: LinearLayout? = null // the year · genre line and the scores under it: refilled where they are as a rating or RT arrives
     // One column for the labels (Critics, Cast, Director), as wide as the widest: the words after them start at one point.
     private val smallLine by lazy { text("", SMALL).lineHeight } // one small line's height: an empty scores line keeps it
@@ -210,6 +213,8 @@ class DetailsActivity : Screen() {
         keepFocus = currentFocus?.takeIf { isInside(it, hero) }?.let { it.contentDescription?.toString() ?: (it as? TextView)?.text?.toString() }
         hero.removeAllViews()
         aboutView = null
+        criticsSlot = null
+        sideColumn = null
         val title = text(m?.name ?: name, SERIF_HERO, serif = true).onArt().apply {
             maxLines = 2; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.CENTER_VERTICAL
             // The box is a fixed height: at large font sizes a two-line name shrinks to fit instead of clipping.
@@ -223,7 +228,7 @@ class DetailsActivity : Screen() {
                     visibility = View.GONE
                 }
                 addView(logo, FrameLayout.LayoutParams(dp(LOGO_W), -1))
-                Images.load(m.logo ?: Images.logoFor(m.id), logo, dp(LOGO_W), urgent = true, failed = {
+                Images.load(m.logo ?: Images.logoFor(m.id), logo, dp(LOGO_W), urgent = true, look = Images.trimmed, failed = {
                     title.visibility = View.VISIBLE; logo.visibility = View.GONE
                 }) {
                     title.visibility = View.GONE; logo.visibility = View.VISIBLE
@@ -236,30 +241,47 @@ class DetailsActivity : Screen() {
             stack.addView(error.marginTop(16))
             error.post { error.getChildAt(2).requestFocus() }
         } else {
-            // Laid out as the Apple TV app sets a title: one column down the left of the art, four things and air
-            // between them. The name; its facts on one line and its scores on the next; Play and its controls on one
-            // line; the plot at a full measure. Nothing else: the critics' consensus, the cast and the director are a
-            // press of ⓘ away, in full. The art's right side stays clear. The facts are filled apart from the block,
-            // so a late number (the age rating, Rotten Tomatoes) refills them where they are instead of rebuilding
-            // the controls under the remote.
+            // Laid out as the Apple TV app sets a title: down the left, four things with air between them (the name;
+            // its facts on one line and its scores on the next; Play and its controls on one line; the plot), and down
+            // the right the information in frosted blocks (the critics in their words, the cast, the director), each
+            // its own thing. The facts and the critics' block are filled apart from the rest, so a late number (the
+            // age rating, Rotten Tomatoes) refills them where they are instead of rebuilding the controls under the remote.
             // The title in its own language under the English one ("Gomorra"), when the rows knew it and it differs.
             val own = original?.takeIf { it.isNotBlank() && !it.equals(m.name, true) }
             if (own != null) stack.addView(text(own, SMALL, color = TEXT_2, serif = true).onArt().apply {
                 maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(dp(HERO_W), -2).apply { topMargin = dp(2) })
+            }, LinearLayout.LayoutParams(dp(COLUMN_W), -2).apply { topMargin = dp(2) })
             val facts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; fillFacts(this, m) }
             factRow = facts
-            stack.addView(facts, LinearLayout.LayoutParams(dp(HERO_W), -2).apply { topMargin = dp(if (own != null) 10 else 14) })
+            stack.addView(facts, LinearLayout.LayoutParams(dp(COLUMN_W), -2).apply { topMargin = dp(if (own != null) 12 else 16) })
             addWatch(m, stack)
-            aboutView = m.description?.takeIf { it.isNotBlank() }?.let {
-                text(it, BODY, color = TEXT).onArt().apply { maxLines = ABOUT_LINES; ellipsize = TextUtils.TruncateAt.END }
-                    .also { about -> stack.addView(about, LinearLayout.LayoutParams(dp(HERO_W), -2).apply { topMargin = dp(24) }) }
+            plotFull = m.description?.takeIf { it.isNotBlank() }
+            aboutView = plotFull?.let { full ->
+                text(full, BODY, color = TEXT).onArt().apply { maxLines = ABOUT_LINES; ellipsize = TextUtils.TruncateAt.END }
+                    .also { about -> stack.addView(about, LinearLayout.LayoutParams(dp(COLUMN_W), -2).apply { topMargin = dp(28) }); fitPlot(about) }
             }
-            // The column keeps above the hint line at the foot: at a large font size the plot gives up lines.
+            // Both columns keep above the hint line at the foot: at a large font size the plot, or the critics' line,
+            // gives up lines.
             val floor = resources.displayMetrics.heightPixels - dp(BAND_BOTTOM)
             stack.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
                 val about = aboutView ?: return@addOnLayoutChangeListener
-                if (bottom > floor && about.maxLines > 1) about.post { about.maxLines -= 1 }
+                if (bottom > floor && about.maxLines > 1) about.post { about.maxLines -= 1; fitPlot(about) }
+            }
+            val side = column(Gravity.START).apply { clipChildren = false; clipToPadding = false }
+            criticsSlot = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; fillCritics(this) }
+            side.addView(criticsSlot, LinearLayout.LayoutParams(-1, -2))
+            if (m.cast.isNotEmpty() && Settings.titlePage(this, SettingsActivity.TITLE_CAST))
+                side.addView(block("Cast", *m.cast.take(CAST_NAMES).map(::person).toTypedArray()), LinearLayout.LayoutParams(-1, -2))
+            if (m.director.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR))
+                side.addView(block(if (m.director.size > 1) "Directors" else "Director", *m.director.take(2).map(::person).toTypedArray()),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(BLOCK_GAP) })
+            sideColumn = side
+            hero.addView(side, FrameLayout.LayoutParams(dp(BLOCK_W), -2, Gravity.TOP or Gravity.END).apply {
+                rightMargin = dp(PAD); topMargin = dp(BAND_TOP)
+            })
+            side.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
+                val said = criticsSlot?.findViewWithTag<TextView>(SAID) ?: return@addOnLayoutChangeListener
+                if (bottom > floor && said.maxLines > 1) said.post { said.maxLines -= 1 }
             }
         }
         hero.addView(stack, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply {
@@ -325,10 +347,51 @@ class DetailsActivity : Screen() {
         alpha = RATING_ALPHA
     }
 
+    /** The critics' consensus in their words, a block of its own; a series' is its newest season's, named in the label. */
+    private fun fillCritics(slot: LinearLayout) {
+        slot.removeAllViews()
+        val rt = tomatoes?.takeIf { it.consensus != null && Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES) }
+        slot.visibility = if (rt == null) View.GONE else View.VISIBLE
+        val line = rt?.consensus ?: return
+        val said = text(line, SMALL, color = TEXT_2).apply { maxLines = CRITICS_LINES; ellipsize = TextUtils.TruncateAt.END; tag = SAID }
+        slot.addView(block(rt.season?.let { "Critics · Season $it" } ?: "Critics", said), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(BLOCK_GAP) })
+    }
+
+    /** A name the remote can select, for the leads and the director alike: their other work, as a search. */
+    private fun person(person: String) = text(person, SMALL, color = TEXT_2).apply {
+        maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(BLOCK_W - 2 * BLOCK_PAD)
+        setPadding(dp(8), dp(3), dp(8), dp(3))
+        contentDescription = "Films and shows with $person"
+        rowFocus(6, rest = { null }) { has -> setTextColor(if (has) TEXT else TEXT_2) }
+        if (Profiles.active(this@DetailsActivity)?.kids == true) isFocusable = false // a Kids profile stays on its own titles
+        else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("query", person)) }
+        // Hugs its words, and starts them at the block's own margin (its padding is the focus rim's room).
+        layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginStart = -dp(8) }
+    }
+
+    /** The plot ends at a sentence where its lines run out, never mid-word with dots; measured once laid out. */
+    private fun fitPlot(about: TextView) {
+        val full = plotFull ?: return
+        about.post {
+            if (plotFull != full) return@post
+            val layout = about.layout ?: return@post
+            val last = minOf(layout.lineCount, about.maxLines) - 1
+            if (last >= 0 && layout.getEllipsisCount(last) > 0) about.text = synopsisAtSentence(full, layout.getLineStart(last) + layout.getEllipsisStart(last))
+        }
+    }
+
+    /** Down within the information blocks moves to the next name, not to the episodes, while there is one below. */
+    private fun nextBelowInSide(): Boolean {
+        val side = sideColumn ?: return false
+        val from = currentFocus?.takeIf { isInside(it, side) } ?: return false
+        return from.focusSearch(View.FOCUS_DOWN)?.let { isInside(it, side) } == true
+    }
+
     /** A late fact (the age rating, Rotten Tomatoes): its rows refill where they are; the controls, and the remote on them, stay. */
     private fun refreshFacts() {
         val m = meta ?: return
         factRow?.let { fillFacts(it, m) }
+        criticsSlot?.let(::fillCritics)
     }
 
     /** What the watch block draws from the library item; the same key again means the same block. */
@@ -365,7 +428,7 @@ class DetailsActivity : Screen() {
         val before = stack.childCount // the where-line and its bar, when they come, sit between the scores and the controls
         if (where.isNotEmpty() && (resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text(where, SMALL, bold = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-        }.marginTop(16))
+        }.marginTop(18))
         if (remaining != null) stack.addView(progressBar(resumeAt.toFloat() / duration), LinearLayout.LayoutParams(dp(240), dp(3)).apply { topMargin = dp(8) })
 
         // The white disc: already the brightest thing on the page at rest, so the eye lands on it before the remote does.
@@ -408,7 +471,7 @@ class DetailsActivity : Screen() {
                 addView(orb, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginStart = dp(if (i == 0) 6 else 10) })
             }
         }
-        stack.addView(actionRow1, wrap().apply { topMargin = dp(if (stack.childCount > before) 14 else 24) })
+        stack.addView(actionRow1, wrap().apply { topMargin = dp(if (stack.childCount > before) 16 else 28) })
         leadControl = lead
     }
 
@@ -795,15 +858,18 @@ class DetailsActivity : Screen() {
                     addView(caps(tomatoes?.season?.let { s -> "Critics consensus · Season $s" } ?: "Critics consensus", TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
                     addView(text(it, BODY).onArt(), wrap().apply { topMargin = dp(6) })
                 }
-                if (m.cast.isNotEmpty()) {
-                    addView(caps("Cast", TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
-                    addView(text(m.cast.take(12).joinToString("  ·  "), BODY).onArt(),
-                        wrap().apply { topMargin = dp(6) })
+                // Every name selects, as on the page itself: three to a line.
+                fun names(label: String, people: List<String>) {
+                    addView(caps(label, TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
+                    people.chunked(3).forEachIndexed { i, line ->
+                        addView(LinearLayout(this@DetailsActivity).apply {
+                            clipChildren = false
+                            line.forEach { addView(person(it).apply { maxWidth = dp(180) }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(10) }) }
+                        }, wrap().apply { topMargin = dp(if (i == 0) 4 else 2); marginStart = -dp(8) })
+                    }
                 }
-                if (m.director.isNotEmpty()) {
-                    addView(caps(if (m.director.size > 1) "Directors" else "Director", TEXT_3).onArt(), wrap().apply { topMargin = dp(18) })
-                    addView(text(m.director.take(3).joinToString("  ·  "), BODY).onArt(), wrap().apply { topMargin = dp(6) })
-                }
+                if (m.cast.isNotEmpty()) names("Cast", m.cast.take(12))
+                if (m.director.isNotEmpty()) names(if (m.director.size > 1) "Directors" else "Director", m.director.take(3))
             })
         }
         infoOverlay.addView(column(Gravity.START,
@@ -1003,7 +1069,7 @@ class DetailsActivity : Screen() {
                 hideSimilar()
                 return true
             } else if (!infoOpen && !similarOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                currentFocus?.let { isInside(it, hero) } == true &&
+                currentFocus?.let { isInside(it, hero) } == true && !nextBelowInSide() &&
                 (if (type == "series") ::guide.isInitialized else ::similarOverlay.isInitialized)) {
                 if (type == "series") showGuide() else showSimilar()
                 return true
@@ -1035,6 +1101,10 @@ class DetailsActivity : Screen() {
         // The column down the left of the art, as Netflix's title page: the name from BAND_TOP, everything under it.
         const val BAND_TOP = 64 // dp from the top: the name top left, under the clock's line
         const val BAND_BOTTOM = 60 // dp kept at the foot for the "▾ More like this" line
-        const val ABOUT_LINES = 4 // the plot's most lines, at HERO_W's measure: a synopsis whole for most titles
+        const val COLUMN_W = 480 // dp: the column down the left, clear of the blocks down the right
+        const val ABOUT_LINES = 4 // the plot's most lines, at COLUMN_W's measure: a synopsis whole for most titles
+        const val CRITICS_LINES = 4 // the critics' consensus, in its block
+        const val CAST_NAMES = 4 // names in the cast block; the rest are on the ⓘ page
+        const val SAID = "said" // the tag of the consensus line, for the block's fitting
     }
 }
