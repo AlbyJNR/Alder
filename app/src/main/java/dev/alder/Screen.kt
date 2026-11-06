@@ -1336,6 +1336,8 @@ abstract class Screen : Activity() {
         const val DIALOG_DIM = 0.6f
         const val FROST_W = 360 // px the art is shrunk to before the blur: wider is less blur (240 read as fog, 480 as smeared)
         const val HERO_W = 600 // dp: a title's block on Home and its page: a measure that holds a synopsis in a few full lines
+        const val TITLE_H = 96 // dp: the name's area on Home and the title page, one height whatever the name, so what follows never moves
+        const val LOGO_W = 340 // dp: the title's logo, where it has one, within that area
         const val BUTTON_H = 34
         const val SHORT_LIST = 5 // "What's new" entries shown before See all changes
         const val WHATS_NEW_W = 480 // dp

@@ -215,11 +215,8 @@ class MainActivity : Screen() {
     private var heroSynopsis = "" // the focused title's whole description; heroAbout shows what fits, cut at a sentence
     private val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
     private val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
-    private var heroBottom = 0 // px from the screen's foot to the hero block, for a poster row
     private var wideRow = false // the row the remote is in has wide cards (Continue Watching): the hero sits lower
     private lateinit var heroAbout: TextView
-    private lateinit var heroActions: LinearLayout
-    private lateinit var heroResume: TextView
 
     // Cinema: one title, low on the left; the stage takes the remote's keys while it shows.
     private var cinema: List<Item> = emptyList()
@@ -357,11 +354,10 @@ class MainActivity : Screen() {
             addView(listHint, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply {
                 rightMargin = dp(PAD); bottomMargin = dp(24)
             })
-            // Sits on the row band, so a larger font size grows it upwards into the art, never down into the rows.
-            addView(browseInfo(), FrameLayout.LayoutParams(dp(HERO_W + 2 * FOCUS_ROOM), -2, Gravity.BOTTOM).apply {
-                heroBottom = screenH - rowTop + dp(HERO_GAP)
-                // Room inside the block for the focused Resume to grow into (it was cut flat on the left).
-                leftMargin = dp(EDGE - FOCUS_ROOM); bottomMargin = heroBottom
+            // From a fixed top, under the top bar: the name is always at the same place, whatever its length, and so
+            // is every line under it. The description gives up lines if the block would reach the rows.
+            addView(browseInfo(), FrameLayout.LayoutParams(dp(HERO_W + 2 * FOCUS_ROOM), -2, Gravity.TOP).apply {
+                leftMargin = dp(EDGE - FOCUS_ROOM); topMargin = dp(HEADER_H)
             })
             addView(stage(), FrameLayout.LayoutParams(-1, -1))
             genreStrip = HorizontalScrollView(context).apply {
@@ -939,42 +935,38 @@ class MainActivity : Screen() {
     // ---------- browse: the focused title, top left ----------
 
     private fun browseInfo(): View {
-        heroName = text("", SERIF_HERO, serif = true).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
+        heroName = text("", SERIF_HERO, serif = true).onArt().apply {
+            maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+            // The area is a fixed height: at large font sizes a two-line name shrinks to fit instead of clipping.
+            setAutoSizeTextTypeUniformWithConfiguration(20, SERIF_HERO.toInt(), 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        }
         // adjustViewBounds resets the scale type to FIT_CENTER, so FIT_START comes after it (logo on the margin).
-        heroLogo = ImageView(this).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START; maxHeight = dp(55) }
+        heroLogo = ImageView(this).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START; maxHeight = dp(TITLE_H) }
         heroFacts = text("", SMALL, color = TEXT_2).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
         heroAdded = text("", SMALL, color = TEXT_3).onArt()
         heroAbout = text("", BODY, color = TEXT).onArt().apply { maxLines = ABOUT_LINES; ellipsize = TextUtils.TruncateAt.END }
-        heroResume = pill("Resume", R.drawable.ic_play).apply {
-            setOnClickListener { heroItem?.let(::play) }
-            setOnLongClickListener { heroItem?.let { play(it, pick = true) }; true }
-        }
-        // Only Resume: OK on any card already opens its title page. It shows only for a title in progress, which lives in
-        // the first row, so Up from any other row goes straight to the row above.
-        heroActions = LinearLayout(this).apply { clipChildren = false; addView(heroResume); visibility = View.GONE } // shown per title
         // Filled by showScores; a line tall while empty, so a late Rotten Tomatoes answer lands in space already its own.
         heroScores = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; minimumHeight = smallLine }
         // No progress line here: the focused card already shows it, right below.
         browseInfo = column(Gravity.START,
             FrameLayout(this).apply {
-                addView(heroName, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
-                addView(heroLogo, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL))
+                addView(heroName, FrameLayout.LayoutParams(-1, -1))
+                addView(heroLogo, FrameLayout.LayoutParams(dp(LOGO_W), -2, Gravity.CENTER_VERTICAL))
+                layoutParams = LinearLayout.LayoutParams(-1, dp(TITLE_H))
             },
             // The facts on one line and the scores on their own under them: a row each, as the title page sets them.
             heroFacts.marginTop(12),
             heroScores.marginTop(6),
-            heroAbout.marginTop(12),
-            heroActions.marginTop(20),
+            heroAbout.marginTop(16),
         ).apply {
             alpha = 0f
             setPadding(dp(FOCUS_ROOM), 0, dp(FOCUS_ROOM), 0)
-            // Too tall for the art above the rows (a large font size, a two-line name): the description gives up lines
-            // until the block clears the top bar's words (they end well above its 76 dp). showHero gives them back for
-            // the next title.
-            addOnLayoutChangeListener { _, _, top, _, _, _, _, _, _ ->
-                if (page == Page.HOME || page == Page.LIBRARY) return@addOnLayoutChangeListener
+            // Too tall for the art above the rows (a large font size): the description gives up lines until the block
+            // keeps HERO_GAP clear of the row heading. showHero gives them back for the next title.
+            addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
+                val rowTop = if (page == Page.LIBRARY) dp(LIST_TOP) else browseRowTop + (if (wideRow) dp(CARD_H - WIDE_H) else 0)
                 val lines = heroAbout.maxLines
-                if (top < dp(HEADER_H - 12) && lines > 0) heroAbout.post { heroAbout.maxLines = lines - 1; fitSynopsis() }
+                if (bottom > rowTop - dp(HERO_GAP) && lines > 1 && heroAbout.visibility == View.VISIBLE) heroAbout.post { heroAbout.maxLines = lines - 1; fitSynopsis() }
             }
         }
         return browseInfo
@@ -1066,7 +1058,6 @@ class MainActivity : Screen() {
         heroSynopsis = episode(item)?.overview?.takeIf { it.isNotBlank() } ?: item.about
         heroAbout.text = heroSynopsis
         fitSynopsis()
-        heroActions.visibility = if (page != Page.HOME && page != Page.LIBRARY && item.resume) View.VISIBLE else View.GONE
         if (page == Page.HOME || page.isCatalog) showCaption(item)
         if (mode == Mode.BROWSE) {
             val target = if (homeDimmed && (page == Page.HOME || page.isCatalog || page == Page.LIBRARY)) 0.3f else 1f
@@ -1156,9 +1147,6 @@ class MainActivity : Screen() {
         scroller.layoutParams = (scroller.layoutParams as FrameLayout.LayoutParams).apply {
             topMargin = if (grid) dp(LIST_TOP) else browseRowTop
             height = if (grid) resources.displayMetrics.heightPixels - dp(LIST_TOP) else browseRowH
-        }
-        browseInfo.layoutParams = (browseInfo.layoutParams as FrameLayout.LayoutParams).apply {
-            bottomMargin = if (grid) resources.displayMetrics.heightPixels - dp(220) else heroBottom
         }
         wideRow = false
         librarySlot = null
@@ -2173,12 +2161,7 @@ class MainActivity : Screen() {
             val beyond = cards.any { it.right - targetScroll > right }
             moreHint.animate().alpha(if (beyond && mode == Mode.BROWSE && page != Page.HOME && !page.isCatalog) 0.9f else 0f).setDuration(200).start()
             moreHint.translationY = if (wide) dp(CARD_H - WIDE_H + WIDE_H / 2 - CARD_H / 2).toFloat() else 0f
-            if (!grid && wideRow != wide) {
-                wideRow = wide
-                browseInfo.layoutParams = (browseInfo.layoutParams as FrameLayout.LayoutParams).apply {
-                    bottomMargin = heroBottom - if (wide) dp(CARD_H - WIDE_H) else 0
-                }
-            }
+            if (!grid && wideRow != wide) { wideRow = wide; browseInfo.requestLayout() } // the block's floor moves with the row's top
             // A held key repeats every 50 ms. Restarting a slowing-down slide on each repeat made the row lurch and brake
             // twenty times a second; a straight slide that lasts until the next repeat joins them into one glide.
             anim = ValueAnimator.ofInt(startScroll, targetScroll).setDuration(if (held) ViewConfiguration.getKeyRepeatDelay().toLong() else 200).apply {
@@ -2783,20 +2766,19 @@ class MainActivity : Screen() {
         const val PREVIEW_WAIT = 140L // ms the remote rests on a country before its preview is drawn
         const val TILE_RADIUS = 10
         const val RANK_SIZE = 30f // sp, the numeral on a ranked card
-        const val LOGO_W = 360 // the cinema's title logo
         const val LOGO_H = 100
         const val ROW_TOP_ROOM = HEADING_GAP + 9 // dp between the row title and its cards, plus the focused card's growth (5% of 180 dp a side)
         const val ROW_BOTTOM_ROOM = 38 // room for the focused caption below the poster
         const val SAFE_BOTTOM = 27
         const val CAPTION_BOTTOM = 24 // dp: inside the TV's safe area, and a clear gap under the focused card
         const val QUIET = 0.65f // the next row remains visible without competing with the active one
-        const val HERO_GAP = 56 // dp between the focused title's block and the row heading below it: air, as Netflix's billboard keeps
+        const val HERO_GAP = 32 // dp kept clear between the focused title's block and the row heading below it
         const val RISE = 200 // dp the rows travel when they come up from the cinema
         // Cards a row starts with (a screenful and a bit), then how many come at a time as the remote nears its end.
         // Building every row's 25 cards at once held the main thread for over a second on a page switch (about 3.6 ms
         // a card), so the first row's posters, already decoded, didn't show until every row was made.
         const val FOCUS_ROOM = 8 // dp around the title block for a focused pill to grow into
-        const val ABOUT_LINES = 4 // the description's most lines on Home: a synopsis whole, at HERO_W's measure
+        const val ABOUT_LINES = 3 // the description's most lines on Home: a synopsis whole, at HERO_W's measure, above the rows
         const val START = 12 // cards a row starts with: past the screen's edge, so the first move right has somewhere to go
         const val ROW_LATER = 350L // ms after a page opens before its rows out of sight are made
         const val ROW_STAGGER = 60L // ms between them
