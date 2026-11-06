@@ -366,7 +366,7 @@ class MainActivity : Screen() {
             }
             // Wrap height: the chips grow with the TV's font size. It ends before the wordmark at the top right.
             addView(genreStrip, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).apply {
-                topMargin = dp(12) // just under the safe edge, clear of the title block that starts at HERO_TOP
+                topMargin = dp(8) // just under the safe edge, clear of the title block that starts at HERO_TOP
                 marginEnd = dp(PAD + 100)
             })
             wordmark = brand().apply { alpha = 0f }
@@ -955,9 +955,9 @@ class MainActivity : Screen() {
                 layoutParams = LinearLayout.LayoutParams(-1, dp(TITLE_H))
             },
             // The facts on one line and the scores on their own under them: a row each, as the title page sets them.
-            heroFacts.marginTop(14),
-            heroScores.marginTop(8),
-            heroAbout.marginTop(18),
+            heroFacts.marginTop(12),
+            heroScores.marginTop(6),
+            heroAbout.marginTop(16),
         ).apply {
             alpha = 0f
             setPadding(dp(FOCUS_ROOM), 0, dp(FOCUS_ROOM), 0)
@@ -2772,14 +2772,16 @@ class MainActivity : Screen() {
         const val SAFE_BOTTOM = 27
         const val CAPTION_BOTTOM = 24 // dp: inside the TV's safe area, and a clear gap under the focused card
         const val QUIET = 0.65f // the next row remains visible without competing with the active one
-        const val HERO_GAP = 20 // dp kept clear between the focused title's block and the row heading below it
+        const val HERO_GAP = 14 // dp kept clear between the focused title's block and the row heading below it
         const val RISE = 200 // dp the rows travel when they come up from the cinema
         // Cards a row starts with (a screenful and a bit), then how many come at a time as the remote nears its end.
         // Building every row's 25 cards at once held the main thread for over a second on a page switch (about 3.6 ms
         // a card), so the first row's posters, already decoded, didn't show until every row was made.
         const val FOCUS_ROOM = 8 // dp around the title block for a focused pill to grow into
         const val ABOUT_LINES = 4 // the description's most lines on Home: a synopsis whole, at HERO_W's measure, above the rows
-        const val HERO_TOP = 60 // dp from the top to the title block, under the genre chips on TV and Movies
+        // The budget above the first row (its top is screenH - rowH - SAFE_BOTTOM, about 300 dp): from HERO_TOP, the
+        // name's area, the facts, the scores and four lines of description must fit above HERO_GAP. Measured on the TV.
+        const val HERO_TOP = 52 // dp from the top to the title block, under the genre chips on TV and Movies
         const val START = 12 // cards a row starts with: past the screen's edge, so the first move right has somewhere to go
         const val ROW_LATER = 350L // ms after a page opens before its rows out of sight are made
         const val ROW_STAGGER = 60L // ms between them
