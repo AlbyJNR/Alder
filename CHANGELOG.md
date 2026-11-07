@@ -13,6 +13,14 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.49.0
+
+- Movies and TV: a **Because you watched** row for each of the two titles you watched last, with the titles IMDb finds most like it. Titles already in your library do not show.
+- Movies and TV: a **Family films** row and a **Family TV** row, from IMDb's Family genre and rated for all ages. They refresh each day.
+- Movies and TV: a **Christmas films** row and a **Christmas TV** row, from November to 6 January, high on the page.
+- Player: the stream reads up to a minute ahead, and keeps the last 20 seconds behind. A short rewind plays from memory.
+- The Fire TV launcher tile is also the app icon. Before, the launcher showed the square icon with grey bars.
+
 ## 1.48.0
 
 - The launcher tile on the Fire TV home screen is new: it fills the whole box, as the big services' tiles do, with the mark and the wordmark large on a lit charcoal surface. The tile is a PNG now; the launcher had passed over the old one and shown the square icon with grey bars.

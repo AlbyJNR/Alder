@@ -5,9 +5,10 @@ Run from anywhere: python3 tools/cas_brand.py
 The mark is an aperture: a C-shaped ring with a dot, the C of CAS and a lens looking back. Monochrome, geometric,
 and legible at launcher size.
 
-- drawable-xhdpi/banner.png (320x180): the Fire TV / Android TV launcher tile. PNG, as Fire TV's launcher wants (a
-  WebP banner was passed over and the square icon shown with grey bars). The whole tile is the brand: a lit charcoal
-  surface with a warm glow behind the mark, the mark and the wordmark large across it, no border.
+- drawable-xhdpi/banner.png (320x180): the Fire TV / Android TV launcher tile, set as both android:banner and
+  android:icon (Fire TV's launcher draws a sideloaded app's tile from the icon, and showed the square one with grey
+  bars either side). The whole tile is the brand: a lit charcoal surface with a warm glow behind the mark, the mark
+  and the wordmark large across it, no border.
 - logo_transparent.png (512x512): the bare mark; the adaptive icon's foreground and the Watch Next mark.
 - drawable/ic_mark.xml: the same mark as a vector, for the wordmark on every screen (Screen.brand()).
 """

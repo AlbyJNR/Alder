@@ -394,7 +394,9 @@ enum class ImdbList(val title: String, val trailers: Boolean = false, val provid
     ON_NETFLIX("Popular on Netflix", provider = "netflix"), ON_PRIME("Popular on Prime Video", provider = "prime_video"),
     ON_DISNEY("Popular on Disney+", provider = "disneyplus"), ON_APPLE("Popular on Apple TV+", provider = "appletv"),
     ON_MAX("Popular on HBO Max", provider = "hbo_max"), ON_PEACOCK("Popular on Peacock", provider = "peacock", region = "US"),
-    TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV");
+    TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV"),
+    // Alan's rows for the Movies and TV pages (2026-11-07): family titles all year, Christmas titles in season.
+    FAMILY_MOVIES("Family films"), FAMILY_TV("Family TV"), CHRISTMAS_MOVIES("Christmas films"), CHRISTMAS_TV("Christmas TV");
 }
 
 internal const val IMDB_TITLE_FIELDS = "id titleText{text}originalTitleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}countriesOfOrigin{countries{text}}spokenLanguages{spokenLanguages{text}}"
@@ -424,6 +426,16 @@ internal fun imdbListQuery(list: ImdbList, today: String, region: String = "GB")
             "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{releaseDateConstraint:{releaseDateRange:{start:\"${month.atDay(1)}\",end:\"${month.atEndOfMonth()}\"}}," +
                 "titleTypeConstraint:{anyTitleTypeIds:[\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
         }
+        // Family: IMDb's Family genre, kept to what the US rates for everyone (G and PG; TV-Y to TV-PG), popular first.
+        ImdbList.FAMILY_MOVIES -> "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{genreConstraint:{allGenreIds:[\"Family\"]},titleTypeConstraint:{anyTitleTypeIds:[\"movie\"]}," +
+            "certificateConstraint:{anyRegionCertificateRatings:[{region:\"US\",rating:\"G\"},{region:\"US\",rating:\"PG\"}]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
+        ImdbList.FAMILY_TV -> "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{genreConstraint:{allGenreIds:[\"Family\"]},titleTypeConstraint:{anyTitleTypeIds:[\"tvSeries\",\"tvMiniSeries\"]}," +
+            "certificateConstraint:{anyRegionCertificateRatings:[{region:\"US\",rating:\"TV-Y\"},{region:\"US\",rating:\"TV-Y7\"},{region:\"US\",rating:\"TV-G\"},{region:\"US\",rating:\"TV-PG\"}]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
+        // Christmas: what IMDb's keywords call a Christmas film (for TV, a Christmas special too), no horror, popular first.
+        ImdbList.CHRISTMAS_MOVIES -> "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{keywordConstraint:{anyKeywords:[\"christmas-movie\"]},genreConstraint:{excludeGenreIds:[\"Horror\"]}," +
+            "titleTypeConstraint:{anyTitleTypeIds:[\"movie\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
+        ImdbList.CHRISTMAS_TV -> "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{keywordConstraint:{anyKeywords:[\"christmas-movie\",\"christmas-special\"]},genreConstraint:{excludeGenreIds:[\"Horror\"]}," +
+            "titleTypeConstraint:{anyTitleTypeIds:[\"tvSeries\",\"tvMiniSeries\",\"tvMovie\",\"tvSpecial\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
         // What people are watching on the service in the TV's country (the country rides in a header): titles it
         // streams on the subscription, not its rentals, popularity first.
         ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK ->
@@ -453,6 +465,36 @@ internal fun imdbList(list: ImdbList, today: String, country: String): List<Imdb
 /** Last time's list from disk, or null; no network. */
 internal fun savedImdbList(list: ImdbList, today: String, country: String): List<ImdbPick>? =
     Http.savedAnswer("https://api.graphql.imdb.com/", imdbListQuery(list, today, list.region ?: country))?.let { runCatching { parseImdbList(list, JSONObject(it)) }.getOrNull() }
+
+/** Whether [today] (ISO) is in the Christmas season, when the Christmas rows show: November and December, to Twelfth Night. */
+internal fun christmasSeason(today: String): Boolean {
+    val d = java.time.LocalDate.parse(today)
+    return d.monthValue >= 11 || (d.monthValue == 1 && d.dayOfMonth <= 6)
+}
+
+/** IMDb's "more like this" for the title [id], as imdb.com asks it; the country in the name keeps one copy per country on disk. */
+internal fun imdbSimilarQuery(id: String, region: String = "GB"): String =
+    JSONObject().put("query", "query CAS_$region{title(id:\"$id\"){moreLikeThisTitles(first:$IMDB_LIST_SIZE){edges{node{$IMDB_TITLE_FIELDS}}}}}").toString()
+
+/** The titles IMDb finds most like [id] ("Because you watched"): an hour in memory, kept on disk for the next cold start. Blocks. */
+internal fun imdbSimilar(id: String, country: String): List<ImdbPick> {
+    cachedImdbSimilar(id, country)?.let { return it }
+    val raw = Http.post("https://api.graphql.imdb.com/", imdbSimilarQuery(id, country), keep = true, timeoutMs = 15_000,
+        headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to country))
+    return parseImdbSimilar(JSONObject(raw)).also { imdbListCache["similar/$id/$country"] = System.currentTimeMillis() to it }
+}
+
+/** The similar titles as fetched within the hour, or null. */
+internal fun cachedImdbSimilar(id: String, country: String): List<ImdbPick>? =
+    imdbListCache["similar/$id/$country"]?.takeIf { System.currentTimeMillis() - it.first < 3600_000L }?.second
+
+/** Last time's similar titles from disk, or null; no network. */
+internal fun savedImdbSimilar(id: String, country: String): List<ImdbPick>? =
+    Http.savedAnswer("https://api.graphql.imdb.com/", imdbSimilarQuery(id, country))?.let { runCatching { parseImdbSimilar(JSONObject(it)) }.getOrNull() }
+
+internal fun parseImdbSimilar(json: JSONObject): List<ImdbPick> =
+    json.optJSONObject("data")?.optJSONObject("title")?.optJSONObject("moreLikeThisTitles")?.optJSONArray("edges").objects()
+        .mapNotNull { e -> e.optJSONObject("node")?.let { imdbPick(it) } }.distinctBy { it.id }
 
 /** One IMDb title as a pick: [clip] its trailer when the list carries one, [rank] its place in a chart, [gross] its weekend. */
 internal fun imdbPick(t: JSONObject, clip: JSONObject? = null, rank: Int? = null, gross: String? = null): ImdbPick? {
@@ -496,7 +538,8 @@ internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
             .mapIndexedNotNull { i, e -> e.optJSONObject("node")?.let { title(it, null, e.optInt("currentRank", 0).takeIf { r -> r > 0 } ?: (i + 1)) } }
         ImdbList.BOX_OFFICE -> data.optJSONObject("boxOfficeWeekendChart")?.optJSONArray("entries").objects()
             .mapIndexedNotNull { i, e -> e.optJSONObject("title")?.let { title(it, null, i + 1, e.optJSONObject("weekendGross")?.optJSONObject("total")?.let(::money)?.let { "$it weekend" }) } }
-        ImdbList.NEW_SERIES, ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK -> searched()
+        ImdbList.NEW_SERIES, ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK,
+        ImdbList.FAMILY_MOVIES, ImdbList.FAMILY_TV, ImdbList.CHRISTMAS_MOVIES, ImdbList.CHRISTMAS_TV -> searched()
     }.distinctBy { it.id }
 }
 

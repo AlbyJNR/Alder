@@ -29,6 +29,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
@@ -171,7 +172,15 @@ class PlayerActivity : Screen() {
             // A decoder that won't open (a Fire TV's first HEVC decoder is busy, or refuses the profile) gives way to the
             // TV's next one for the format before the source counts as failed.
             .setEnableDecoderFallback(true)
-        player = ExoPlayer.Builder(this, renderers).build()
+        // Buffering for streams over the internet: when the buffer falls under half a minute the player reads ahead
+        // again, up to a minute, so a link that slows for a moment plays on; and the last [BACK_BUFFER_MS] stay
+        // behind, so a short rewind replays from memory instead of asking the server again. Starts and rebuffers
+        // keep ExoPlayer's own thresholds. The size cap on the buffer is ExoPlayer's too, so a 4K stream on a
+        // small Fire TV Stick holds what it held before.
+        val buffers = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(BUFFER_MIN_MS, BUFFER_MAX_MS, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS, DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
+            .setBackBuffer(BACK_BUFFER_MS, true).build()
+        player = ExoPlayer.Builder(this, renderers).setLoadControl(buffers).build()
         val remembered = Settings.titleChoice(this, metaId)
         wantAudio = remembered?.audio ?: Settings.audioLanguage(this)
         // A choice made for this title while watching stands; else Settings: always, never, or (Netflix's way) only
@@ -1485,6 +1494,9 @@ class PlayerActivity : Screen() {
         const val ADDON_SUB = "addon-subtitle" // the id an addon subtitle file is attached under
         const val SUB_WAIT = 2_000L // ms the start waits for the addon's subtitles
         const val RETRIES = 2
+        const val BUFFER_MIN_MS = 30_000 // read ahead again under this much buffered
+        const val BUFFER_MAX_MS = 60_000 // and stop at this much
+        const val BACK_BUFFER_MS = 20_000 // kept behind the position, for a short rewind without a new request
         const val RETRY_WAIT = 1_500L
         const val LONG_STALL = 20_000L // ms of buffering, mid-play, that counts as a source failing
         const val AUTO_SWITCHES = 2 // lighter files the player goes to by itself before it asks

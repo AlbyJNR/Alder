@@ -2,6 +2,7 @@ package dev.alder
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -290,6 +291,30 @@ class MetaTest {
         assertTrue(imdbListQuery(ImdbList.RECENT, "2026-11-05").contains("contentTypes:[TRAILER]"))
         assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05", "US").startsWith("{\"query\":\"query CAS_US{"))
         assertTrue(imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05", "US") != imdbListQuery(ImdbList.ON_NETFLIX, "2026-11-05", "GB"))
+        assertTrue(imdbListQuery(ImdbList.FAMILY_MOVIES, "2026-11-07").contains("allGenreIds:[\\\"Family\\\"]"))
+        assertTrue(imdbListQuery(ImdbList.FAMILY_TV, "2026-11-07").contains("rating:\\\"TV-PG\\\""))
+        assertTrue(imdbListQuery(ImdbList.CHRISTMAS_MOVIES, "2026-11-07").contains("anyKeywords:[\\\"christmas-movie\\\"]"))
+        assertTrue(imdbListQuery(ImdbList.CHRISTMAS_TV, "2026-11-07").contains("\\\"tvSpecial\\\""))
+    }
+
+    @Test fun christmasRowsShowFromNovemberToTwelfthNight() {
+        assertTrue(christmasSeason("2026-11-01"))
+        assertTrue(christmasSeason("2026-12-25"))
+        assertTrue(christmasSeason("2027-01-06"))
+        assertFalse(christmasSeason("2027-01-07"))
+        assertFalse(christmasSeason("2026-10-31"))
+    }
+
+    @Test fun imdbSimilarTitlesParse() {
+        val json = JSONObject("""{"data":{"title":{"id":"tt0944947","moreLikeThisTitles":{"edges":[
+            {"node":{"id":"tt11198330","titleText":{"text":"House of the Dragon"},"titleType":{"id":"tvSeries"},"releaseYear":{"year":2022}}},
+            {"node":{"id":"tt11198330","titleText":{"text":"House of the Dragon"},"titleType":{"id":"tvSeries"}}},
+            {"node":{"id":"tt4574334","titleText":{"text":"Stranger Things"},"titleType":{"id":"tvSeries"}}}
+        ]}}}}""")
+        val picks = parseImdbSimilar(json)
+        assertEquals(listOf("tt11198330", "tt4574334"), picks.map { it.id })
+        assertEquals("series", picks[0].type)
+        assertTrue(imdbSimilarQuery("tt0944947", "US").contains("title(id:\\\"tt0944947\\\"){moreLikeThisTitles(first:30)"))
     }
 
     @Test fun imdbTrailerEmptyWhenNoVideos() {

@@ -2441,20 +2441,26 @@ class MainActivity : Screen() {
     }
 
     /**
-     * The rows read from the web, by page and in order (Alan's, 2026-11-05): title to builder. Movies opens with
-     * RogerEbert.com's reviews and Rotten Tomatoes' Certified Fresh, then IMDb's box office and popular films.
-     * TV opens with Rotten Tomatoes' popular series, then IMDb's new series and popular TV. On both, the Top 250
-     * ([TAIL_ROWS]) closes the page under the add-ons' catalogs (Alan, 2026-11-06). Content has
-     * everything: the trailer lists (with this month's most anticipated), the reviews and Rotten Tomatoes, what's
-     * popular on each streaming service, the charts, and the two Top 250s at the bottom.
+     * The rows read from the web, by page and in order (Alan's, 2026-11-05 and 2026-11-07): title to builder. Movies
+     * opens with RogerEbert.com's reviews and Rotten Tomatoes' Certified Fresh, then in season IMDb's Christmas films,
+     * then "Because you watched" rows from the viewer's own library, IMDb's box office, family films and popular
+     * films. TV opens with Rotten Tomatoes' popular series, then Christmas TV in season, "Because you watched",
+     * IMDb's new series, family TV and popular TV. On both, the Top 250 ([TAIL_ROWS]) closes the page under the
+     * add-ons' catalogs (Alan, 2026-11-06). Content has everything: the trailer lists (with this month's most
+     * anticipated), the reviews and Rotten Tomatoes, what's popular on each streaming service, the charts, the
+     * family and seasonal rows, and the two Top 250s at the bottom.
      */
     private fun webRows(p: Page): List<Pair<String, (LinearLayout, Int) -> Unit>> {
         fun imdb(l: ImdbList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> imdbRow(s, l, g) }
         fun rt(l: RtList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> rtRow(s, l, g) }
         val ebert: Pair<String, (LinearLayout, Int) -> Unit> = EBERT_ROW to { s, g -> ebertRow(s, g) }
+        val because: Pair<String, (LinearLayout, Int) -> Unit> = BECAUSE_ROW to { s, g -> becauseRows(s, p, g) }
+        val season = christmasSeason(java.time.LocalDate.now().toString())
         return when (p) {
-            Page.MOVIES -> listOf(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
-            Page.SHOWS -> listOf(rt(RtList.POPULAR_TV), imdb(ImdbList.NEW_SERIES), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
+            Page.MOVIES -> listOfNotNull(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because,
+                imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
+            Page.SHOWS -> listOfNotNull(rt(RtList.POPULAR_TV), imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because,
+                imdb(ImdbList.NEW_SERIES), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
             // Foreign: what the chosen country has made best (its series, then its films), then its services in
             // its own order, each as ten films then ten series.
             // World: every country's highest rated TV, one row each, to scroll down through rather than hop chips.
@@ -2469,8 +2475,39 @@ class MainActivity : Screen() {
                 ebert + rt(RtList.FRESH_IN_CINEMAS) + rt(RtList.POPULAR_TV) +
                 listOf(ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK).map(::imdb) +
                 listOf(ImdbList.BOX_OFFICE, ImdbList.HOT_MOVIES, ImdbList.HOT_TV, ImdbList.NEW_SERIES).map(::imdb) +
+                (if (season) listOf(ImdbList.CHRISTMAS_MOVIES, ImdbList.CHRISTMAS_TV) else emptyList()).map(::imdb) +
+                listOf(ImdbList.FAMILY_MOVIES, ImdbList.FAMILY_TV).map(::imdb) +
                 listOf(ImdbList.TOP_MOVIES, ImdbList.TOP_TV).map(::imdb)
             else -> emptyList()
+        }
+    }
+
+    /**
+     * "Because you watched …" (Alan, 2026-11-07): for the last [BECAUSE_SEEDS] titles of the page's kind the viewer
+     * watched, the titles IMDb finds most like each, bar what is in the library already. One row each, in [slot].
+     * The seeds come from the library as this process has it (Home read it), else last time's from disk: no request.
+     * A row the viewer hid (by its own title) stays hidden; the next seed is not promoted in its place.
+     */
+    private fun becauseRows(slot: LinearLayout, p: Page, g: Int) {
+        val key = profile.authKey
+        val today = java.time.LocalDate.now().toString()
+        val kind = if (p == Page.SHOWS) "series" else "movie"
+        background({
+            val items = Stremio.knownLibrary(key) ?: Stremio.savedLibrary(key).orEmpty()
+            val have = items.filter { !it.optBoolean("removed") }.map { it.optString("_id") }.toSet()
+            val seeds = items.filter { it.optString("type") == kind && it.optString("_id").startsWith("tt") && it.optJSONObject("state")?.text("lastWatched") != null }
+                .sortedByDescending { it.optJSONObject("state")?.text("lastWatched") }.take(BECAUSE_SEEDS).map { it.optString("_id") to it.optString("name") }
+            seeds to have
+        }) { r ->
+            val (seeds, have) = r.getOrNull() ?: return@background
+            if (g != generation) return@background
+            seeds.forEach { (id, name) ->
+                val title = "$BECAUSE_ROW $name"
+                if ("${p.label}|$title" in hiddenSeen.orEmpty()) return@forEach
+                val sub = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also { slot.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+                fun items(picks: List<ImdbPick>?) = picks?.filter { it.id !in have && it.id != id }?.map { imdbItem(it, today) }
+                fetchedRow(sub, title, g, cached = { c -> items(cachedImdbSimilar(id, c)) }, saved = { c -> items(savedImdbSimilar(id, c)) }) { c -> items(imdbSimilar(id, c)).orEmpty() }
+            }
         }
     }
 
@@ -2487,7 +2524,7 @@ class MainActivity : Screen() {
             if (g != generation || picks.isEmpty() || ids == shownIds) return
             shownIds = ids
             clear()
-            val items = picks.map { imdbItem(it, list, today) }
+            val items = picks.map { imdbItem(it, today, list.trailers) }
             slot.addView(row(list.title, items.take(START), later(items)).view)
         }
         val country = imdbCountry()
@@ -2499,7 +2536,7 @@ class MainActivity : Screen() {
         }
     }
 
-    private fun imdbItem(pk: ImdbPick, list: ImdbList, today: String): Item {
+    private fun imdbItem(pk: ImdbPick, today: String, trailers: Boolean = false): Item {
         val note = when {
             pk.rank != null -> "No. ${pk.rank}"
             pk.date != null && pk.date > today -> shortDay(pk.date, today)?.let { if (pk.type == "movie") "In cinemas $it" else "From $it" }
@@ -2507,7 +2544,7 @@ class MainActivity : Screen() {
         }
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" }, pk.gross)
         return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { list.trailers }, released = pk.date)
+            null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { trailers }, released = pk.date)
     }
 
     /**
@@ -2802,6 +2839,8 @@ class MainActivity : Screen() {
 }
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
+private const val BECAUSE_ROW = "Because you watched" // the row's title opens with it; the seed title's name follows
+private const val BECAUSE_SEEDS = 2 // how many of the viewer's last-watched titles get a "Because you watched" row
 private val RT_METERS = Regex("[CA]\\d+%.*")
 private val TAIL_ROWS = setOf(ImdbList.TOP_MOVIES.title, ImdbList.TOP_TV.title) // web rows that close a page under its catalogs // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
 private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
