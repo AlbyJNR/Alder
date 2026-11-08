@@ -288,7 +288,11 @@ class MainActivity : Screen() {
         val rowTop = screenH - rowH - dp(SAFE_BOTTOM) // one row on screen; the track in the left margin says where you are
         browseRowTop = rowTop
         browseRowH = rowH
-        content = column(Gravity.START)
+        content = column(Gravity.START).apply {
+            // A row above the remote's row fills in later (rows answer in any order): the band stays on the remote's
+            // row, and what shows is measured again, now that the rows have their places.
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> holdRow() }
+        }
         scroller = object : ScrollView(this) {
             override fun requestChildFocus(child: View, focused: View) {
                 super.requestChildFocus(child, focused)
@@ -2683,7 +2687,8 @@ class MainActivity : Screen() {
     /** Shows the focused row in the row band and briefly reveals its position when changing rows. */
     private fun snapTo(focused: View) {
         val rowView = rows.firstOrNull { isInside(focused, it.view) }?.view ?: return
-        scroller.smoothScrollTo(0, offsetIn(rowView).coerceAtLeast(0))
+        snapY = offsetIn(rowView).coerceAtLeast(0)
+        scroller.smoothScrollTo(0, snapY)
         val order = rows.filter { it.view.isAttachedToWindow }.map { it.view }.sortedBy { offsetIn(it) }
         val n = order.size
         val at = order.indexOf(rowView).coerceAtLeast(0)
@@ -2696,6 +2701,25 @@ class MainActivity : Screen() {
             track.animate().alpha(if (n > 1 && mode == Mode.BROWSE && page == Page.LIVE) 1f else 0f).setDuration(200).start()
             main.postDelayed(hideTrack, 1200)
         }
+    }
+
+    private var snapY = -1 // where snapTo last sent the band: a row that is elsewhere after a layout was pushed
+
+    /**
+     * After a layout of the page: a row above the remote's row filled in and pushed it down out of the one-row band
+     * (Alan's photo, 2026-11-08: a title above an empty band). The band jumps back onto the remote's row, where
+     * snapTo put it, and the rows are measured again for what shows; the band had measured the row that slid in
+     * before it had a height, and left it invisible. A smooth scroll still on its way is left alone.
+     */
+    private fun holdRow() {
+        if (mode != Mode.BROWSE) return
+        val focused = currentFocus?.takeIf { isInside(it, scroller) }
+        val rowView = focused?.let { f -> rows.firstOrNull { isInside(f, it.view) }?.view }
+        if (rowView != null) {
+            val y = offsetIn(rowView).coerceAtLeast(0)
+            if (y != snapY) { snapY = y; scroller.scrollTo(0, y) }
+        }
+        updateImages()
     }
 
     // ---------- memory: pictures only near the screen ----------

@@ -13,6 +13,10 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.49.1
+
+- Home, TV, Movies: when a row above the row you are on arrives late, the row you are on stays in view. Before, it moved down out of the screen, and the row that arrived did not show. The screen then showed a title above an empty band.
+
 ## 1.49.0
 
 - Movies and TV: a **Because you watched** row for each of the two titles you watched last, with the titles IMDb finds most like it. Titles already in your library do not show.
