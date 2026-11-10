@@ -13,6 +13,14 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.57.0
+
+- Select the name of an actor, a director or a writer: CAS opens a page for that person, with the films and the TV they made. Before, CAS did a search for the name.
+- Home: a **Top 10 today** row shows the 10 most popular films and series, with numbers.
+- Settings › Profile › **Text size**: set it to Large to make all text bigger for the profile.
+- Episodes: a season with more than 40 episodes has a **Go to…** key. Select it to go to a group of episodes.
+- Large titles use the display cut of the font, with tighter letters.
+
 ## 1.56.0
 
 - The IMDb rating shows behind a star. Before, it showed behind the letters IMDb.

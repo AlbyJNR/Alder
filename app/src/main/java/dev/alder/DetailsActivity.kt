@@ -376,7 +376,7 @@ class DetailsActivity : Screen() {
         contentDescription = "Films and shows with $person"
         rowFocus(6, rest = { null }) { has -> setTextColor(if (has) TEXT else TEXT_2) }
         if (Profiles.active(this@DetailsActivity)?.kids == true) isFocusable = false // a Kids profile stays on its own titles
-        else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("query", person)) }
+        else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("person", person)) }
         // Hugs its words, and starts them at the block's own margin (its padding is the focus rim's room).
         layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginStart = -dp(8) }
     }
@@ -773,6 +773,14 @@ class DetailsActivity : Screen() {
                 })
             }
         }
+        // A very long season (a soap, an anime): one chip jumps to a stretch of it, with no scroll of hundreds of rows.
+        val inSeason = videos.count { it.season == selectedSeason }
+        if (inSeason > LONG_SEASON) seasonStrip.addView(chip("Go to…").apply {
+            setOnClickListener {
+                val starts = (0 until inSeason step EPISODE_JUMP).toList()
+                choose("Go to episode", starts.map { "${it + 1} to ${minOf(it + EPISODE_JUMP, inSeason)}" }) { i -> episodeRows.getOrNull(starts[i])?.requestFocus() }
+            }
+        }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         guideRows.removeAllViews()
         val currentId = playTarget(meta)?.first
         val tickers = mutableMapOf<String, () -> Unit>()
@@ -1133,6 +1141,8 @@ class DetailsActivity : Screen() {
     }
 
     private companion object {
+        const val LONG_SEASON = 40 // episodes in a season before Go to… shows
+        const val EPISODE_JUMP = 25 // episodes in each stretch it offers
         const val PANE_SHADE = 0.55f // the episode panel's frost, darkened to the mock's smoked glass
         const val GUIDE_ART = 0.6f // the film's brightness behind the episode guide
         const val STARTED = 60_000L // ms watched before a title counts as started

@@ -233,7 +233,9 @@ class SearchActivity : Screen() {
         // Opened with a name from a title's cast: the search runs at once, and the remote lands on the results.
         // Opened by the remote's search or microphone key: listening at once.
         if (intent.getBooleanExtra("voice", false)) main.postDelayed({ if (!isFinishing) speak() }, 300)
-        val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() }
+        // A name from a title's page: that person's own page, their films and series from IMDb (see [personPage]).
+        person = intent.getStringExtra("person")?.takeIf { it.isNotBlank() }
+        val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() } ?: person
         if (query != null) {
             input.setText(query)
             main.removeCallbacks(typed)
@@ -509,6 +511,24 @@ class SearchActivity : Screen() {
         background = glassOver(this, 14)
     }
 
+    private var person: String? = null // the name this screen was opened for; its page shows while the field still says it
+
+    /**
+     * A person's page: who they are (their work, beside the count) and what they made, films then series, the best
+     * known first, from IMDb. Typing anything else goes back to a plain search; so does a name IMDb doesn't know.
+     */
+    private fun personPage(name: String, token: Int, moveFocus: Boolean) {
+        val country = java.util.Locale.getDefault().country.ifEmpty { "GB" }
+        background({ imdbPersonPage(name, country) }) { r ->
+            if (token != request) return@background
+            val (who, picks) = r.getOrNull()?.takeIf { it.second.isNotEmpty() } ?: run { person = null; search(moveFocus); return@background }
+            val sections = linkedMapOf("Films with ${who.name}" to picks.filter { it.type == "movie" }.map { it.meta() },
+                "TV with ${who.name}" to picks.filter { it.type == "series" }.map { it.meta() }).filterValues { it.isNotEmpty() }
+            render(sections, name, moveFocus)
+            resultCount.text = (who.jobs.take(2) + "${picks.size} titles").joinToString("  ·  ")
+        }
+    }
+
     private fun search(moveFocus: Boolean) {
         val query = input.text.toString().trim()
         val token = ++request
@@ -522,6 +542,7 @@ class SearchActivity : Screen() {
         resultsScroll.scrollTo(0, 0)
         resultCount.text = ""
         results.addView(ring(), LinearLayout.LayoutParams(dp(28), dp(28)).apply { marginStart = dp(12) })
+        if (query.isNotEmpty() && query == person) return personPage(query, token, moveFocus)
         if (query.isEmpty()) {
             background({
                 val addons = Stremio.savedAddons(authKey.orEmpty()).orEmpty().ifEmpty { Stremio.addons(authKey.orEmpty()) }

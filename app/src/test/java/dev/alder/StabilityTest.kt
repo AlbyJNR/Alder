@@ -59,6 +59,20 @@ class StabilityTest {
         assertTrue(Library.continueWatching(listOf(notOut.put("type", "series"), last.put("type", "series"))).isEmpty())
     }
 
+    @Test fun aPersonAndTheirTitlesParse() {
+        val who = parseImdbPerson(org.json.JSONObject("""{"data":{"advancedNameSearch":{"edges":[{"node":{"name":{"id":"nm0000198","nameText":{"text":"Gary Oldman"},
+            "primaryImage":{"url":"https://x/a._V1_.jpg"},"primaryProfessions":[{"category":{"text":"Actor"}},{"category":{"text":"Producer"}}]}}}]}}}"""))!!
+        assertEquals("nm0000198", who.id)
+        assertEquals(listOf("Actor", "Producer"), who.jobs)
+        assertNull(parseImdbPerson(org.json.JSONObject("""{"data":{"advancedNameSearch":{"edges":[]}}}""")))
+        assertTrue(imdbPersonQuery("Gary \"O\" Oldman").contains("searchTerm"))
+        assertTrue(imdbPersonTitlesQuery("nm0000198").contains("anyNameIds:[\\\"nm0000198\\\"]"))
+        val titles = parseImdbPersonTitles(org.json.JSONObject("""{"data":{"advancedTitleSearch":{"edges":[{"node":{"title":{"id":"tt5875444","titleText":{"text":"Slow Horses"},"titleType":{"id":"tvSeries"}}}}]}}}"""))
+        assertEquals("series", titles[0].type)
+        assertEquals("Slow Horses", titles[0].meta().name)
+        assertEquals(3, titles[0].ranked(3).rank)
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

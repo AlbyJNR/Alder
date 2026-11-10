@@ -175,6 +175,15 @@ abstract class Screen : Activity() {
     /** The Stremio account of the profile in use. */
     protected val authKey: String? get() = Profiles.active(this)?.authKey
 
+    private var textScaleHere = 1f // the profile's text size as this screen was made with it
+
+    /** The profile's text size (Settings › Profile › Text size) on top of the TV's own, for every word on the screen. */
+    override fun attachBaseContext(base: Context) {
+        textScaleHere = runCatching { Settings.textScale(base) }.getOrDefault(1f)
+        super.attachBaseContext(if (textScaleHere == 1f) base else base.createConfigurationContext(
+            android.content.res.Configuration(base.resources.configuration).apply { fontScale *= textScaleHere }))
+    }
+
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         Images.trim(level)
@@ -235,6 +244,7 @@ abstract class Screen : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (Settings.textScale(this) != textScaleHere) return recreate() // changed in Settings: this screen is made again in the new size
         val release = pendingInstall ?: return
         pendingInstall = null
         if (Updates.canInstall(this)) installUpdate(release)
@@ -257,7 +267,10 @@ abstract class Screen : Activity() {
             text = value
             textSize = sp
             setTextColor(color)
-            typeface = if (serif || bold) fonts.semiBold else fonts.medium
+            // Large type takes Inter's display cut and sits a little tighter, as a display face does; text sizes keep the text cut.
+            val display = sp >= SERIF_NAME
+            typeface = if (serif || bold) (if (display) fonts.displaySemiBold else fonts.semiBold) else if (display) fonts.displayMedium else fonts.medium
+            if (sp >= SERIF_TITLE) letterSpacing = DISPLAY_TRACKING
             LEADING[sp]?.let { lead ->
                 val want = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, lead, resources.displayMetrics)
                 setLineSpacing(want - paint.getFontMetricsInt(null), 1f)
@@ -1363,7 +1376,11 @@ abstract class Screen : Activity() {
     private class Fonts(assets: android.content.res.AssetManager) {
         val medium: Typeface = Typeface.Builder(assets, "fonts/inter.ttf").setFontVariationSettings("'wght' 500").setWeight(500).build()
         val semiBold: Typeface = Typeface.Builder(assets, "fonts/inter.ttf").setFontVariationSettings("'wght' 600").setWeight(600).build()
-        // CAS uses Inter throughout, including display headings.
+        // Inter has an optical size axis, as Apple's San Francisco has its Text and Display: 14 is its text cut (the
+        // default), 32 its display cut, drawn for large sizes. San Francisco itself is licensed for Apple's own
+        // platforms only, so it cannot be in CAS; Inter is the open face made to the same model.
+        val displayMedium: Typeface = Typeface.Builder(assets, "fonts/inter.ttf").setFontVariationSettings("'wght' 500, 'opsz' 32").setWeight(500).build()
+        val displaySemiBold: Typeface = Typeface.Builder(assets, "fonts/inter.ttf").setFontVariationSettings("'wght' 600, 'opsz' 32").setWeight(600).build()
     }
 
     companion object {
@@ -1432,6 +1449,7 @@ abstract class Screen : Activity() {
         const val DOT = "  ·  "
 
         const val WORDMARK = 22f // sp, "CAS" beside its mark
+        const val DISPLAY_TRACKING = -0.012f // em, on titles of 28 sp and up
         const val SERIF_HERO = 38f
         const val SERIF_TITLE = 28.5f
         const val SERIF_NAME = 19f

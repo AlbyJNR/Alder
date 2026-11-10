@@ -366,6 +366,45 @@ class ImdbPick(
     val languages: List<String> = emptyList(), // spoken, IMDb's names, the primary first ("Neapolitan", "Italian")
 )
 
+/** The pick numbered [n], for a row that counts down from one. */
+internal fun ImdbPick.ranked(n: Int) = ImdbPick(id, name, type, poster, year, plot, genres, rating, n, date, trailerId, still, seconds, gross, original, countries, languages)
+
+/** The pick as a meta add-on would describe it, for the screens that draw [Meta]s (a person's page in Search). */
+internal fun ImdbPick.meta() = Meta(JSONObject().put("id", id).put("type", type).put("name", name).put("poster", poster).put("releaseInfo", year)
+    .put("description", plot).put("imdbRating", rating).put("genres", JSONArray(genres)))
+
+/** A person as IMDb has them: who a name on a title's page is, for that person's own page. */
+class ImdbPerson(val id: String, val name: String, val photo: String?, val jobs: List<String>)
+
+internal fun imdbPersonQuery(name: String, region: String = "GB"): String = JSONObject().put("query",
+    "query CAS_$region{advancedNameSearch(first:1,constraints:{nameTextConstraint:{searchTerm:${JSONObject.quote(name)}}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{name{id nameText{text}primaryImage{url}primaryProfessions{category{text}}}}}}}").toString()
+
+internal fun parseImdbPerson(json: JSONObject): ImdbPerson? {
+    val n = json.optJSONObject("data")?.optJSONObject("advancedNameSearch")?.optJSONArray("edges").objects().firstOrNull()?.optJSONObject("node")?.optJSONObject("name") ?: return null
+    val id = n.text("id")?.takeIf { it.startsWith("nm") } ?: return null
+    return ImdbPerson(id, n.optJSONObject("nameText")?.text("text") ?: return null, n.optJSONObject("primaryImage")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX360_.jpg"),
+        n.optJSONArray("primaryProfessions").objects().mapNotNull { it.optJSONObject("category")?.text("text") })
+}
+
+/** The films and series [nameId] is credited on, the best known first: IMDb's own search by credited name. */
+internal fun imdbPersonTitlesQuery(nameId: String, region: String = "GB"): String = JSONObject().put("query",
+    "query CAS_$region{advancedTitleSearch(first:$IMDB_PERSON_TITLES,constraints:{creditedNameConstraint:{anyNameIds:[\"$nameId\"]},titleTypeConstraint:{anyTitleTypeIds:[\"movie\",\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}}").toString()
+
+internal fun parseImdbPersonTitles(json: JSONObject): List<ImdbPick> =
+    json.optJSONObject("data")?.optJSONObject("advancedTitleSearch")?.optJSONArray("edges").objects()
+        .mapNotNull { e -> e.optJSONObject("node")?.optJSONObject("title")?.let { imdbPick(it) } }.distinctBy { it.id }
+
+private fun imdbAsk(body: String, region: String) = JSONObject(Http.post("https://api.graphql.imdb.com/", body, keep = true, timeoutMs = 15_000,
+    headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized", "x-imdb-user-country" to region)))
+
+/** The person named [name] and what they made, or null when IMDb knows no one by it. Blocks. */
+internal fun imdbPersonPage(name: String, country: String): Pair<ImdbPerson, List<ImdbPick>>? {
+    val who = parseImdbPerson(imdbAsk(imdbPersonQuery(name, country), country)) ?: return null
+    return who to parseImdbPersonTitles(imdbAsk(imdbPersonTitlesQuery(who.id, country), country))
+}
+
+internal const val IMDB_PERSON_TITLES = 40
+
 /** The pick as JSON, for a finished row kept on disk; [imdbPickOf] reads it back. */
 internal fun ImdbPick.json(): JSONObject = JSONObject().put("id", id).put("name", name).put("type", type).put("poster", poster).put("year", year)
     .put("plot", plot).put("genres", JSONArray(genres)).put("rating", rating).put("rank", rank).put("date", date)
@@ -396,7 +435,8 @@ enum class ImdbList(val title: String, val trailers: Boolean = false, val provid
     ON_MAX("Popular on HBO Max", provider = "hbo_max"), ON_PEACOCK("Popular on Peacock", provider = "peacock", region = "US"),
     TOP_MOVIES("Top 250 films"), TOP_TV("Top 250 TV"), HOT_MOVIES("Most popular films"), HOT_TV("Most popular TV"),
     // Alan's rows for the Movies and TV pages (2026-11-07): family titles all year, Christmas titles in season.
-    FAMILY_MOVIES("Family films"), FAMILY_TV("Family TV"), CHRISTMAS_MOVIES("Christmas films"), CHRISTMAS_TV("Christmas TV");
+    FAMILY_MOVIES("Family films"), FAMILY_TV("Family TV"), CHRISTMAS_MOVIES("Christmas films"), CHRISTMAS_TV("Christmas TV"),
+    TOP_TEN("Top 10 today"); // Home's numbered row: the ten most popular films and series, together
 }
 
 internal const val IMDB_TITLE_FIELDS = "id titleText{text}originalTitleText{text}titleType{id}primaryImage{url}releaseYear{year}releaseDate{day month year}ratingsSummary{aggregateRating}plot{plotText{plainText}}genres{genres{text}}countriesOfOrigin{countries{text}}spokenLanguages{spokenLanguages{text}}"
@@ -426,6 +466,7 @@ internal fun imdbListQuery(list: ImdbList, today: String, region: String = "GB")
             "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{releaseDateConstraint:{releaseDateRange:{start:\"${month.atDay(1)}\",end:\"${month.atEndOfMonth()}\"}}," +
                 "titleTypeConstraint:{anyTitleTypeIds:[\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
         }
+        ImdbList.TOP_TEN -> "advancedTitleSearch(first:10,constraints:{titleTypeConstraint:{anyTitleTypeIds:[\"movie\",\"tvSeries\",\"tvMiniSeries\"]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
         // Family: IMDb's Family genre, kept to what the US rates for everyone (G and PG; TV-Y to TV-PG), popular first.
         ImdbList.FAMILY_MOVIES -> "advancedTitleSearch(first:$IMDB_LIST_SIZE,constraints:{genreConstraint:{allGenreIds:[\"Family\"]},titleTypeConstraint:{anyTitleTypeIds:[\"movie\"]}," +
             "certificateConstraint:{anyRegionCertificateRatings:[{region:\"US\",rating:\"G\"},{region:\"US\",rating:\"PG\"}]}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{title{$IMDB_TITLE_FIELDS}}}}"
@@ -540,6 +581,7 @@ internal fun parseImdbList(list: ImdbList, json: JSONObject): List<ImdbPick> {
             .mapIndexedNotNull { i, e -> e.optJSONObject("title")?.let { title(it, null, i + 1, e.optJSONObject("weekendGross")?.optJSONObject("total")?.let(::money)?.let { "$it weekend" }) } }
         ImdbList.NEW_SERIES, ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK,
         ImdbList.FAMILY_MOVIES, ImdbList.FAMILY_TV, ImdbList.CHRISTMAS_MOVIES, ImdbList.CHRISTMAS_TV -> searched()
+        ImdbList.TOP_TEN -> searched().mapIndexed { i, p -> p.ranked(i + 1) }
     }.distinctBy { it.id }
 }
 

@@ -42,6 +42,10 @@ object Settings {
      * Home, TV, Movies and Search, short pages, a handful of settings. On: every page, every row, every setting.
      */
     fun everything(c: Context) = prefs(c).getBoolean(profileKey(c, "everything"), false)
+    /** The profile's text size, a multiple of the TV's own: 1 standard, [LARGE_TEXT] large. */
+    fun textScale(c: Context) = prefs(c).getFloat(profileKey(c, "textScale"), 1f)
+    fun setTextScale(c: Context, scale: Float) = prefs(c).edit().putFloat(profileKey(c, "textScale"), scale).apply()
+    const val LARGE_TEXT = 1.15f
     fun setEverything(c: Context, on: Boolean) = prefs(c).edit().putBoolean(profileKey(c, "everything"), on).apply()
     /** The Foreign page's country, by ISO code (JW_COUNTRIES); the last one chosen on its chips. */
     fun foreignCountry(c: Context): String = prefs(c).getString("foreignCountry", null) ?: "ALL"
@@ -522,6 +526,12 @@ class SettingsActivity : Screen() {
                     actionRow("Show everything", if (on) "On" else "Off",
                         "Off: Home, TV, Movies and Search, with short pages and few settings. On: every page, every row and every setting.") {
                         Settings.setEverything(this, !on)
+                        recreate()
+                    }
+                }
+                (Settings.textScale(this) > 1f).let { large ->
+                    actionRow("Text size", if (large) "Large" else "Standard", "Large makes every word in CAS bigger, for this profile.") {
+                        Settings.setTextScale(this, if (large) 1f else Settings.LARGE_TEXT)
                         recreate()
                     }
                 }

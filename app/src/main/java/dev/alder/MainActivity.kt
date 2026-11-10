@@ -1410,7 +1410,7 @@ class MainActivity : Screen() {
             // under them: the catalogs' slots go in between now, so the page's order is fixed before any row fills.
             var sectionSlots = emptyList<LinearLayout>()
             val catalogSlots = { sectionSlots = sections.map { slot() } }
-            if (p.isCatalog && !profile.kids) {
+            if ((p.isCatalog || p == Page.HOME) && !profile.kids) {
                 val web = webRows(p).filter { "${p.label}|${it.first}" !in hiddenSeen.orEmpty() }
                 val (last, first) = web.partition { it.first in TAIL_ROWS }
                 buildWebRows(first, g, tail = last, between = catalogSlots)
@@ -2565,6 +2565,8 @@ class MainActivity : Screen() {
         val because: Pair<String, (LinearLayout, Int) -> Unit> = BECAUSE_ROW to { s, g -> becauseRows(s, p, g) }
         val season = christmasSeason(java.time.LocalDate.now().toString())
         // The short CAS: no two rows that say the same thing (the box office and the reviews go; one "popular" each).
+        // Home has one row from the web, under the viewer's own: the ten most popular today, numbered.
+        if (p == Page.HOME) return listOf(imdb(ImdbList.TOP_TEN))
         if (simple) return when (p) {
             Page.MOVIES -> listOfNotNull(imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.TOP_MOVIES))
             Page.SHOWS -> listOfNotNull(imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because, rt(RtList.POPULAR_TV), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.TOP_TV))
@@ -2638,7 +2640,7 @@ class MainActivity : Screen() {
             if (g != generation || picks.isEmpty() || ids == shownIds) return
             shownIds = ids
             clear()
-            val items = picks.map { imdbItem(it, today, list.trailers) }
+            val items = picks.map { imdbItem(it, today, list.trailers, numbered = list == ImdbList.TOP_TEN) }
             slot.addView(row(list.title, items.take(START), later(items)).view)
         }
         val country = imdbCountry()
@@ -2650,7 +2652,7 @@ class MainActivity : Screen() {
         }
     }
 
-    private fun imdbItem(pk: ImdbPick, today: String, trailers: Boolean = false): Item {
+    private fun imdbItem(pk: ImdbPick, today: String, trailers: Boolean = false, numbered: Boolean = false): Item {
         val note = when {
             pk.rank != null -> "No. ${pk.rank}"
             pk.date != null && pk.date > today -> shortDay(pk.date, today)?.let { if (pk.type == "movie") "In cinemas $it" else "From $it" }
@@ -2658,7 +2660,8 @@ class MainActivity : Screen() {
         }
         val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" }, pk.gross)
         return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { trailers }, released = pk.date)
+            null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { trailers }, released = pk.date,
+            rank = pk.rank.takeIf { numbered }) // Top 10: the numeral on the card
     }
 
     /**
