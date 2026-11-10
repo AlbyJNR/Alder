@@ -36,6 +36,13 @@ object Settings {
     fun profileKey(c: Context, key: String) = "$key@${Profiles.active(c)?.id}"
     /** Settings › Title page: each extra on a title's page is on unless turned off. Keys: TITLE_* in SettingsActivity. */
     fun titlePage(c: Context, key: String) = prefs(c).getBoolean(key, true)
+
+    /**
+     * Whether this profile sees the whole of CAS. Off, the default (Alan, 2026-11-10: CAS is for his parents first):
+     * Home, TV, Movies and Search, short pages, a handful of settings. On: every page, every row, every setting.
+     */
+    fun everything(c: Context) = prefs(c).getBoolean(profileKey(c, "everything"), false)
+    fun setEverything(c: Context, on: Boolean) = prefs(c).edit().putBoolean(profileKey(c, "everything"), on).apply()
     /** The Foreign page's country, by ISO code (JW_COUNTRIES); the last one chosen on its chips. */
     fun foreignCountry(c: Context): String = prefs(c).getString("foreignCountry", null) ?: "ALL"
     /** Chosen: kept, and (a country, not the World) put first among the three most recent for the chips. */
@@ -291,7 +298,7 @@ class SettingsActivity : Screen() {
             setPadding(dp(7), dp(9), dp(7), dp(9))
             background = glassOver(this, 14)
         }
-        Group.entries.forEach { group ->
+        shownGroups().forEach { group ->
             if (group == Group.STORAGE) groups.addView(View(this).apply { setBackgroundColor(GLASS_EDGE) },
                 LinearLayout.LayoutParams(-1, dp(1)).apply { setMargins(dp(6), dp(8), dp(6), dp(8)) })
             addGroup(group)
@@ -324,7 +331,7 @@ class SettingsActivity : Screen() {
         window.setBackgroundDrawable(null)
         setContentView(root)
         profileName.text = Profiles.active(this)?.name?.let { "Profile " + it } ?: ""
-        showGroup(Group.STREAMS)
+        showGroup(shownGroups().first())
         groupViews[Group.STREAMS]?.post { groupViews[Group.STREAMS]?.requestFocus() }
     }
 
@@ -385,6 +392,9 @@ class SettingsActivity : Screen() {
         groupLabels[group] = label
         groups.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(1) })
     }
+
+    /** The groups this profile's Settings has: all of them with Show everything on, else the three a viewer needs. */
+    private fun shownGroups() = if (Settings.everything(this)) Group.entries.toList() else listOf(Group.SUBTITLES, Group.PROFILE, Group.ABOUT)
 
     private fun showGroup(group: Group) {
         if (selectedGroup == group && detailRows.childCount > 0) return
@@ -508,6 +518,13 @@ class SettingsActivity : Screen() {
                 }
             }
             Group.PROFILE -> {
+                Settings.everything(this).let { on ->
+                    actionRow("Show everything", if (on) "On" else "Off",
+                        "Off: Home, TV, Movies and Search, with short pages and few settings. On: every page, every row and every setting.") {
+                        Settings.setEverything(this, !on)
+                        recreate()
+                    }
+                }
                 // One row: switching and managing both open the picker, where Hold OK does the managing.
                 actionRow("Profiles", "", "Choose who is watching. Rename profiles, change PINs or add another person.") {
                     startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)

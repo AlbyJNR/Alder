@@ -54,6 +54,10 @@ class ProfilesActivity : Screen() {
             intent.getStringExtra("preview")?.let { url -> main.postDelayed({
                 showPreview("Preview test") { listOf(Stream("Test", "", url, emptyMap(), 0, null, null)) }
             }, 1500) }
+        // Debug builds only, and only on a TV with no profile yet: `--es testKey <Stremio auth key>` signs a test
+        // profile in with no phone, so CI can photograph the signed-in screens (cas-build.yml, screens).
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && Profiles.all(this).isEmpty())
+            intent.getStringExtra("testKey")?.takeIf { it.isNotBlank() }?.let { key -> return signedIn("Test", key, null) }
         val profiles = Profiles.all(this)
         // Home found this profile signed out: straight to its sign-in, the profile and its settings kept.
         val again = intent.getStringExtra("signIn")?.let { id -> profiles.firstOrNull { it.id == id } }

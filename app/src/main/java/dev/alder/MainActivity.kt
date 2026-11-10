@@ -493,6 +493,8 @@ class MainActivity : Screen() {
 
     override fun onResume() {
         super.onResume()
+        // Show everything was switched in Settings: the rail and the pages are built again for it.
+        if (everythingBuilt != null && everythingBuilt != Settings.everything(this)) return recreate()
         // Idle dim stays off (ponytail, 2026-10-26); the cinema screensaver is Settings › Picture & sound › Screensaver (CAS 1.6).
         restIdle()
         // A version downloaded overnight that Android wants a press for: one press, no download to wait on.
@@ -722,7 +724,8 @@ class MainActivity : Screen() {
             setOnClickListener { startActivity(Intent(this@MainActivity, SearchActivity::class.java)) }
         }.inNav()
         // A page opens as soon as the remote rests on its entry. OK on TV or Movies goes to its genres.
-        Page.entries.filter { it != Page.LIVE && (!profile.kids || it == Page.HOME) }.forEach { p ->
+        everythingBuilt = Settings.everything(this)
+        Page.entries.filter { it != Page.LIVE && (!profile.kids || it == Page.HOME) && (everythingBuilt == true || it == Page.HOME || it.isCatalog) }.forEach { p ->
             navItems[p] = entry(p.icon, p.label).apply {
                 setOnFocusChangeListener { _, has ->
                     styleNav()
@@ -744,6 +747,9 @@ class MainActivity : Screen() {
         return header
     }
 
+
+    private var everythingBuilt: Boolean? = null // Show everything as the rail and the pages were built with it
+    private val simple get() = everythingBuilt == false && !profile.kids // the short CAS: three pages, few rows
 
     private var pending = Page.HOME
     private var jump = false // OK on a page's name: go down into its rows once they're in
@@ -1109,8 +1115,9 @@ class MainActivity : Screen() {
         // Not said twice: Rotten Tomatoes' meters are on the RT badge, and a rank is the numeral on the card.
         val note = item.note?.takeUnless { RT_METERS.matches(it) || item.rank != null && it.startsWith("No. ") }
         // The genre is on every title's line, a show in progress too (Alan, 2026-11-10: it was only on the title's own page).
-        heroFactsBase = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() }, genre)
-            else listOfNotNull(item.original, note, year, genre, length, item.origin)).joinToString(DOT)
+        // The short CAS says three things at most: the age rating (showFacts), then the episode or the year, then the genre.
+        heroFactsBase = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() && !simple }, genre)
+            else listOfNotNull(item.original, note, year, genre, length.takeIf { !simple }, item.origin)).joinToString(DOT)
         showFacts(item)
         addedLine = item.addedAt?.let { "Added ${addedAgo(it)}" } ?: ""
         showScores(item)
@@ -1387,7 +1394,9 @@ class MainActivity : Screen() {
                 if (p == Page.HOME) homeEmptyNote = note
             }
             val genres = catalogGenres(catalogs.flatMap { it.genres })
+            // The short CAS keeps a page short: one catalogue row on Home, two on TV and Movies, under the web rows.
             val sections = sections(p, shelves).filterNot { "${p.label}|${it.first}" in hiddenSeen.orEmpty() }
+                .let { all -> if (simple) all.take(if (p == Page.HOME) SIMPLE_HOME_ROWS else SIMPLE_PAGE_ROWS) else all }
             val genreNames = (if (p.isCatalog) sections.take(nextCatalogSection(sections.size, 0)).map { it.first }.filter { name -> genres.any { it.equals(name, true) } }
                 else emptyList()).toMutableList()
             val genreResults = mutableMapOf<String, Boolean>()
@@ -2527,6 +2536,12 @@ class MainActivity : Screen() {
         val ebert: Pair<String, (LinearLayout, Int) -> Unit> = EBERT_ROW to { s, g -> ebertRow(s, g) }
         val because: Pair<String, (LinearLayout, Int) -> Unit> = BECAUSE_ROW to { s, g -> becauseRows(s, p, g) }
         val season = christmasSeason(java.time.LocalDate.now().toString())
+        // The short CAS: no two rows that say the same thing (the box office and the reviews go; one "popular" each).
+        if (simple) return when (p) {
+            Page.MOVIES -> listOfNotNull(imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.TOP_MOVIES))
+            Page.SHOWS -> listOfNotNull(imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because, rt(RtList.POPULAR_TV), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.TOP_TV))
+            else -> emptyList()
+        }
         return when (p) {
             Page.MOVIES -> listOfNotNull(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because,
                 imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
@@ -2933,6 +2948,8 @@ class MainActivity : Screen() {
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
 private const val BECAUSE_ROW = "Because you watched" // the row's title opens with it; the seed title's name follows
+private const val SIMPLE_HOME_ROWS = 1 // catalogue rows on Home in the short CAS, under Continue and New episodes
+private const val SIMPLE_PAGE_ROWS = 2 // and on TV and Movies, under the web rows
 private const val BECAUSE_SEEDS = 1 // how many of the viewer's last-watched titles get a "Because you watched" row
 private val RT_METERS = Regex("[CA]\\d+%.*")
 private val TAIL_ROWS = setOf(ImdbList.TOP_MOVIES.title, ImdbList.TOP_TV.title) // web rows that close a page under its catalogs // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move

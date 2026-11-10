@@ -40,9 +40,14 @@ jobs:
           } > keystore.properties
           echo "signed=true" >> "$GITHUB_OUTPUT"
       - name: Lint, test and build
-        run: bash gradlew lintRelease testDebugUnitTest assembleRelease --no-daemon --console=plain
+        run: bash gradlew lintRelease testDebugUnitTest assembleRelease assembleDebug --no-daemon --console=plain
       - name: Name the APK
         run: mkdir -p dist && cp app/build/outputs/apk/release/app-release.apk dist/CAS.apk
+      - uses: actions/upload-artifact@v5
+        with:
+          name: CAS-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
       - uses: actions/upload-artifact@v5
         with:
           name: CAS-apk
@@ -98,6 +103,50 @@ jobs:
           path: |
             smoke.png
             logcat.txt
+          if-no-files-found: ignore
+
+  # The signed-in screens, photographed: the debug build on a TV emulator, signed in to a throwaway Stremio account
+  # (repository secrets CAS_TEST_EMAIL and CAS_TEST_PASSWORD; never a real account, the pictures are build artifacts).
+  # Walks Home, the rail, TV, Movies and a title page, and fails on a crash. Without the secrets it does nothing.
+  # It does not hold up publishing: it is how a layout fault is seen before it is on a TV.
+  screens:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CAS_TEST_EMAIL: ${{ secrets.CAS_TEST_EMAIL }}
+      CAS_TEST_PASSWORD: ${{ secrets.CAS_TEST_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: have
+        run: if [ -n "$CAS_TEST_EMAIL" ] && [ -n "$CAS_TEST_PASSWORD" ]; then echo "account=true" >> "$GITHUB_OUTPUT"; else echo "No test account in secrets: skipped."; fi
+      - uses: actions/download-artifact@v5
+        if: steps.have.outputs.account == 'true'
+        with:
+          name: CAS-debug-apk
+          path: dist
+      - name: Enable KVM
+        if: steps.have.outputs.account == 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Photograph the signed-in screens
+        if: steps.have.outputs.account == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          disable-animations: false
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          script: bash tools/ci_screens.sh dist/app-debug.apk
+      - uses: actions/upload-artifact@v5
+        if: always() && steps.have.outputs.account == 'true'
+        with:
+          name: CAS-screens
+          path: screens/
           if-no-files-found: ignore
 
   publish:

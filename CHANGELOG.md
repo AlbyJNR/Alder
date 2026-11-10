@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.54.0
+
+- CAS is short and simple for each profile: Home, TV, Movies and Search, with short pages and 3 groups of settings. To get every page, row and setting back, go to Settings › Profile and set **Show everything** to On.
+- Title page: the word **Play** or **Resume** shows beside the Play button.
+- Title page: select ↺ to start over or to remove the title from Continue Watching.
+
 ## 1.53.0
 
 - Home, TV, Movies: the line below the name shows the age rating and the genre of the title. A series in progress shows its genre too.

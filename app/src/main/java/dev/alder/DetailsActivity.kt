@@ -452,8 +452,11 @@ class DetailsActivity : Screen() {
             // Held OK: every source, to choose one by hand.
             setOnLongClickListener { (unaired ?: comingOut)?.let(::notAired) ?: openSources(target?.first ?: metaId, startOver = false, pick = true); true }
         }
+        // Start over, and the way off Continue Watching that was only behind a held OK on Home.
         val startOver = if (resumeAt > 0) iconButton("↺", "Start over") {
-            openSources(target?.first ?: metaId, startOver = true)
+            choose(m.name, listOf("Start over", "Remove from Continue Watching", "Cancel")) { i ->
+                when (i) { 0 -> openSources(target?.first ?: metaId, startOver = true); 1 -> removeFromContinue() }
+            }
         } else null
         infoButton = iconButton("ⓘ", "More information") { showInfo() }
         listButton = iconButton(if (Library.inList(item)) "✓" else "+", "My List") { toggleList() }.apply {
@@ -470,7 +473,7 @@ class DetailsActivity : Screen() {
                     else choose("Trailer unavailable", listOf("OK"), "No trailer was found for this title.") {}
                 }
             } else null
-        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW))
+        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW) && Settings.everything(this))
             glassButton("Preview") { if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) } else null
         // One line of controls, as the Apple TV app sets them: Play's white disc first, always (a title not out yet
         // keeps the same order, and Play says when it is out), the worded glass controls beside it, then the small
@@ -478,7 +481,10 @@ class DetailsActivity : Screen() {
         actionRow1 = LinearLayout(this).apply {
             clipChildren = false
             gravity = Gravity.CENTER_VERTICAL // the glass controls and the orbs sit on the disc's centre line
-            addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(14) })
+            // The disc says what it does in a word beside it, where the line has the room (no Preview on it).
+            val word = if (preview == null) text(if (resumeAt > 0) "Resume" else "Play", BODY, bold = true).onArt() else null
+            addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(if (word != null) 10 else 14) })
+            word?.let { addView(it, wrap().apply { marginEnd = dp(18) }) }
             listOfNotNull(trailer, preview).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
             listOfNotNull(startOver, listButton, infoButton).forEachIndexed { i, orb ->
                 addView(orb, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginStart = dp(if (i == 0) 6 else 10) })
@@ -528,6 +534,16 @@ class DetailsActivity : Screen() {
         val current = item?.optJSONObject("state")?.text("video_id")
         val video = videos.firstOrNull { it.id == current } ?: videos.firstOrNull { it.season > 0 } ?: videos.first()
         return video.id to video
+    }
+
+    /** Off Continue Watching, as held OK on Home does it: the resume point goes, the history and My List stay; back to where the viewer came from. */
+    private fun removeFromContinue() {
+        val entry = item ?: return
+        itemChangedHere = true
+        val offset = Library.hideFromContinueWatching(entry)
+        Settings.setHidden(this, Settings.hidden(this).put(metaId, JSONObject().put("name", meta?.name ?: name).put("timeOffset", offset)))
+        val snapshot = JSONObject(entry.toString())
+        background({ Stremio.saveLibrary(key, listOf(snapshot)) }) { finish() }
     }
 
     private fun toggleList() {
