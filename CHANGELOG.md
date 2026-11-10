@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.55.0
+
+- Hold OK on a title in a row: select **Add to My List**. Before, you opened the page of the title to add it.
+- Hold OK on a title in a row: select **Move row to top** to put that row first on the page.
+
 ## 1.54.0
 
 - CAS is short and simple for each profile: Home, TV, Movies and Search, with short pages and 3 groups of settings. To get every page, row and setting back, go to Settings › Profile and set **Show everything** to On.

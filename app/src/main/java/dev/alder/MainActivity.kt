@@ -1971,15 +1971,38 @@ class MainActivity : Screen() {
         val slotOf = rows.firstOrNull { r -> r.cards.any { it.item === item } }?.view?.parent as? View
         val moves = slotOf?.takeIf { it.parent === content && (it.tag as? String)?.startsWith("row:") == true }?.let { s ->
             val at = rowSlots().indexOf(s)
-            listOfNotNull(if (at > 0) "Move row up" to { moveRow(s, -1) } else null, if (at in 0 until rowSlots().lastIndex) "Move row down" to { moveRow(s, 1) } else null)
+            listOfNotNull(if (at > 1) "Move row to top" to { moveRow(s, -at) } else null,
+                if (at > 0) "Move row up" to { moveRow(s, -1) } else null, if (at in 0 until rowSlots().lastIndex) "Move row down" to { moveRow(s, 1) } else null)
         } ?: emptyList()
-        val own = listOwn + moves + when {
+        // My List from any row (Alan, 2026-11-10): before, a title went in only from its own page.
+        val saved = Library.inList((library + Stremio.knownLibrary(profile.authKey).orEmpty()).firstOrNull { it.optString("_id") == item.id })
+        val myList = if (page == Page.LIBRARY || profile.kids || !(item.type == "movie" || item.type == "series")) emptyList()
+            else listOf((if (saved) "Remove from My List" else "Add to My List") to { setInMyList(item, !saved) })
+        val own = myList + listOwn + moves + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
             else -> emptyList()
         } + hideRow
         listsMenu(Lists.Entry(item.id, item.type, item.name, item.poster), own, skip = inList?.id) { redrawLists() }
+    }
+
+    /** Held OK › Add to My List (or Remove): the title into the Stremio library, its watch history kept, and a word to say so. */
+    private fun setInMyList(item: Item, on: Boolean) {
+        val key = profile.authKey
+        val known = (library + Stremio.knownLibrary(key).orEmpty()).firstOrNull { it.optString("_id") == item.id }
+        val entry = known?.let { JSONObject(it.toString()) } ?: Library.newItem(item.id, item.type, item.name, item.poster)
+        Library.setInList(entry, on)
+        background({ Stremio.saveLibrary(key, listOf(entry)) }) { result ->
+            if (isFinishing) return@background
+            result.fold({
+                library = library.filterNot { it.optString("_id") == item.id } + entry
+                android.widget.Toast.makeText(this, if (on) "Added to My List" else "Removed from My List", android.widget.Toast.LENGTH_SHORT).show()
+            }) { error ->
+                forgetIfSessionGone(error)
+                choose("Couldn't save it", listOf("OK"), "Check the connection and try again.") { }
+            }
+        }
     }
 
     private fun libraryEdit(item: Item, selected: Int) {
@@ -2075,7 +2098,7 @@ class MainActivity : Screen() {
         val at = titles.indexOf(slotTitle(slot))
         val to = at + delta
         if (at < 0 || to !in titles.indices) return
-        titles[at] = titles[to].also { titles[to] = titles[at] }
+        titles.add(to, titles.removeAt(at)) // one step swaps with its neighbour; further (to the top) carries the row past the rest
         Settings.setRowOrder(this, page.label, titles)
         arrangeRows()
     }
