@@ -376,7 +376,7 @@ class DetailsActivity : Screen() {
         contentDescription = "Films and shows with $person"
         rowFocus(6, rest = { null }) { has -> setTextColor(if (has) TEXT else TEXT_2) }
         if (Profiles.active(this@DetailsActivity)?.kids == true) isFocusable = false // a Kids profile stays on its own titles
-        else setOnClickListener { startActivity(Intent(this@DetailsActivity, SearchActivity::class.java).putExtra("person", person)) }
+        else setOnClickListener { startActivity(Intent(this@DetailsActivity, PersonActivity::class.java).putExtra("name", person)) }
         // Hugs its words, and starts them at the block's own margin (its padding is the focus rim's room).
         layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginStart = -dp(8) }
     }

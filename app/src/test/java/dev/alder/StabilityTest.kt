@@ -73,6 +73,21 @@ class StabilityTest {
         assertEquals(3, titles[0].ranked(3).rank)
     }
 
+    @Test fun aFilmographyComesInPagesInTheOrderAsked() {
+        val newestTv = imdbFilmographyQuery("nm1", "GB", newest = true, kind = TV, after = "abc")
+        assertTrue(newestTv.contains("sortBy:RELEASE_DATE,sortOrder:DESC"))
+        assertTrue(newestTv.contains("after:\\\"abc\\\""))
+        assertFalse(newestTv.contains("\\\"movie\\\""))
+        assertTrue(imdbFilmographyQuery("nm1", "GB", newest = false, kind = ALL, after = null).contains("sortBy:POPULARITY"))
+        val page = parseFilmography(org.json.JSONObject("""{"data":{"advancedTitleSearch":{"total":233,"pageInfo":{"endCursor":"next","hasNextPage":true},
+            "edges":[{"node":{"title":{"id":"tt1","titleText":{"text":"A"},"titleType":{"id":"movie"}}}}]}}}"""))
+        assertEquals(233, page.total)
+        assertEquals("next", page.cursor)
+        assertNull(parseFilmography(org.json.JSONObject("""{"data":{"advancedTitleSearch":{"total":1,"pageInfo":{"endCursor":"x","hasNextPage":false},"edges":[]}}}""")).cursor)
+        assertEquals("21 March 1958", longDay("1958-03-21"))
+        assertEquals("1958", longDay("1958"))
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

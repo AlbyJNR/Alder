@@ -374,17 +374,60 @@ internal fun ImdbPick.meta() = Meta(JSONObject().put("id", id).put("type", type)
     .put("description", plot).put("imdbRating", rating).put("genres", JSONArray(genres)))
 
 /** A person as IMDb has them: who a name on a title's page is, for that person's own page. */
-class ImdbPerson(val id: String, val name: String, val photo: String?, val jobs: List<String>)
+class ImdbPerson(val id: String, val name: String, val photo: String?, val jobs: List<String>,
+    val bio: String? = null, val born: String? = null, val birthplace: String? = null)
+
+/** One page of a person's titles: [total] in all, [cursor] to ask for the next page with (null at the end). */
+class Filmography(val picks: List<ImdbPick>, val total: Int, val cursor: String?)
+
+internal const val ALL = 0
+internal const val FILMS = 1
+internal const val TV = 2
+
+/**
+ * A page of what [nameId] is credited on: [newest] first or the best known first, films, TV or both ([kind]),
+ * from [after] (the last page's cursor) on. IMDb's own search by credited name, so a long career comes in pages.
+ * Talk shows, news, game shows and reality TV are left out: a guest's chair is not their work.
+ */
+internal fun imdbFilmographyQuery(nameId: String, region: String, newest: Boolean, kind: Int, after: String?): String {
+    val types = when (kind) { FILMS -> "\"movie\""; TV -> "\"tvSeries\",\"tvMiniSeries\""; else -> "\"movie\",\"tvSeries\",\"tvMiniSeries\"" }
+    val sort = if (newest) "sortBy:RELEASE_DATE,sortOrder:DESC" else "sortBy:POPULARITY,sortOrder:ASC"
+    val from = after?.let { ",after:${JSONObject.quote(it)}" }.orEmpty()
+    return JSONObject().put("query", "query CAS_$region{advancedTitleSearch(first:$FILMOGRAPHY_PAGE$from,constraints:{creditedNameConstraint:{anyNameIds:[\"$nameId\"]}," +
+        "titleTypeConstraint:{anyTitleTypeIds:[$types]},genreConstraint:{excludeGenreIds:[\"Talk-Show\",\"News\",\"Game-Show\",\"Reality-TV\"]}},sort:{$sort}){total pageInfo{endCursor hasNextPage}edges{node{title{$IMDB_TITLE_FIELDS}}}}}").toString()
+}
+
+internal fun parseFilmography(json: JSONObject): Filmography {
+    val s = json.optJSONObject("data")?.optJSONObject("advancedTitleSearch")
+    val page = s?.optJSONObject("pageInfo")
+    return Filmography(parseImdbPersonTitles(json), s?.optInt("total") ?: 0, page?.text("endCursor")?.takeIf { page.optBoolean("hasNextPage") })
+}
+
+/** The person IMDb knows by [name], the best known of that name, or null. Blocks. */
+internal fun imdbPersonFind(name: String, country: String): ImdbPerson? = parseImdbPerson(imdbAsk(imdbPersonQuery(name, country), country))
+
+internal fun imdbFilmography(nameId: String, country: String, newest: Boolean, kind: Int, after: String?): Filmography =
+    parseFilmography(imdbAsk(imdbFilmographyQuery(nameId, country, newest, kind, after), country))
+
+internal const val FILMOGRAPHY_PAGE = 50
 
 internal fun imdbPersonQuery(name: String, region: String = "GB"): String = JSONObject().put("query",
-    "query CAS_$region{advancedNameSearch(first:1,constraints:{nameTextConstraint:{searchTerm:${JSONObject.quote(name)}}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{name{id nameText{text}primaryImage{url}primaryProfessions{category{text}}}}}}}").toString()
+    "query CAS_$region{advancedNameSearch(first:1,constraints:{nameTextConstraint:{searchTerm:${JSONObject.quote(name)}}},sort:{sortBy:POPULARITY,sortOrder:ASC}){edges{node{name{id nameText{text}primaryImage{url}primaryProfessions{category{text}}bio{text{plainText}}birthDate{date}birthLocation{text}}}}}}").toString()
 
 internal fun parseImdbPerson(json: JSONObject): ImdbPerson? {
     val n = json.optJSONObject("data")?.optJSONObject("advancedNameSearch")?.optJSONArray("edges").objects().firstOrNull()?.optJSONObject("node")?.optJSONObject("name") ?: return null
     val id = n.text("id")?.takeIf { it.startsWith("nm") } ?: return null
     return ImdbPerson(id, n.optJSONObject("nameText")?.text("text") ?: return null, n.optJSONObject("primaryImage")?.text("url")?.replace("._V1_.jpg", "._V1_QL80_UX360_.jpg"),
-        n.optJSONArray("primaryProfessions").objects().mapNotNull { it.optJSONObject("category")?.text("text") })
+        n.optJSONArray("primaryProfessions").objects().mapNotNull { it.optJSONObject("category")?.text("text") },
+        bio = n.optJSONObject("bio")?.optJSONObject("text")?.text("plainText")?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() },
+        born = n.optJSONObject("birthDate")?.text("date")?.let(::longDay),
+        birthplace = n.optJSONObject("birthLocation")?.text("text"))
 }
+
+/** "1958-03-21" as "21 March 1958"; a date IMDb gives only in part stays as it came. */
+internal fun longDay(iso: String): String = runCatching {
+    java.time.LocalDate.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.UK))
+}.getOrDefault(iso)
 
 /** The films and series [nameId] is credited on, the best known first: IMDb's own search by credited name. */
 internal fun imdbPersonTitlesQuery(nameId: String, region: String = "GB"): String = JSONObject().put("query",

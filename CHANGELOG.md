@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.58.0
+
+- The page of a person is new. The left side shows the photograph, the name, the work, the date and place of birth, and some lines about the person.
+- The page shows all the films and TV of the person as posters. More posters come when you go down.
+- Select **Best known** or **Newest** to set the order. Select **All**, **Films** or **TV** to set which titles show.
+
 ## 1.57.0
 
 - Select the name of an actor, a director or a writer: CAS opens a page for that person, with the films and the TV they made. Before, CAS did a search for the name.
