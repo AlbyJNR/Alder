@@ -172,6 +172,9 @@ internal fun nextSettingIndex(current: Int, size: Int, direction: Int): Int {
     return if (current < 0) if (direction < 0) size - 1 else 0 else (current + direction + size) % size
 }
 
+/** Whether a stream add-on's address carries a Real-Debrid key (Torrentio and its kin write "realdebrid=…" into it). */
+internal fun carriesRealDebrid(transportUrl: String) = transportUrl.lowercase().let { "realdebrid" in it || "real-debrid" in it }
+
 class SettingsActivity : Screen() {
     private class Choice(val key: String, val label: String, val hint: String, val values: List<Pair<Any, String>>, val perProfile: Boolean = false) {
         init { require(values.isNotEmpty() && values.all { it.first.javaClass == values[0].first.javaClass }) }
@@ -420,6 +423,31 @@ class SettingsActivity : Screen() {
                         val on = !Profiles.sharesStreams(this, me.id)
                         Profiles.setSharesStreams(this, me.id, on)
                         value.text = (if (on) "On" else "Off") + "  ›"
+                    }
+                }
+                // Real-Debrid has no sign-in of its own in CAS: the key lives in the address of a stream add-on on the
+                // Stremio account. Signing out is taking those add-ons off the account; the key is never shown.
+                Profiles.active(this)?.let { me ->
+                    var all: List<Addon>? = null
+                    var carriers: List<Addon> = emptyList()
+                    lateinit var value: TextView
+                    value = actionRow("Real-Debrid", "…", "Sign out of Real-Debrid on this profile. CAS removes the stream add-ons that carry your Real-Debrid key.") {
+                        val list = all ?: return@actionRow
+                        if (carriers.isEmpty()) return@actionRow choose("Real-Debrid", listOf("OK"),
+                            "No add-on on this profile shows a Real-Debrid key. An add-on that keeps its key hidden can be removed in Add-ons.") {}
+                        val names = carriers.joinToString(", ") { addonShortName(it.name) }
+                        choose("Sign out of Real-Debrid?", listOf("Cancel", "Sign out"),
+                            "This removes $names from this profile's Stremio account, on all its devices. Your Real-Debrid account stays as it is. To sign in again, add the add-on again.") { n ->
+                            if (n == 1) background({ Stremio.setAddons(me.authKey, list - carriers.toSet()) }) { r ->
+                                if (r.isSuccess) showGroup(Group.STREAMS)
+                                else choose("Couldn't sign out", listOf("OK"), "Stremio did not save the change. Check the TV's connection and try again.") {}
+                            }
+                        }
+                    }
+                    background({ Stremio.addons(me.authKey, refresh = true) }) { r ->
+                        all = r.getOrNull()
+                        carriers = all.orEmpty().filter { !it.locked && carriesRealDebrid(it.transportUrl) }
+                        value.text = (when { all == null -> "Unavailable"; carriers.isEmpty() -> "Not signed in"; else -> "Signed in" }) + "  ›"
                     }
                 }
                 Profiles.streamLenders(this).forEach { lender ->

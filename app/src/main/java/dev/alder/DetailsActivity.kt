@@ -46,6 +46,14 @@ internal fun airs(released: String?, now: String = Library.now(), word: String =
 }
 
 // A title stays in place over its art; episodes and related titles open over the same scene.
+/** The word before the episode on a series' page: "Continue" part-way through one, "Up next" past the first, none at the start or for a film. */
+internal fun whereLead(series: Boolean, started: Boolean, pastFirst: Boolean): String? = when {
+    !series -> null
+    started -> "Continue"
+    pastFirst -> "Up next"
+    else -> null
+}
+
 class DetailsActivity : Screen() {
     private val type by lazy { intent.getStringExtra("type") ?: "movie" }
     private val metaId by lazy { intent.getStringExtra("id")!! }
@@ -426,8 +434,15 @@ class DetailsActivity : Screen() {
         val comingOut = if (item == null || resumeAt == 0L) airs(m.released ?: listedRelease, word = if (type == "movie") "In cinemas" else "From") else null
         val where = listOfNotNull(episode?.let { "S${it.season} E${it.episode}" }, episode?.title?.takeIf { it.isNotBlank() }, remaining ?: unaired ?: comingOut).joinToString(DOT)
         val before = stack.childCount // the where-line and its bar, when they come, sit between the scores and the controls
-        if (where.isNotEmpty() && (resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text(where, SMALL, bold = true).onArt().apply {
+        // A series always says which episode Play plays (Alan, 2026-11-10: nothing on the page said where you were
+        // until an episode was part-watched): a warm word for why it is this one, then the episode.
+        val lead = whereLead(episode != null, resumeAt > 0, episode?.let { it.season > 1 || it.episode > 1 } == true)
+        if (where.isNotEmpty() && (episode != null || resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text("", SMALL, bold = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+            this.text = if (lead == null) where else android.text.SpannableString("${lead.uppercase()}   $where").apply {
+                setSpan(android.text.style.ForegroundColorSpan(TUNGSTEN), 0, lead.length, 0)
+                setSpan(android.text.style.RelativeSizeSpan(CAPS / SMALL), 0, lead.length, 0)
+            }
         }.marginTop(18))
         if (remaining != null) stack.addView(progressBar(resumeAt.toFloat() / duration), LinearLayout.LayoutParams(dp(240), dp(3)).apply { topMargin = dp(8) })
 
@@ -460,7 +475,6 @@ class DetailsActivity : Screen() {
         // One line of controls, as the Apple TV app sets them: Play's white disc first, always (a title not out yet
         // keeps the same order, and Play says when it is out), the worded glass controls beside it, then the small
         // round ones a step apart. The column is wide enough for all of them, so nothing is squeezed out of the line.
-        val lead = playButton
         actionRow1 = LinearLayout(this).apply {
             clipChildren = false
             gravity = Gravity.CENTER_VERTICAL // the glass controls and the orbs sit on the disc's centre line
@@ -471,7 +485,7 @@ class DetailsActivity : Screen() {
             }
         }
         stack.addView(actionRow1, wrap().apply { topMargin = dp(if (stack.childCount > before) 16 else 28) })
-        leadControl = lead
+        leadControl = playButton
     }
 
     private fun keyed(root: View, key: String): View? {
@@ -759,6 +773,11 @@ class DetailsActivity : Screen() {
             // otherwise; an episode not out yet says when, and sits back.
             tickers[video.id] = {
                 val ticked = video.id in Library.watched(item, videos)
+                // The episode Play plays: a warm play mark where its number was, its name in bold, and why.
+                val current = video.id == currentId && !ticked
+                number.text = if (current) "▶" else "%02d".format(video.episode)
+                number.setTextColor(if (current) TUNGSTEN else TEXT_3)
+                title.typeface = android.graphics.Typeface.create(title.typeface, if (current) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
                 val resumeAt = item?.let { Library.resumeAt(it, video.id) } ?: 0L
                 val duration = item?.optJSONObject("state")?.takeIf { it.text("video_id") == video.id }?.optLong("duration") ?: 0L
                 title.setTextColor(if (ticked) TEXT_2 else TEXT)
@@ -766,9 +785,10 @@ class DetailsActivity : Screen() {
                     ticked -> "✓"
                     unaired != null -> unaired
                     resumeAt > 0 && duration > resumeAt -> "${(duration - resumeAt) / 60_000} min left"
+                    current && (video.season > 1 || video.episode > 1) -> "Up next"
                     else -> meta?.runtime.orEmpty()
                 }
-                status.setTextColor(if (ticked) TUNGSTEN else TEXT_2)
+                status.setTextColor(if (ticked || current) TUNGSTEN else TEXT_2)
                 status.visibility = if (status.text.isEmpty()) View.GONE else View.VISIBLE
                 row.alpha = if (unaired != null && !ticked) AIRS_ALPHA else 1f
             }

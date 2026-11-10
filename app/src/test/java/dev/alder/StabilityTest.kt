@@ -25,6 +25,19 @@ class StabilityTest {
         assertEquals(0f to 0f, trimShares(80))
     }
 
+    @Test fun seriesPageSaysWhichEpisodeAndWhy() {
+        assertEquals("Continue", whereLead(series = true, started = true, pastFirst = true))
+        assertEquals("Up next", whereLead(series = true, started = false, pastFirst = true))
+        assertNull(whereLead(series = true, started = false, pastFirst = false))
+        assertNull(whereLead(series = false, started = true, pastFirst = false))
+    }
+
+    @Test fun realDebridAddonsAreKnownByTheirAddress() {
+        assertTrue(carriesRealDebrid("https://torrentio.strem.fun/sort=qualitysize|realdebrid=XXXX/manifest.json"))
+        assertTrue(carriesRealDebrid("https://example.org/Real-Debrid/abc/manifest.json"))
+        assertFalse(carriesRealDebrid("https://v3-cinemeta.strem.io/manifest.json"))
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

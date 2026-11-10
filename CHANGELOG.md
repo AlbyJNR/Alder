@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.51.0
+
+- Title page of a series: the page always shows the episode that Play starts. **Continue** shows for an episode you started. **Up next** shows for the next episode.
+- Episodes: the episode that Play starts has a play mark and a bold name.
+- Settings › Streams › **Real-Debrid**: select it to sign out. CAS removes the stream add-ons that hold your Real-Debrid key from the Stremio account of the profile.
+
 ## 1.50.1
 
 - The open rail is as wide as its longest name. Before, it went across the full screen.
