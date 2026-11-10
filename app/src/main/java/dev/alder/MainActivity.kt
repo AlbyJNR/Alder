@@ -698,14 +698,15 @@ class MainActivity : Screen() {
         // The profile: your initial in a small disc. OK opens the small menu (switch profile, settings).
         profileEntry = FrameLayout(this).apply {
             isFocusable = true
-            contentDescription = "Profile: ${profile.name}"
+            contentDescription = if (profile.kids) "Profile: ${profile.name}" else "Settings"
             // The same disc as the avatars on Settings and Search: 30 dp, the initial in BODY bold.
             profileAvatar = text(profile.name.take(1).uppercase(), BODY, bold = true, color = TUNGSTEN).apply {
                 gravity = Gravity.CENTER
                 background = rounded(0x33FFFFFF, 15)
             }
             addView(profileAvatar, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp((RAIL_ICON - 30) / 2) })
-            railNames[this] = railName(profile.name).also { addView(it, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL).apply { leftMargin = dp(RAIL_ICON) }) }
+            // Named for what OK opens, not for who is watching: the initial in the disc already says who (Alan, 2026-11-10).
+            railNames[this] = railName(if (profile.kids) profile.name else "Settings").also { addView(it, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL).apply { leftMargin = dp(RAIL_ICON) }) }
             setOnFocusChangeListener { _, _ -> styleNav() }
             setOnClickListener { profileMenu() }
         }.inNav()
@@ -1035,9 +1036,26 @@ class MainActivity : Screen() {
     }
 
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
+    private var heroFactsBase = "" // the facts line without the age rating
+    private val heroCerts = mutableMapOf<String, String?>() // age ratings looked up for the title block; null: asked, none yet
+
+    /** The facts line: the age rating first when it is known ("15 · 2022 · Thriller · 4 seasons"), as the title's page has it. */
+    private fun showFacts(item: Item) {
+        val cert = (metas[item.id]?.certification ?: heroCerts[item.id])?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
+        heroFacts.text = listOfNotNull(cert, heroFactsBase.ifEmpty { null }).joinToString(DOT)
+    }
+
     private val scoresAhead = Runnable {
         val item = heroItem ?: return@Runnable
         if (mode != Mode.BROWSE || item.type == COUNTRY) return@Runnable
+        // The age rating, asked once the remote rests on a title, as the scores are.
+        if (Settings.titlePage(this, SettingsActivity.TITLE_RATING) && metas[item.id]?.certification == null && item.id.startsWith("tt") && item.id !in heroCerts) {
+            heroCerts[item.id] = null
+            background({ imdbCertificate(item.id.substringBefore(':')) }) { r ->
+                heroCerts[item.id] = r.getOrNull()
+                if (heroItem === item && mode == Mode.BROWSE) showFacts(item)
+            }
+        }
         val tomatoes = Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)
         val hasRt = item.facts.any { RT_METERS.matches(it) } || item.id in heroRtScores
         if (tomatoes && !hasRt) {
@@ -1090,8 +1108,10 @@ class MainActivity : Screen() {
         val code = item.left?.split(DOT)?.firstOrNull { it.startsWith("S") && " E" in it }
         // Not said twice: Rotten Tomatoes' meters are on the RT badge, and a rank is the numeral on the card.
         val note = item.note?.takeUnless { RT_METERS.matches(it) || item.rank != null && it.startsWith("No. ") }
-        heroFacts.text = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() })
+        // The genre is on every title's line, a show in progress too (Alan, 2026-11-10: it was only on the title's own page).
+        heroFactsBase = (if (code != null) listOfNotNull(when { item.newCount > 1 -> "${item.newCount} new episodes"; item.newCount == 1 -> "New episode"; else -> null }, code, episode(item)?.title?.takeIf { it.isNotEmpty() }, genre)
             else listOfNotNull(item.original, note, year, genre, length, item.origin)).joinToString(DOT)
+        showFacts(item)
         addedLine = item.addedAt?.let { "Added ${addedAgo(it)}" } ?: ""
         showScores(item)
         main.removeCallbacks(scoresAhead)

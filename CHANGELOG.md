@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.53.0
+
+- Home, TV, Movies: the line below the name shows the age rating and the genre of the title. A series in progress shows its genre too.
+- The rail: the first entry has the name **Settings**. Before, it showed the name of the profile.
+
 ## 1.52.0
 
 - Continue Watching: when you finish an episode and the next episode is not out, the series leaves the row. Before, it stayed in the row with nothing to play.
