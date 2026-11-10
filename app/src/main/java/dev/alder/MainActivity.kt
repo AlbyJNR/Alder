@@ -709,7 +709,13 @@ class MainActivity : Screen() {
             setOnFocusChangeListener { _, _ -> styleNav() }
             setOnClickListener { profileMenu() }
         }.inNav()
-        nav.addView(View(this).apply { setBackgroundColor(GLASS_EDGE) }, LinearLayout.LayoutParams(-1, dp(1)).apply { setMargins(dp(10), dp(8), dp(10), dp(8) - dp(NAV_GAP)) })
+        // The hairline takes the capsule's width and never sets it: a plain View asked "at most the screen" answers
+        // the whole screen, and the capsule (every entry as wide as the widest) then filled it (1.50.0's fault).
+        val hairline = object : View(this) {
+            override fun onMeasure(w: Int, h: Int) =
+                setMeasuredDimension(if (MeasureSpec.getMode(w) == MeasureSpec.EXACTLY) MeasureSpec.getSize(w) else 0, MeasureSpec.getSize(h))
+        }.apply { setBackgroundColor(GLASS_EDGE) }
+        nav.addView(hairline, LinearLayout.LayoutParams(-1, dp(1)).apply { setMargins(dp(10), dp(8), dp(10), dp(8) - dp(NAV_GAP)) })
 
         if (!profile.kids) search = entry(R.drawable.ic_search, "Search").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, SearchActivity::class.java)) }
@@ -780,6 +786,11 @@ class MainActivity : Screen() {
         android.transition.TransitionManager.beginDelayedTransition(nav, android.transition.AutoTransition().setDuration(RAIL_OPEN_MS))
         railNames.values.forEach { it.visibility = if (open) View.VISIBLE else View.GONE }
         nav.background = rounded(if (open) 0xF218191D.toInt() else 0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
+        // Open, the rail reaches over the left of the title block: a shade from the screen's edge puts the page
+        // behind the names, so they are read against dark, not against the title.
+        header.minimumWidth = if (open) dp(RAIL_SHADE_W) else 0
+        header.background = if (open) android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(0xF008090B.toInt(), 0xD908090B.toInt(), 0x0008090B)) else null
     }
 
     // ---------- the art, and what shows over it ----------
@@ -2841,6 +2852,7 @@ class MainActivity : Screen() {
         const val RAIL_X = 16 // dp from the screen's edge to the rail
         const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
         const val RAIL_OPEN_MS = 140L // the rail opening to its names, and closing
+        const val RAIL_SHADE_W = 300 // dp, the shade behind the open rail
         const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing

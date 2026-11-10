@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Movies: an old film camera, two reels on a box with the lens hood to the right (Alan, 2026-11-10). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path android:fillColor="#FFFFFFFF" android:pathData="M18,4l2,4h-3l-2,-4h-2l2,4h-3l-2,-4H8l2,4H7L5,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V4h-4z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M3.5,6.5a3.5,3.5 0 1,0 7,0a3.5,3.5 0 1,0 -7,0z M5.8,6.5a1.2,1.2 0 1,0 2.4,0a1.2,1.2 0 1,0 -2.4,0z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd"
+        android:pathData="M11.2,7.2a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0z M13,7.2a1,1 0 1,0 2,0a1,1 0 1,0 -2,0z" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M4.5,11h10.5c0.83,0 1.5,0.67 1.5,1.5v6c0,0.83 -0.67,1.5 -1.5,1.5H4.5C3.67,20 3,19.33 3,18.5v-6C3,11.67 3.67,11 4.5,11z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M17.3,14.3L21.5,12v7l-4.2,-2.3z" />
 </vector>

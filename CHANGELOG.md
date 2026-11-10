@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.50.1
+
+- The open rail is as wide as its longest name. Before, it went across the full screen.
+- A shade shows behind the open rail, so you can read the names.
+- Movies has a new icon: a film camera with 2 reels.
+
 ## 1.50.0
 
 - The rail shows the name of each entry when the remote is in it: your profile, Search, Home, TV, Movies, Content, Foreign, Library. It closes to the icons when the remote goes back to the rows.
