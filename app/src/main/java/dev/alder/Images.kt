@@ -14,6 +14,14 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 /** Posters and backgrounds: downloaded off the main thread, scaled down to the size shown, kept in memory. */
+/** What share of the poster store and of the art store stays at this onTrimMemory [level]; null: nothing to give up. */
+internal fun trimShares(level: Int): Pair<Float, Float>? = when {
+    level >= 40 -> 0f to 0f // TRIM_MEMORY_BACKGROUND and worse: next to go
+    level >= 20 -> 0.5f to 0f // TRIM_MEMORY_UI_HIDDEN: nothing of ours is on the screen
+    level >= 10 -> 0.5f to 0.5f // TRIM_MEMORY_RUNNING_LOW, RUNNING_CRITICAL: on the screen, the device short
+    else -> null
+}
+
 object Images {
     // Hardware bitmaps live in graphics memory, not the Java heap; the heap limit (192 MB on the test TV) only scales
     // the budget to the device, so switching pages shows them from memory. Full-screen art (8 MB a picture at 1080p) has a store of its own: sharing one, a few arts pushed out every poster,
@@ -25,6 +33,18 @@ object Images {
     private val cards = store(Runtime.getRuntime().maxMemory() / 4)
     private val screens = store(Runtime.getRuntime().maxMemory() / 6)
     private fun cache(widthPx: Int) = if (widthPx > 1000) screens else cards
+
+    /**
+     * Android asks for memory back ([level] is onTrimMemory's): in use but short, both stores give up half; with CAS
+     * off the screen, the full-screen art goes and the posters halve; in the background and under pressure, all of
+     * it goes. Pictures come back from the disk cache when they are next shown. Held to nothing, a 1 GB Fire TV
+     * Stick ended CAS in the background instead.
+     */
+    fun trim(level: Int) {
+        val (posters, art) = trimShares(level) ?: return
+        cards.trimToSize((cards.maxSize() * posters).toInt())
+        screens.trimToSize((screens.maxSize() * art).toInt())
+    }
     // Home asks only for posters near the screen and lets far ones go, so this pool and cache stay small.
     private val pool = newestFirst(8)
     // The picture on screen right now (the full-screen art, a logo) skips the queue of cards loading behind it.

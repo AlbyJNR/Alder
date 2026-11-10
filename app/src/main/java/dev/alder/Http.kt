@@ -17,6 +17,12 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * (Android's own client kept five per process), HTTP/2 where a host speaks it (one connection carries a title page's
  * burst of add-on requests side by side), and a disk cache for pictures. Every call blocks, so run them off the main thread.
  */
+internal val GUEST_HOSTS = setOf("api.graphql.imdb.com", "www.rottentomatoes.com", "www.rogerebert.com")
+internal const val REST_MS = 10 * 60_000L
+
+/** Whether an answer with this HTTP [code] means the site is refusing or broken (not that one page is missing). */
+internal fun restsAfter(code: Int) = code == 403 || code == 429 || code >= 500
+
 object Http {
     private const val DEFAULT_TIMEOUT = 20_000
     private const val PICTURE_CACHE = 250L * 1024 * 1024
@@ -57,8 +63,20 @@ object Http {
 
     fun bytes(url: String): ByteArray = request(url, null, cache = true).second
 
+    // The sites CAS reads without an agreement (IMDb's lists, Rotten Tomatoes, RogerEbert.com) can change or refuse
+    // at any time. One that fails is left alone for [REST_MS]: its rows keep last time's copy from disk, the page
+    // spends no more requests or seconds on it, and the site is not asked again and again.
+    private val resting = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     private fun text(url: String, json: String?, keep: Boolean, timeoutMs: Int = 20_000, headers: Map<String, String> = emptyMap()): String {
-        val (code, body) = request(url, json, cache = false, timeoutMs, headers)
+        val host = url.substringAfter("://").substringBefore('/')
+        val guest = host in GUEST_HOSTS
+        if (guest && (resting[host] ?: 0L) > System.currentTimeMillis()) throw IOException("$host is resting after a failure")
+        val (code, body) = try { request(url, json, cache = false, timeoutMs, headers) } catch (e: IOException) {
+            if (guest) resting[host] = System.currentTimeMillis() + REST_MS
+            throw e
+        }
+        if (guest && restsAfter(code)) resting[host] = System.currentTimeMillis() + REST_MS
         val text = String(body, Charsets.UTF_8)
         // Stremio's API answers errors as JSON (read by the caller); anything else failed is an error page: say the code.
         if (code >= 400 && !text.trimStart().startsWith("{")) throw IOException("HTTP $code")

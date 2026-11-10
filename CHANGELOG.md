@@ -13,6 +13,16 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.50.0
+
+- The rail shows the name of each entry when the remote is in it: your profile, Search, Home, TV, Movies, Content, Foreign, Library. It closes to the icons when the remote goes back to the rows.
+- Player: when no source plays, CAS says "This isn't playing right now." Select **Try again**, or select **Choose a source** to see every source. Before, a list of sources opened.
+- Player: CAS tries 5 sources before it stops. Before, it tried 3.
+- CAS gives memory back when the Fire TV asks for it. This helps a small Fire TV Stick keep CAS open in the background.
+- Home, TV, Movies: the row on the screen stays in its place when the remote is in the rail and a row above arrives late.
+- TV and Movies open with fewer requests. **Because you watched** shows one row, for the title you watched last.
+- When IMDb, Rotten Tomatoes or RogerEbert.com does not answer, CAS does not ask again for 10 minutes. The rows show the last copy.
+
 ## 1.49.1
 
 - Home, TV, Movies: when a row above the row you are on arrives late, the row you are on stays in view. Before, it moved down out of the screen, and the row that arrived did not show. The screen then showed a title above an empty band.

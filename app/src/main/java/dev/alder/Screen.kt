@@ -175,6 +175,11 @@ abstract class Screen : Activity() {
     /** The Stremio account of the profile in use. */
     protected val authKey: String? get() = Profiles.active(this)?.authKey
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        Images.trim(level)
+    }
+
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         Crash.install(this)

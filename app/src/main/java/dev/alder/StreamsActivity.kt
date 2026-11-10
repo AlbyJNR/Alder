@@ -523,7 +523,7 @@ class StreamsActivity : Screen() {
     }
 
     private companion object {
-        const val TRY = 3
+        const val TRY = 5
         const val QUALITY_W = 76 // dp, wide enough for "QUALITY" in spaced capitals
         const val ROW_H = 44 // dp a source row's least height; it grows with the TV's font size
         const val SD_DIM = 0.6f // a source below 720p at rest; focus by light dims it again, so lower read as gone

@@ -1,0 +1,27 @@
+name: CAS web sources check
+# Each week, and on request: asks IMDb every list CAS shows, with the app's own queries and parsers
+# (LiveSourcesCheck). IMDb can change without notice; a failure here says which row has stopped.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          log-accepted-android-sdk-licenses: false
+      - name: Ask IMDb every list
+        env:
+          CAS_LIVE: '1'
+        run: bash gradlew --console=plain testDebugUnitTest --tests 'dev.alder.LiveSourcesCheck' --rerun-tasks

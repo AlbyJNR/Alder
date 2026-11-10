@@ -81,6 +81,9 @@ internal fun shortRowName(name: String, genres: Collection<String> = emptyList()
     }
 }
 
+/** Where the row band must jump so the row it holds stays in it: the row's place when a layout moved it from [snapY], else null. */
+internal fun heldScroll(rowOffset: Int?, snapY: Int): Int? = rowOffset?.coerceAtLeast(0)?.takeIf { it != snapY }
+
 internal fun isAddonMessage(name: String) = name.contains("Authentication Required", ignoreCase = true)
 
 internal fun listRowCount(titles: Int, columns: Int) = (titles + columns - 1) / columns
@@ -650,21 +653,31 @@ class MainActivity : Screen() {
     private lateinit var profileEntry: View
     private lateinit var profileAvatar: TextView // the initial in its disc
     private val railIcons = mutableMapOf<View, ImageView>()
+    private val railNames = mutableMapOf<View, TextView>()
 
-    /** One rail entry: a glyph in a round cell, named for the screen reader. Focus lights the cell. */
+    /** An entry's name, beside its glyph: shown while the remote is in the rail (see [nameRail]). */
+    private fun railName(label: String) = text(label, SMALL, bold = true, color = TEXT_2).apply {
+        maxLines = 1
+        visibility = View.GONE
+        setPadding(dp(2), 0, dp(16), 0)
+    }
+
+    /** One rail entry: a glyph in a round cell with its name beside it. Focus lights the cell. */
     private fun entry(icon: Int, label: String): FrameLayout = FrameLayout(this).apply {
         isFocusable = true
         contentDescription = label
         val glyph = ImageView(context).apply { setImageResource(icon); setPadding(dp(9), dp(9), dp(9), dp(9)) }
         addView(glyph, FrameLayout.LayoutParams(dp(RAIL_ICON), dp(RAIL_ICON)))
         railIcons[this] = glyph
+        railNames[this] = railName(label).also { addView(it, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL).apply { leftMargin = dp(RAIL_ICON) }) }
         setOnFocusChangeListener { _, _ -> styleNav() }
     }
 
     /**
-     * Netflix's rail (2026), as Alan wants it: a slim column of glyphs on the left and nothing more. No panel of
-     * words opens; the glyphs say enough. Your profile first, then Search and the pages. The open page is lit, the
-     * focused entry white.
+     * The rail: a slim column of glyphs on the left while the remote is in the rows, so the art keeps the screen.
+     * When the remote comes into the rail it opens to show every entry's name beside its glyph (Alan, 2026-11-10:
+     * his parents read words, not pictures), and closes again as the remote leaves. Your profile first, then Search
+     * and the pages. The open page is lit, the focused entry white.
      */
     private fun header(): View {
         header = object : FrameLayout(this) {
@@ -680,7 +693,7 @@ class MainActivity : Screen() {
             setPadding(dp(6), dp(6), dp(6), dp(6))
             background = rounded(0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
         }
-        fun <V : View> V.inNav() = apply { nav.addView(this, LinearLayout.LayoutParams(-2, dp(RAIL_ICON)).apply { if (nav.childCount > 0) topMargin = dp(NAV_GAP) }) }
+        fun <V : View> V.inNav() = apply { nav.addView(this, LinearLayout.LayoutParams(-1, dp(RAIL_ICON)).apply { if (nav.childCount > 0) topMargin = dp(NAV_GAP) }) }
 
         // The profile: your initial in a small disc. OK opens the small menu (switch profile, settings).
         profileEntry = FrameLayout(this).apply {
@@ -691,7 +704,8 @@ class MainActivity : Screen() {
                 gravity = Gravity.CENTER
                 background = rounded(0x33FFFFFF, 15)
             }
-            addView(profileAvatar, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
+            addView(profileAvatar, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp((RAIL_ICON - 30) / 2) })
+            railNames[this] = railName(profile.name).also { addView(it, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL).apply { leftMargin = dp(RAIL_ICON) }) }
             setOnFocusChangeListener { _, _ -> styleNav() }
             setOnClickListener { profileMenu() }
         }.inNav()
@@ -750,8 +764,22 @@ class MainActivity : Screen() {
             }
             val colour = if (focused) BASE else if (current) TEXT else TEXT_2
             railIcons[item]?.setColorFilter(colour)
+            railNames[item]?.setTextColor(colour)
             if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) 0x1F000000 else 0x33FFFFFF, 15) }
         }
+        // After the focus has finished moving: while an entry is losing it, the rail still counts as focused.
+        main.removeCallbacks(nameRail)
+        main.post(nameRail)
+    }
+
+    /** The names show while the remote is in the rail, and the capsule darkens to carry them over the art. */
+    private val nameRail = Runnable {
+        if (!::nav.isInitialized) return@Runnable
+        val open = header.hasFocus()
+        if (railNames.values.all { (it.visibility == View.VISIBLE) == open }) return@Runnable
+        android.transition.TransitionManager.beginDelayedTransition(nav, android.transition.AutoTransition().setDuration(RAIL_OPEN_MS))
+        railNames.values.forEach { it.visibility = if (open) View.VISIBLE else View.GONE }
+        nav.background = rounded(if (open) 0xF218191D.toInt() else 0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
     }
 
     // ---------- the art, and what shows over it ----------
@@ -1186,6 +1214,8 @@ class MainActivity : Screen() {
         heroItem = null
         browseInfo.animate().alpha(0f).setDuration(150).start()
         scroller.scrollTo(0, 0)
+        snapY = -1
+        heldRow = null
         mode = Mode.BROWSE
         main.removeCallbacks(advance)
         scroller.visibility = View.VISIBLE
@@ -2487,7 +2517,7 @@ class MainActivity : Screen() {
     }
 
     /**
-     * "Because you watched …" (Alan, 2026-11-07): for the last [BECAUSE_SEEDS] titles of the page's kind the viewer
+     * "Because you watched …" (Alan, 2026-11-07): for the last title ([BECAUSE_SEEDS]) of the page's kind the viewer
      * watched, the titles IMDb finds most like each, bar what is in the library already. One row each, in [slot].
      * The seeds come from the library as this process has it (Home read it), else last time's from disk: no request.
      * A row the viewer hid (by its own title) stays hidden; the next seed is not promoted in its place.
@@ -2688,6 +2718,7 @@ class MainActivity : Screen() {
     private fun snapTo(focused: View) {
         val rowView = rows.firstOrNull { isInside(focused, it.view) }?.view ?: return
         snapY = offsetIn(rowView).coerceAtLeast(0)
+        heldRow = rowView
         scroller.smoothScrollTo(0, snapY)
         val order = rows.filter { it.view.isAttachedToWindow }.map { it.view }.sortedBy { offsetIn(it) }
         val n = order.size
@@ -2704,6 +2735,7 @@ class MainActivity : Screen() {
     }
 
     private var snapY = -1 // where snapTo last sent the band: a row that is elsewhere after a layout was pushed
+    private var heldRow: View? = null // the row snapTo last put in the band: held there while the remote is in the rail or the chips
 
     /**
      * After a layout of the page: a row above the remote's row filled in and pushed it down out of the one-row band
@@ -2714,11 +2746,9 @@ class MainActivity : Screen() {
     private fun holdRow() {
         if (mode != Mode.BROWSE) return
         val focused = currentFocus?.takeIf { isInside(it, scroller) }
-        val rowView = focused?.let { f -> rows.firstOrNull { isInside(f, it.view) }?.view }
-        if (rowView != null) {
-            val y = offsetIn(rowView).coerceAtLeast(0)
-            if (y != snapY) { snapY = y; scroller.scrollTo(0, y) }
-        }
+        // The remote's row; with the remote in the rail or the chips, the row it left in the band.
+        val rowView = if (focused != null) rows.firstOrNull { isInside(focused, it.view) }?.view else heldRow?.takeIf { it.isAttachedToWindow }
+        heldScroll(rowView?.let(::offsetIn), snapY)?.let { y -> snapY = y; scroller.scrollTo(0, y) }
         updateImages()
     }
 
@@ -2810,6 +2840,7 @@ class MainActivity : Screen() {
         const val NAV_GAP = 4 // dp between the rail's entries
         const val RAIL_X = 16 // dp from the screen's edge to the rail
         const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
+        const val RAIL_OPEN_MS = 140L // the rail opening to its names, and closing
         const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead
         const val SWITCH_WAIT = 300L // ms the remote rests on a page's name before it opens: passing over names opens nothing
@@ -2864,10 +2895,10 @@ class MainActivity : Screen() {
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
 private const val BECAUSE_ROW = "Because you watched" // the row's title opens with it; the seed title's name follows
-private const val BECAUSE_SEEDS = 2 // how many of the viewer's last-watched titles get a "Because you watched" row
+private const val BECAUSE_SEEDS = 1 // how many of the viewer's last-watched titles get a "Because you watched" row
 private val RT_METERS = Regex("[CA]\\d+%.*")
 private val TAIL_ROWS = setOf(ImdbList.TOP_MOVIES.title, ImdbList.TOP_TV.title) // web rows that close a page under its catalogs // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
 private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
-private const val WEB_ROWS_FIRST = 5 // web rows filled as a page opens
+private const val WEB_ROWS_FIRST = 3 // web rows filled as a page opens: the band shows one, the next two wait behind it
 private const val WEB_ROWS_WAVE = 3 // and how many more each wave brings
 private const val WEB_ROWS_PAUSE = 2000L // ms between waves when the page is not scrolled

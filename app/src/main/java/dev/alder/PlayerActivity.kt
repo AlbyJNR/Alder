@@ -59,7 +59,7 @@ internal fun plausibleEpisode(durationMs: Long) = durationMs >= 2 * 60_000L
 // ExoPlayer with our own controls (buildControls) and audio/subtitle panel (openOptions). Resumes where Stremio says you stopped and
 // writes progress back to the account, so Continue Watching matches on every device.
 // It gets a short list of sources: one that fails, or hasn't shown a picture after START_WAIT, gives way to the next
-// at the same second, and when the list runs out the sources page opens. Network blips are retried first, twice
+// at the same second, and when the list runs out the player says so and offers Try again or Choose a source. Network blips are retried first, twice
 // after 1.5 s (NuvioTV's rule), so a dropped connection doesn't cost the source.
 class PlayerActivity : Screen() {
     private lateinit var player: ExoPlayer
@@ -534,25 +534,30 @@ class PlayerActivity : Screen() {
         val position = position()
         if (at + 1 < sources.size) {
             at++
-            stalls.clear()
-            retries = 0
-            asHls = false
-            audioPicked = false
-            subsPicked = false
-            failedAudio.clear()
-            whyNote = null // the reason was for the source that failed
+            fresh()
             android.util.Log.w("CAS", "Source failed: $reason; trying another")
-            return load(position, "That source failed · trying the next one")
+            return load(position, "Finding one that plays")
         }
-        if (intent.getBooleanExtra("picked", false)) {
-            showSourceError()
-            player.stop()
-            showLoading("That source failed · choose another source")
-            return
-        }
-        startActivity(Intent(this, StreamsActivity::class.java).putExtras(intent).putExtra("pick", true)
-            .putExtra("message", "${sources.size} sources didn't play"))
-        finish()
+        // Every source in the list failed. No list of files opens on its own (a dead end for a viewer who never
+        // chose a source): one plain sentence, Try again first, and Choose a source for the title that needs one
+        // picked by hand (a file gone from the debrid server).
+        android.util.Log.w("CAS", "Source failed: $reason; none left of ${sources.size}")
+        stoppedAt = position
+        player.stop()
+        showSourceError()
+    }
+
+    private var stoppedAt = 0L // where playback was when the last source failed: Try again starts there
+
+    /** The next source starts clean: the stalls, retries and track choices were the last one's. */
+    private fun fresh() {
+        stalls.clear()
+        retries = 0
+        asHls = false
+        audioPicked = false
+        subsPicked = false
+        failedAudio.clear()
+        whyNote = null // the reason was for the source that failed
     }
 
     /** Worth trying the same link again: a network or server hiccup, not a link that's gone (4xx) or a bad file. */
@@ -703,21 +708,40 @@ class PlayerActivity : Screen() {
         stallPanel.removeAllViews()
     }
 
+    /**
+     * Nothing in the list played: said once, in plain words, in the middle of the screen. Try again runs the same
+     * sources from the first, at the same second (most failures are the network's, and pass). Choose a source opens
+     * every source there is.
+     */
     private fun showSourceError() {
+        hideLoading()
         stallPanel.removeAllViews()
+        val again = pill("Try again").apply {
+            setOnClickListener {
+                dismissStall()
+                at = 0
+                fresh()
+                load(stoppedAt, "Trying again")
+            }
+        }
+        val choose = pill("Choose a source").apply { setOnClickListener { changeStream() } }
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(again, wrap())
+            addView(choose, wrap().apply { marginStart = dp(10) })
+        }
         val card = column(Gravity.START,
-            caps("Source failed", TUNGSTEN),
-            text("Try another source", SERIF_TITLE, serif = true).marginTop(6),
-            pill("Other sources").apply { setOnClickListener { changeStream() } }.marginTop(12)
+            caps("Not playing", TUNGSTEN),
+            text("This isn't playing right now.", SERIF_TITLE, serif = true).marginTop(6),
+            text("Try again in a moment, or choose a different source.", SMALL, color = TEXT_2).marginTop(6),
+            buttons.marginTop(16)
         ).apply {
-            setPadding(dp(18), dp(16), dp(18), dp(16))
+            setPadding(dp(22), dp(20), dp(22), dp(20))
             background = glass(14)
         }
-        stallPanel.addView(card, FrameLayout.LayoutParams(dp(310), -2, Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(PAD); bottomMargin = dp(48)
-        })
+        stallPanel.addView(card, FrameLayout.LayoutParams(dp(400), -2, Gravity.CENTER))
         stallPanel.visibility = View.VISIBLE
-        card.getChildAt(2).requestFocus()
+        again.requestFocus()
     }
 
     /** Continue at the same second with one quality step lower; [auto] when the player decided, not the viewer. */
