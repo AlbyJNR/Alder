@@ -1493,7 +1493,8 @@ class PlayerActivity : Screen() {
         item?.let { it -> meta?.videos?.takeIf { v -> !tickedWatched && v.isNotEmpty() && Library.pastCredits(it) }?.let { v -> tickedWatched = true; Library.markWatched(it, v, videoId) } }
         // The player's own episode list first: Home's Resume passes no next episode when the title's details weren't in
         // yet, and a finished episode with no next one drops the title out of Continue Watching.
-        item?.let { Library.stopped(it, nextVideo()?.id ?: intent.getStringExtra("nextVideoId")) }
+        val next = nextVideo()
+        item?.let { Library.stopped(it, next?.id ?: intent.getStringExtra("nextVideoId"), nextAired = next == null || airs(next.released) == null) }
         push()
     }
 

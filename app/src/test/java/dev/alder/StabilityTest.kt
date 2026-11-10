@@ -38,6 +38,27 @@ class StabilityTest {
         assertFalse(carriesRealDebrid("https://v3-cinemeta.strem.io/manifest.json"))
     }
 
+    @Test fun finishedMeansPastTheCreditsForLongAndShortTitles() {
+        val min = 60_000L
+        assertTrue(Library.finished(109 * min, 120 * min)) // a film, past nine tenths
+        assertFalse(Library.finished(100 * min, 120 * min))
+        assertTrue(Library.finished(9 * min + 30_000, 11 * min)) // a cartoon stopped as its credits start (86%)
+        assertFalse(Library.finished(5 * min, 11 * min)) // little left only counts once it is watched
+        assertFalse(Library.finished(50 * min, 0))
+    }
+
+    @Test fun aFinishedEpisodeWaitsOnlyForAnEpisodeThatIsOut() {
+        fun item() = org.json.JSONObject().put("state", org.json.JSONObject().put("timeOffset", 58 * 60_000L).put("duration", 60 * 60_000L).put("video_id", "tt1:1:3"))
+        val out = item().also { Library.stopped(it, "tt1:1:4") }
+        assertEquals(1L, out.getJSONObject("state").getLong("timeOffset")) // stays in Continue Watching for episode 4
+        val notOut = item().also { Library.stopped(it, "tt1:2:1", nextAired = false) }
+        assertEquals(0L, notOut.getJSONObject("state").getLong("timeOffset")) // leaves the row
+        assertEquals("tt1:2:1", notOut.getJSONObject("state").getString("video_id")) // and the page still knows what is next
+        val last = item().also { Library.stopped(it, null) }
+        assertEquals(0L, last.getJSONObject("state").getLong("timeOffset"))
+        assertTrue(Library.continueWatching(listOf(notOut.put("type", "series"), last.put("type", "series"))).isEmpty())
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

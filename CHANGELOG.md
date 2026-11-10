@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.52.0
+
+- Continue Watching: when you finish an episode and the next episode is not out, the series leaves the row. Before, it stayed in the row with nothing to play.
+- Continue Watching: a short episode that you stop at its credits is finished. Before, an episode shorter than 25 minutes could stay in the row.
+- **Remove from Continue Watching** does not block a title. When you play the title again, it comes back to the row. Settings shows these titles as **Removed from Continue Watching**.
+
 ## 1.51.0
 
 - Title page of a series: the page always shows the episode that Play starts. **Continue** shows for an episode you started. **Up next** shows for the next episode.

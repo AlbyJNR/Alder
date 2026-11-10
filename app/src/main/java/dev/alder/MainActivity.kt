@@ -1271,6 +1271,12 @@ class MainActivity : Screen() {
                 // The remote was on one of these titles: it stays on that title wherever it moved (watched: to the front).
                 val was = (currentFocus?.takeIf { isInside(it, slot) })?.tag
                 library = list
+                // Removed from Continue Watching is not a block: a title watched again is back on the row, and
+                // leaves the list of removed titles in Settings, so that list never reads as a list of blocked ones.
+                Settings.hidden(this).let { removed ->
+                    val back = list.filter { (it.optJSONObject("state")?.optLong("timeOffset") ?: 0L) > 0 }.map { it.optString("_id") }.filter(removed::has)
+                    if (back.isNotEmpty()) { back.forEach { removed.remove(it) }; Settings.setHidden(this, removed) }
+                }
                 if (p == Page.HOME) Profiles.active(this)?.let { me -> background({ WatchNext.sync(applicationContext, me.authKey, cw, me.pin != null) }) {} }
                 rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
                 slot.removeAllViews()

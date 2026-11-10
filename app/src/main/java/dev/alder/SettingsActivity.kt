@@ -523,7 +523,7 @@ class SettingsActivity : Screen() {
                 }
                 var hiddenValue: TextView? = null
                 fun count() { hiddenValue?.text = "${Settings.hidden(this).length()}  ›" }
-                hiddenValue = actionRow("Hidden from Continue Watching", "", "Put back a title you removed from Continue Watching.") {
+                hiddenValue = actionRow("Removed from Continue Watching", "", "Titles you took off the row. They are not blocked: play one and it comes back. Select one here to put it back now.") {
                     unhideMenu(::count)
                 }
                 count()
@@ -617,9 +617,9 @@ class SettingsActivity : Screen() {
     private fun unhideMenu(done: () -> Unit) {
         val all = Settings.hidden(this)
         val ids = all.keys().asSequence().toList()
-        if (ids.isEmpty()) return choose("Nothing is hidden", listOf("OK"), "Titles you remove from Continue Watching show here.") {}
+        if (ids.isEmpty()) return choose("Nothing removed", listOf("OK"), "Titles you remove from Continue Watching show here until you play them again.") {}
         val key = authKey ?: return
-        choose("Hidden from Continue Watching", ids.map { all.getJSONObject(it).optString("name", it) }, "Select a title to put it back.") { i ->
+        choose("Removed from Continue Watching", ids.map { all.getJSONObject(it).optString("name", it) }, "Select a title to put it back.") { i ->
             val id = ids[i]
             background({
                 val item = Stremio.library(key, listOf(id)).firstOrNull() ?: error("not in the library")

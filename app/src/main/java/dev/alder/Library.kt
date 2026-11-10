@@ -15,6 +15,15 @@ import java.util.TimeZone
 object Library {
     private const val WATCHED = 0.7 // stremio-core WATCHED_THRESHOLD_COEF: watched this much, it counts as seen
     private const val CREDITS = 0.9 // CREDITS_THRESHOLD_COEF: stopped past this, it's finished
+    private const val CREDITS_TAIL = 150_000L // ms: watched, and this little left, is the credits too (a short episode's are more than a tenth of it)
+
+    /**
+     * Whether stopping at [offset] of [duration] (ms) is the end: past nine tenths, as stremio-core has it, or
+     * watched (seven tenths) with only the credits' few minutes left. The second rule is for short episodes: an
+     * 11-minute cartoon's credits start at 85%, and stopping there left it in Continue Watching (Alan, 2026-11-10).
+     */
+    fun finished(offset: Long, duration: Long): Boolean =
+        duration > 0 && (offset > duration * CREDITS || offset > duration * WATCHED && duration - offset <= CREDITS_TAIL)
 
     /**
      * Continue Watching: what's in progress, plus the series in My List with a new episode out ([news], from
@@ -22,7 +31,9 @@ object Library {
      * episode aired, whichever is later. So the film started tonight comes first, last night's new episode next.
      */
     fun continueWatching(items: List<JSONObject>, news: Map<String, NewEpisodes.News> = emptyMap()): List<JSONObject> {
-        val inProgress = items.filter { it.optString("type") != "other" && (!it.optBoolean("removed") || it.optBoolean("temp")) && it.state.optLong("timeOffset") > 0 }
+        // A film left at its credits by a player that never got to say so (the TV was switched off) is not in progress.
+        val inProgress = items.filter { it.optString("type") != "other" && (!it.optBoolean("removed") || it.optBoolean("temp")) && it.state.optLong("timeOffset") > 0 &&
+            !(it.optString("type") == "movie" && finished(it.state.optLong("timeOffset"), it.state.optLong("duration"))) }
         val going = inProgress.map { it.optString("_id") }.toSet()
         val withNews = items.filter { it.optString("_id") in news && it.optString("_id") !in going && !it.optBoolean("removed") }
         return (inProgress + withNews).sortedByDescending { maxOf(it.state.text("lastWatched") ?: "", news[it.optString("_id")]?.latest ?: "") }
@@ -81,14 +92,14 @@ object Library {
     }
 
     /** Stopped past the credits: finished, whatever the watched-time count says. */
-    fun pastCredits(item: JSONObject): Boolean = item.state.let { s -> s.optLong("duration") > 0 && s.optLong("timeOffset") > s.optLong("duration") * CREDITS }
+    fun pastCredits(item: JSONObject): Boolean = item.state.let { s -> finished(s.optLong("timeOffset"), s.optLong("duration")) }
 
     /** Where to resume [videoId] in milliseconds, 0 to start from the beginning. */
     fun resumeAt(item: JSONObject, videoId: String): Long {
         val s = item.state
         val offset = s.optLong("timeOffset")
         val duration = s.optLong("duration")
-        val unfinished = duration == 0L || offset < duration * CREDITS
+        val unfinished = !finished(offset, duration)
         return if (s.text("video_id") == videoId && offset > 0 && unfinished) offset else 0
     }
 
@@ -165,16 +176,20 @@ object Library {
         item.put("_mtime", now)
     }
 
-    /** When playback stops: past the credits it's finished, and a series moves on to [nextVideoId]. */
-    fun stopped(item: JSONObject, nextVideoId: String?) {
+    /**
+     * When playback stops: past the credits it's finished, and a series moves on to [nextVideoId]. With the next
+     * episode out ([nextAired]) the title stays in Continue Watching for it. With the next one not out yet the title
+     * leaves the row, as a finished one does: there is nothing to continue (New episodes brings it back the day it airs).
+     */
+    fun stopped(item: JSONObject, nextVideoId: String?, nextAired: Boolean = true) {
         val s = item.state
-        if (s.optLong("duration") == 0L || s.optLong("timeOffset") <= s.optLong("duration") * CREDITS) return
+        if (!finished(s.optLong("timeOffset"), s.optLong("duration"))) return
         s.put("timeOffset", 0)
         if (nextVideoId != null) {
             s.put("video_id", nextVideoId)
             s.put("overallTimeWatched", s.optLong("overallTimeWatched") + s.optLong("timeWatched"))
             s.put("timeWatched", 0).put("flaggedWatched", 0)
-            s.put("timeOffset", 1) // stremio-core's marker for "start the next episode", which keeps it in Continue Watching
+            if (nextAired) s.put("timeOffset", 1) // stremio-core's marker for "start the next episode", which keeps it in Continue Watching
         }
         item.put("_mtime", now())
     }
