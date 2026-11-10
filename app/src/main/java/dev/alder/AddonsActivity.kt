@@ -233,7 +233,7 @@ class AddonsActivity : Screen() {
 
     private fun save(next: List<Addon>, focus: String?) {
         val key = authKey ?: return
-        background({ Stremio.setAddons(key, next) }) { result ->
+        urgent({ Stremio.setAddons(key, next) }) { result ->
             result.onSuccess { addons = next; show(focus) }
                 .onFailure { show(focus, "Couldn't save the change to Stremio.", retry = { save(next, focus) }) }
         }

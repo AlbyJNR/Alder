@@ -600,6 +600,11 @@ class PlayerActivity : Screen() {
 
     override fun onStart() {
         super.onStart()
+        parkedAt?.let { at ->
+            parkedAt = null
+            load(at, "Resuming")
+            player.playWhenReady = false // as it was left: paused, the picture back, Play to go on
+        }
         if (prepared) {
             lastPosition = player.currentPosition
             main.postDelayed(tickTask, TICK)
@@ -848,7 +853,7 @@ class PlayerActivity : Screen() {
         if (!watched || player.isCurrentMediaItemLive) return
         val key = authKey ?: return
         val snapshot = item?.let { JSONObject(it.toString()) } ?: return
-        background({ Stremio.saveLibrary(key, listOf(snapshot)) }) {}
+        urgent({ Stremio.saveLibrary(key, listOf(snapshot)) }) {}
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -1486,7 +1491,7 @@ class PlayerActivity : Screen() {
         main.removeCallbacks(skipTask)
         main.removeCallbacks(loadingTask)
         player.pause()
-        if (!watched || player.isCurrentMediaItemLive || type == "series" && !plausibleEpisode(player.duration)) return
+        if (!watched || player.isCurrentMediaItemLive || type == "series" && !plausibleEpisode(player.duration)) return park()
         record()
         // Finished (past the credits) but not ticked yet, because the episode list came late or the viewer skipped
         // through: the tick goes in now, so the guide, the blur and Home's NEW count agree with what was watched.
@@ -1496,6 +1501,20 @@ class PlayerActivity : Screen() {
         val next = nextVideo()
         item?.let { Library.stopped(it, next?.id ?: intent.getStringExtra("nextVideoId"), nextAired = next == null || airs(next.released) == null) }
         push()
+        park()
+    }
+
+    private var parkedAt: Long? = null // where playback stood when CAS left the screen with the player still open
+
+    /**
+     * CAS is off the screen but not closed (Home was pressed, another app is in front): the player lets go of the
+     * TV's video decoder and its buffers. A Fire TV has few decoders; held here, another app could not play, and
+     * the TV was more likely to end CAS. Coming back, [onStart] loads the same source at the same second, paused.
+     */
+    private fun park() {
+        if (isFinishing || !prepared) return
+        parkedAt = if (player.isCurrentMediaItemLive) 0L else position()
+        player.stop()
     }
 
     override fun onDestroy() {

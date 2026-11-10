@@ -13,6 +13,14 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.59.0
+
+- Each request to an add-on or a site has a time limit for the full answer. Before, a slow add-on could stop all pages from loading.
+- CAS saves your progress and My List on a separate path. A slow add-on does not delay the save.
+- CAS uses less memory after a long time in use.
+- Player: when you press Home, CAS releases the video decoder of the TV. When you come back, the picture returns at the same moment, paused.
+- CAS reads the profile one time, not for each setting. Movement along a row does less work.
+
 ## 1.58.0
 
 - The page of a person is new. The left side shows the photograph, the name, the work, the date and place of birth, and some lines about the person.

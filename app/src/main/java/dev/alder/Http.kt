@@ -20,6 +20,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 internal val GUEST_HOSTS = setOf("api.graphql.imdb.com", "www.rottentomatoes.com", "www.rogerebert.com")
 internal const val REST_MS = 10 * 60_000L
 
+/** The longest a whole call for an answer may take, ms: its read wait and half as much again, for the connection and a slow body. */
+internal fun callLimit(timeoutMs: Int) = timeoutMs + timeoutMs / 2
+
 /** Whether an answer with this HTTP [code] means the site is refusing or broken (not that one page is missing). */
 internal fun restsAfter(code: Int) = code == 403 || code == 429 || code >= 500
 
@@ -121,6 +124,18 @@ object Http {
 
     private val jsonType = "application/json".toMediaType()
 
+    // The clients for answers, by their wait: made once each from [client], and again when [init] replaces it.
+    private val limitedClients = java.util.concurrent.ConcurrentHashMap<Int, Pair<OkHttpClient, OkHttpClient>>()
+    private fun limited(timeoutMs: Int): OkHttpClient {
+        val base = client
+        limitedClients[timeoutMs]?.takeIf { it.first === base }?.let { return it.second }
+        return base.newBuilder()
+            .connectTimeout(minOf(10_000, timeoutMs).toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
+            .callTimeout(callLimit(timeoutMs).toLong(), TimeUnit.MILLISECONDS).build()
+            .also { limitedClients[timeoutMs] = base to it }
+    }
+
     // [cache]: pictures only. A response cache once kept an addon's 404 and, revalidated with a 304, served it forever
     // (AIOMetadata's movie search); answers are never stored here and have their own copy in [saved].
     private fun request(url: String, json: String?, cache: Boolean, timeoutMs: Int = DEFAULT_TIMEOUT, headers: Map<String, String> = emptyMap()): Pair<Int, ByteArray> {
@@ -133,9 +148,9 @@ object Http {
                 if (json != null) post(json.toRequestBody(jsonType))
             }.build()
         // A longer or shorter wait shares the pool and cache; only the timeouts differ.
-        val with = if (timeoutMs == DEFAULT_TIMEOUT) client else client.newBuilder()
-            .connectTimeout(minOf(10_000, timeoutMs).toLong(), TimeUnit.MILLISECONDS)
-            .readTimeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS).build()
+        // An answer (not a picture) also has a limit on the whole call: the read timeout is per read, so a server that
+        // sent a byte now and then held its worker for as long as it liked, and six of those stopped every screen.
+        val with = if (cache) client else limited(timeoutMs)
         // Stremio's API puts its JSON error in the body of a failed response too, so the body is read either way.
         return with.newCall(request).execute().use { r -> r.code to (r.body?.bytes() ?: throw IOException("HTTP ${r.code}")) }
     }

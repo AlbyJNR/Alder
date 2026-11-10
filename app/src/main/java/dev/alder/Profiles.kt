@@ -19,12 +19,20 @@ object Profiles {
     const val MAX = 5
     val COLORS = intArrayOf(0xFFFFFFFF.toInt(), 0xFFC98E6A.toInt(), 0xFF8FA39A.toInt(), 0xFFA6A2BD.toInt(), 0xFFD3A66B.toInt())
 
+    // The profiles as last parsed, with the text they were parsed from: every setting is kept per profile, so each
+    // read of one asked who is watching, and parsed this list again (on each move along a row on Home).
+    @Volatile private var parsed: Pair<String, List<Profile>>? = null
+    @Volatile private var migrated = false
+
     fun all(context: Context): List<Profile> {
         val prefs = prefs(context)
-        migrate(prefs)
-        return JSONArray(prefs.getString("profiles", "[]")).objects()
+        if (!migrated) { migrate(prefs); migrated = true }
+        val raw = prefs.getString("profiles", "[]") ?: "[]"
+        parsed?.takeIf { it.first == raw }?.let { return it.second }
+        return JSONArray(raw).objects()
             .map { Profile(it.getString("id"), it.getString("name"), it.getInt("color").takeIf { c -> c in COLORS } ?: COLORS[0],
                 it.getString("authKey"), it.optString("pin").ifEmpty { null }, it.optBoolean("kids")) }
+            .also { parsed = raw to it }
     }
 
     /** The profile in use: the one picked last, or the only one there is. */

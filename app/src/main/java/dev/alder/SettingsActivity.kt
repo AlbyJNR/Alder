@@ -452,7 +452,7 @@ class SettingsActivity : Screen() {
                         val names = carriers.joinToString(", ") { addonShortName(it.name) }
                         choose("Sign out of Real-Debrid?", listOf("Cancel", "Sign out"),
                             "This removes $names from this profile's Stremio account, on all its devices. Your Real-Debrid account stays as it is. To sign in again, add the add-on again.") { n ->
-                            if (n == 1) background({ Stremio.setAddons(me.authKey, list - carriers.toSet()) }) { r ->
+                            if (n == 1) urgent({ Stremio.setAddons(me.authKey, list - carriers.toSet()) }) { r ->
                                 if (r.isSuccess) showGroup(Group.STREAMS)
                                 else choose("Couldn't sign out", listOf("OK"), "Stremio did not save the change. Check the TV's connection and try again.") {}
                             }

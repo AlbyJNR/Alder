@@ -143,7 +143,11 @@ class MainActivity : Screen() {
     private var search: View? = null
     private val rows = mutableListOf<Row>()
     private var focusedSomething = false
-    private val metas = mutableMapOf<String, Meta>() // full details, fetched once per title
+    // Full details, fetched once per title and kept for the [META_KEEP] used last: a series' details carry every
+    // episode it has, and an evening's browsing kept thousands of them until CAS closed. Main thread only.
+    private val metas: MutableMap<String, Meta> = object : LinkedHashMap<String, Meta>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Meta>?) = size > META_KEEP
+    }
 
     // The art, at full strength and full bleed, over the previous title's art while it crossfades in.
     private lateinit var art: ImageView
@@ -1998,8 +2002,8 @@ class MainActivity : Screen() {
         val known = (library + Stremio.knownLibrary(key).orEmpty()).firstOrNull { it.optString("_id") == item.id }
         val entry = known?.let { JSONObject(it.toString()) } ?: Library.newItem(item.id, item.type, item.name, item.poster)
         Library.setInList(entry, on)
-        background({ Stremio.saveLibrary(key, listOf(entry)) }) { result ->
-            if (isFinishing) return@background
+        urgent({ Stremio.saveLibrary(key, listOf(entry)) }) { result ->
+            if (isFinishing) return@urgent
             result.fold({
                 library = library.filterNot { it.optString("_id") == item.id } + entry
                 android.widget.Toast.makeText(this, if (on) "Added to My List" else "Removed from My List", android.widget.Toast.LENGTH_SHORT).show()
@@ -2016,7 +2020,7 @@ class MainActivity : Screen() {
             val updated = JSONObject(original.toString())
             if (selected == 0) Library.setInList(updated, false)
             else Library.markTitleWatched(updated, metas[item.id]?.videos.orEmpty())
-            background({ Stremio.saveLibrary(profile.authKey, listOf(updated)) }) { result ->
+            urgent({ Stremio.saveLibrary(profile.authKey, listOf(updated)) }) { result ->
                 result.fold({
                     library = library.map { if (it.optString("_id") == item.id) updated else it }
                     if (page == Page.LIBRARY) redrawLibrary()
@@ -2035,7 +2039,7 @@ class MainActivity : Screen() {
             val original = library.firstOrNull { it.optString("_id") == item.id } ?: return
             val updated = JSONObject(original.toString())
             val offset = Library.hideFromContinueWatching(updated)
-            background({ Stremio.saveLibrary(profile.authKey, listOf(updated)) }) { result ->
+            urgent({ Stremio.saveLibrary(profile.authKey, listOf(updated)) }) { result ->
                 result.fold({
                     Settings.setHidden(this, Settings.hidden(this)
                         .put(item.id, JSONObject().put("name", item.name).put("timeOffset", offset)))
@@ -2979,6 +2983,7 @@ class MainActivity : Screen() {
 
 private const val EBERT_ROW = "Roger Ebert: new reviews"
 private const val BECAUSE_ROW = "Because you watched" // the row's title opens with it; the seed title's name follows
+private const val META_KEEP = 240 // titles whose full details stay in memory
 private const val SIMPLE_HOME_ROWS = 1 // catalogue rows on Home in the short CAS, under Continue and New episodes
 private const val SIMPLE_PAGE_ROWS = 2 // and on TV and Movies, under the web rows
 private const val BECAUSE_SEEDS = 1 // how many of the viewer's last-watched titles get a "Because you watched" row

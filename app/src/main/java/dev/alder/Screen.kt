@@ -251,6 +251,18 @@ abstract class Screen : Activity() {
     }
 
     /** Runs [work] off the main thread and hands its result back on it, unless the screen is gone. */
+    /**
+     * As [background], on a lane of its own: for what the viewer did and must not wait (watch progress, My List,
+     * add-ons saved to Stremio). On the shared lane a save queued behind six slow add-ons, and was lost if the TV
+     * was switched off before its turn.
+     */
+    protected fun <T> urgent(work: () -> T, done: (Result<T>) -> Unit) {
+        savePool.execute {
+            val result = runCatching(work)
+            main.post { if (!isDestroyed && !isFinishing) done(result) }
+        }
+    }
+
     protected fun <T> background(work: () -> T, done: (Result<T>) -> Unit) {
         pool.execute {
             val result = runCatching(work)
@@ -1476,6 +1488,7 @@ abstract class Screen : Activity() {
         const val PROGRESS_TRACK = 0x4DFFFFFF // light enough that a short fill still reads as a bar, not a dash
         // Fetching and parsing sit behind the main thread and the RenderThread: on a four-core stick, a page's answers
         // parsed at the main thread's priority took frames from the row sliding in.
+        private val savePool = Executors.newFixedThreadPool(2)
         private val pool = Executors.newFixedThreadPool(6) { r ->
             Thread { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND); r.run() }
         }

@@ -196,6 +196,8 @@ private val YOUTUBE_ID = Regex("^[A-Za-z0-9_-]{11}$")
 // ---------- trailers as files ----------
 
 private val imdbTrailerCache = java.util.concurrent.ConcurrentHashMap<String, List<Stream>>()
+/** A lookup cache past [limit] entries starts again: they are quick to ask for, and without a limit only ever grew. */
+internal fun <K, V> java.util.concurrent.ConcurrentHashMap<K, V>.capped(limit: Int = 500) = apply { if (size > limit) clear() }
 
 /**
  * The title's trailer as video files from IMDb's own video service (MP4 and HLS, 1080p down to SD), through the same
@@ -213,7 +215,7 @@ internal fun imdbTrailerStreams(imdbId: String): List<Stream> {
             runCatching { Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized")) }
                 .onFailure { android.util.Log.w("CAS", "IMDb trailer call $attempt for $imdbId failed: $it") }.getOrNull()
         } ?: return emptyList()
-        parseImdbTrailerStreams(JSONObject(raw)).also { imdbTrailerCache[imdbId] = it }
+        parseImdbTrailerStreams(JSONObject(raw)).also { imdbTrailerCache.capped()[imdbId] = it }
     }.getOrDefault(emptyList())
 }
 
@@ -228,7 +230,7 @@ internal fun imdbRating(imdbId: String): String? {
         val query = JSONObject().put("query", "{title(id:\"$imdbId\"){ratingsSummary{aggregateRating}}}").toString()
         val raw = Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
         JSONObject(raw).optJSONObject("data")?.optJSONObject("title")?.optJSONObject("ratingsSummary")?.optDouble("aggregateRating", 0.0)
-            ?.takeIf { it > 0 }?.let { "%.1f".format(Locale.US, it) }?.also { imdbRatingCache[imdbId] = it }
+            ?.takeIf { it > 0 }?.let { "%.1f".format(Locale.US, it) }?.also { imdbRatingCache.capped()[imdbId] = it }
     }.onFailure { android.util.Log.w("CAS", "IMDb rating for $imdbId failed: $it") }.getOrNull()
 }
 
@@ -242,7 +244,7 @@ internal fun imdbCertificate(imdbId: String): String? {
     return runCatching {
         val query = JSONObject().put("query", "{title(id:\"$imdbId\"){certificate{rating}}}").toString()
         val raw = Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
-        parseImdbCertificate(JSONObject(raw))?.also { imdbCertificateCache[imdbId] = it }
+        parseImdbCertificate(JSONObject(raw))?.also { imdbCertificateCache.capped()[imdbId] = it }
     }.onFailure { android.util.Log.w("CAS", "IMDb certificate for $imdbId failed: $it") }.getOrNull()
 }
 

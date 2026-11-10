@@ -88,6 +88,14 @@ class StabilityTest {
         assertEquals("1958", longDay("1958"))
     }
 
+    @Test fun anAnswerHasALimitOnTheWholeCall() {
+        assertEquals(30_000, callLimit(20_000))
+        assertEquals(18_000, callLimit(12_000))
+        val cache = java.util.concurrent.ConcurrentHashMap<String, String>()
+        repeat(4) { cache.capped(2)["k$it"] = "v" }
+        assertEquals(1, cache.size) // past the limit it starts again, with the newest
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

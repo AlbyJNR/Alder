@@ -547,7 +547,7 @@ class DetailsActivity : Screen() {
         val offset = Library.hideFromContinueWatching(entry)
         Settings.setHidden(this, Settings.hidden(this).put(metaId, JSONObject().put("name", meta?.name ?: name).put("timeOffset", offset)))
         val snapshot = JSONObject(entry.toString())
-        background({ Stremio.saveLibrary(key, listOf(snapshot)) }) { finish() }
+        urgent({ Stremio.saveLibrary(key, listOf(snapshot)) }) { finish() }
     }
 
     private fun toggleList() {
@@ -558,7 +558,7 @@ class DetailsActivity : Screen() {
         listButton.text = if (Library.inList(entry)) "✓" else "+"
         listButton.contentDescription = if (Library.inList(entry)) "Remove from My List" else "Add to My List"
         val snapshot = JSONObject(entry.toString())
-        background({ Stremio.saveLibrary(key, listOf(snapshot)) }) {}
+        urgent({ Stremio.saveLibrary(key, listOf(snapshot)) }) {}
     }
 
     /** An episode that isn't out yet: a word on when, instead of a search for sources that can't exist. */
@@ -585,7 +585,7 @@ class DetailsActivity : Screen() {
         Profiles.active(this)?.id?.let { NewEpisodes.record(this, it, entry, m) }
         refreshTicks()
         val snapshot = JSONObject(entry.toString())
-        background({ Stremio.saveLibrary(key, listOf(snapshot)) }) {}
+        urgent({ Stremio.saveLibrary(key, listOf(snapshot)) }) {}
     }
 
     /** The guide's rows and the still redrawn for the ticks as they are now; the remote stays where it is. */
