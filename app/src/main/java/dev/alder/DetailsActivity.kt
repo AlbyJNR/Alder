@@ -283,6 +283,10 @@ class DetailsActivity : Screen() {
             if (m.director.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR))
                 side.addView(block(if (m.director.size > 1) "Directors" else "Director", *m.director.take(2).map(::person).toTypedArray()),
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(BLOCK_GAP) })
+            // The writers under the director, a film's only (a series has a room of them): each a name to search, as the rest.
+            if (m.writer.isNotEmpty() && type == "movie" && Settings.titlePage(this, SettingsActivity.TITLE_DIRECTOR))
+                side.addView(block(if (m.writer.size > 1) "Writers" else "Writer", *m.writer.take(2).map(::person).toTypedArray()),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(BLOCK_GAP) })
             sideColumn = side
             hero.addView(side, FrameLayout.LayoutParams(dp(BLOCK_W), -2, Gravity.TOP or Gravity.END).apply {
                 rightMargin = dp(PAD); topMargin = dp(BAND_TOP)
@@ -884,7 +888,7 @@ class DetailsActivity : Screen() {
                 intArrayOf(0xC9000808.toInt(), 0x99000808.toInt(), 0x00000000))
         }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 3 / 5, -1))
         val facts = listOfNotNull(certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }, m.year, m.runtime,
-            m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "IMDb $it" },
+            m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "★ $it" },
             tomatoes?.critics?.let { "Tomatometer $it%" + if (tomatoes?.criticsCertified == true) " (Certified Fresh)" else "" },
             tomatoes?.audience?.let { "Popcornmeter $it%" }).joinToString(DOT)
         val story = ScrollView(this).apply {
@@ -910,6 +914,7 @@ class DetailsActivity : Screen() {
                 }
                 if (m.cast.isNotEmpty()) names("Cast", m.cast.take(12))
                 if (m.director.isNotEmpty()) names(if (m.director.size > 1) "Directors" else "Director", m.director.take(3))
+                if (m.writer.isNotEmpty()) names(if (m.writer.size > 1) "Writers" else "Writer", m.writer.take(6))
             })
         }
         infoOverlay.addView(column(Gravity.START,

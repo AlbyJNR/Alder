@@ -292,7 +292,15 @@ abstract class Screen : Activity() {
         fun badge(name: String) = text(name, BADGE, bold = true, color = BASE).apply {
             setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
         }
-        rating?.let { dot(); line.addView(badge("IMDb")); line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(6) }) }
+        // The rating behind a warm star, not the letters of where it is from (Alan, 2026-11-10).
+        rating?.let {
+            dot()
+            line.addView(android.widget.ImageView(this).apply {
+                setImageResource(R.drawable.ic_star); imageTintList = android.content.res.ColorStateList.valueOf(TUNGSTEN)
+                contentDescription = "IMDb rating"
+            }, LinearLayout.LayoutParams(dp(METER_ICON + 1), dp(METER_ICON + 1)))
+            line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(4) })
+        }
         meters?.let {
             dot(); line.addView(badge("RT"))
             // The critics as a pen, the audience as a person: what each number is, with no letter to decode.

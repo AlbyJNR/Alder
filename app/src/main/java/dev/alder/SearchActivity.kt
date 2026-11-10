@@ -231,6 +231,8 @@ class SearchActivity : Screen() {
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
         firstKey?.post { firstKey?.requestFocus() }
         // Opened with a name from a title's cast: the search runs at once, and the remote lands on the results.
+        // Opened by the remote's search or microphone key: listening at once.
+        if (intent.getBooleanExtra("voice", false)) main.postDelayed({ if (!isFinishing) speak() }, 300)
         val query = intent.getStringExtra("query")?.takeIf { it.isNotBlank() }
         if (query != null) {
             input.setText(query)
@@ -339,23 +341,29 @@ class SearchActivity : Screen() {
         key("−", fifth, 1, false) { append("-") }
         key("⌫", fifth, 2, true) { delete() }
         val last = keyRow()
-        val speech = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-        val canSpeak = speech.resolveActivity(packageManager) != null
-        key("SPACE", last, if (canSpeak) 4 else 6, !canSpeak) { append(" ") }
-        if (canSpeak) {
-            key("", last, 2, true) {
-                runCatching {
-                    startActivityForResult(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    }, SPEECH)
-                }.onFailure { choose("Voice search is unavailable on this TV.", listOf("OK")) {} }
-            }.apply {
-                contentDescription = "Voice search"
-                setCompoundDrawablesRelative(null, getDrawable(R.drawable.ic_mic)?.mutate()?.apply {
-                    setTint(TUNGSTEN); setBounds(0, 0, dp(13), dp(17))
-                }, null, null)
-            }
+        // The microphone key is on every TV: it listens where the TV can (Android TV, Google TV), and on a Fire TV
+        // opens the field to the remote's own microphone button (see [speak]).
+        key("SPACE", last, 4, false) { append(" ") }
+        key("", last, 2, true) { speak() }.apply {
+            contentDescription = "Voice search"
+            setCompoundDrawablesRelative(null, getDrawable(R.drawable.ic_mic)?.mutate()?.apply {
+                setTint(TUNGSTEN); setBounds(0, 0, dp(13), dp(17))
+            }, null, null)
         }
+    }
+
+    /**
+     * Voice search. Where the TV has a speech service, it listens and the words go in the field. A Fire TV has none
+     * an app can call, and its microphone button belongs to Alexa: but with a text field open to the Fire TV
+     * keyboard, holding that button types what is said into the field. So there the field opens, with a word on how.
+     */
+    private fun speak() {
+        val listen = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply { putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM) }
+        if (listen.resolveActivity(packageManager) != null && runCatching { startActivityForResult(listen, SPEECH) }.isSuccess) return
+        input.showSoftInputOnFocus = true
+        input.requestFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, 0)
+        android.widget.Toast.makeText(this, "Hold the microphone button on the remote and say a title", android.widget.Toast.LENGTH_LONG).show()
     }
 
     private var modeLabel: TextView? = null

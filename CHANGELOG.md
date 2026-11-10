@@ -13,6 +13,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.56.0
+
+- The IMDb rating shows behind a star. Before, it showed behind the letters IMDb.
+- Title page of a film: the writers show below the director. Select a name to search for it. ⓘ shows the writers of a film or a series.
+- Search: the microphone key is on each TV. On a Fire TV, select it, then hold the microphone button on the remote and say a title.
+- A search key or microphone key on the remote opens Search, where the TV gives the key to CAS.
+
 ## 1.55.0
 
 - Hold OK on a title in a row: select **Add to My List**. Before, you opened the page of the title to add it.

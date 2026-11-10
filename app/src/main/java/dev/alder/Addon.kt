@@ -600,6 +600,8 @@ class Meta(json: JSONObject) {
     /** The age rating ("PG-13", "15", "TV-MA") when the add-on gives one; IMDb is asked otherwise (imdbCertificate). */
     val certification: String? = (json.text("certification") ?: json.text("contentRating"))?.trim()?.takeIf { it.isNotEmpty() && it.length <= 8 }
     val director = json.optJSONArray("director").strings()
+    /** Who wrote it, as the meta add-on names them (Cinemeta's `writer`); never the director's name twice over. */
+    val writer = (json.optJSONArray("writer") ?: json.optJSONArray("writers")).strings().map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     /** Trailer files an add-on gives outright (a `url` in `trailerStreams`): playable in CAS's own player. */
     val trailerFiles: List<Stream> = json.optJSONArray("trailerStreams").objects().mapNotNull { t ->
         val url = t.text("url") ?: return@mapNotNull null

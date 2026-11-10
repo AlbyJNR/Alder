@@ -533,6 +533,11 @@ class MainActivity : Screen() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // A remote's search or microphone key, where the TV hands it to the app: straight to Search, listening.
+        if (event.action == KeyEvent.ACTION_DOWN && (event.keyCode == KeyEvent.KEYCODE_SEARCH || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) && !profile.kids) {
+            startActivity(Intent(this, SearchActivity::class.java).putExtra("voice", true))
+            return true
+        }
         if (event.action == KeyEvent.ACTION_DOWN) {
             touched = true
             dimHome(false)
