@@ -510,7 +510,9 @@ abstract class Screen : Activity() {
      *  their curve, rather than a flat bar that stops short of them and reads as a stray line. */
     private inner class Highlight(private val radius: Float) : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = GLASS_HIGHLIGHT }
-        override fun draw(canvas: Canvas) = canvas.drawPath(highlight(RectF(bounds), radius), paint)
+        private var path: Path? = null // cut once for these bounds, not on every draw
+        override fun onBoundsChange(bounds: android.graphics.Rect) { path = null }
+        override fun draw(canvas: Canvas) = canvas.drawPath(path ?: highlight(RectF(bounds), radius).also { path = it }, paint)
         override fun setAlpha(alpha: Int) {}
         override fun setColorFilter(colorFilter: ColorFilter?) {}
         @Deprecated("Drawable API") override fun getOpacity() = PixelFormat.TRANSLUCENT
@@ -559,7 +561,9 @@ abstract class Screen : Activity() {
             .takeWhile { it !is android.widget.ScrollView && it !is android.widget.HorizontalScrollView && it !is android.widget.AbsListView }
             .forEach { it.clipChildren = false; it.clipToPadding = false }
         focusScale[this] = if (on) by else 1f
-        return animate().scaleX(if (on) by else 1f).scaleY(if (on) by else 1f)
+        // As a layer while it moves: the control is drawn once into a picture and the GPU sizes that picture each
+        // frame, where before its text, face and shadow were drawn again each frame, over the art and its shades.
+        return animate().scaleX(if (on) by else 1f).scaleY(if (on) by else 1f).withLayer()
             .setInterpolator(if (on) FOCUS_IN else FOCUS_OUT).setDuration(if (on) FOCUS_IN_MS else FOCUS_OUT_MS)
     }
 
@@ -1052,9 +1056,13 @@ abstract class Screen : Activity() {
      */
     protected fun TextView.lightFocus(radiusDp: Int, grow: Float = CHIP_GROW) {
         isFocusable = true
-        background = glass(radiusDp)
+        // Both faces made once and swapped: a new glass face on every move of the remote was a new shape to cut and
+        // send to the GPU, twice per move (the control left, the control arrived), while both were also in motion.
+        val rest = glass(radiusDp)
+        val lit = rounded(TEXT, radiusDp)
+        background = rest
         setOnFocusChangeListener { v, has ->
-            v.background = if (has) rounded(TEXT, radiusDp) else glass(radiusDp)
+            v.background = if (has) lit else rest
             setTextColor(if (has) BASE else TEXT)
             v.grow(has, grow).start()
         }
@@ -1101,8 +1109,10 @@ abstract class Screen : Activity() {
         elevation = dp(2).toFloat()
         if (android.os.Build.VERSION.SDK_INT >= 28) outlineSpotShadowColor = TUNGSTEN_GLOW
         setOnFocusChangeListener { v, has ->
+            // The lift is set, not animated: a shadow that rises is a soft shadow drawn again every frame, the dearest
+            // thing on the page for a Fire TV Stick's GPU. The growth carries the arrival.
+            v.translationZ = if (has) dp(CARD_LIFT).toFloat() else 0f
             v.grow(has, DISC_GROW).start()
-            v.animate().translationZ(if (has) dp(CARD_LIFT).toFloat() else 0f).setDuration(150).start()
         }
         layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
     }

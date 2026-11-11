@@ -13,6 +13,10 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.60.1
+
+- Title page: movement between Play, Trailer and Preview is quicker. The TV does less work for each move.
+
 ## 1.60.0
 
 - A tomato shows before the Rotten Tomatoes scores. Before, the letters RT showed.
