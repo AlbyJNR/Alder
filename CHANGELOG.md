@@ -13,6 +13,13 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.60.0
+
+- A tomato shows before the Rotten Tomatoes scores. Before, the letters RT showed.
+- The age rating shows as a mark in the colour of its group: green, yellow, orange, pink or red. The rating is the rating of your country.
+- CAS goes from one screen to the next with a short fade. Play, the sources, the player and Back are quicker.
+- A control gets its focus more quickly when you move the remote.
+
 ## 1.59.0
 
 - Each request to an add-on or a site has a time limit for the full answer. Before, a slow add-on could stop all pages from loading.

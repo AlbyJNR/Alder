@@ -96,6 +96,15 @@ class StabilityTest {
         assertEquals(1, cache.size) // past the limit it starts again, with the newest
     }
 
+    @Test fun ageRatingsTakeTheirBandsColour() {
+        assertEquals(certColour("U"), certColour("TV-G"))
+        assertEquals(certColour("PG"), certColour("tv-pg"))
+        assertEquals(certColour("12A"), certColour("PG-13"))
+        assertEquals(certColour("15"), certColour("R"))
+        assertEquals(certColour("18"), certColour("TV-MA"))
+        assertTrue(setOf("U", "PG", "12", "15", "18", "Unrated").map(::certColour).toSet().size == 6)
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

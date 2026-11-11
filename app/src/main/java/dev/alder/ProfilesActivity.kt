@@ -54,6 +54,20 @@ class ProfilesActivity : Screen() {
             intent.getStringExtra("preview")?.let { url -> main.postDelayed({
                 showPreview("Preview test") { listOf(Stream("Test", "", url, emptyMap(), 0, null, null)) }
             }, 1500) }
+        // Debug builds only: `--ez marks true` shows the scores line and the age-rating marks on a plain screen, to be
+        // looked at on an emulator with no account.
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent.getBooleanExtra("marks", false)) {
+            return setContentView(column(Gravity.START,
+                text("Slow Horses", SERIF_TITLE, serif = true),
+                text("", SMALL, color = TEXT_2).apply {
+                    text = android.text.SpannableStringBuilder(certMark("15")).append("  ·  S1 E3  ·  Thriller")
+                }.marginTop(12),
+                scoresLine("8.4", "C97% A87%", lead = false).marginTop(8),
+                text("", SMALL, color = TEXT_2).apply {
+                    text = android.text.SpannableStringBuilder().apply { listOf("U", "PG", "12A", "15", "18", "TV-MA", "PG-13", "NR").forEach { append(certMark(it)).append("   ") } }
+                }.marginTop(24),
+            ).apply { setPadding(dp(84), dp(64), dp(48), 0); setBackgroundColor(0xFF2A3A44.toInt()) })
+        }
         // Debug builds only, and only on a TV with no profile yet: `--es testKey <Stremio auth key>` signs a test
         // profile in with no phone, so CI can photograph the signed-in screens (cas-build.yml, screens).
         if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && Profiles.all(this).isEmpty())

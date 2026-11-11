@@ -6,5 +6,19 @@
         <item name="android:ambientShadowAlpha">0</item>
         <!-- The frame Android shows before CAS draws anything is CAS's own near-black, so starting never flashes. -->
         <item name="android:windowBackground">#FF08090B</item>
+        <!-- One screen to the next (a title to its sources, to the player, and back) is a quick fade of CAS's own,
+             not the TV's slide: that took a third of a second each way and made Play and Back feel slow. -->
+        <item name="android:windowAnimationStyle">@style/CAS.Window</item>
+    </style>
+
+    <style name="CAS.Window" parent="@android:style/Animation.Activity">
+        <item name="android:activityOpenEnterAnimation">@anim/cas_open_enter</item>
+        <item name="android:activityOpenExitAnimation">@anim/cas_open_exit</item>
+        <item name="android:activityCloseEnterAnimation">@anim/cas_close_enter</item>
+        <item name="android:activityCloseExitAnimation">@anim/cas_close_exit</item>
+        <item name="android:taskOpenEnterAnimation">@anim/cas_open_enter</item>
+        <item name="android:taskOpenExitAnimation">@anim/cas_open_exit</item>
+        <item name="android:taskCloseEnterAnimation">@anim/cas_close_enter</item>
+        <item name="android:taskCloseExitAnimation">@anim/cas_close_exit</item>
     </style>
 </resources>

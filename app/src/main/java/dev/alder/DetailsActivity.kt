@@ -352,12 +352,7 @@ class DetailsActivity : Screen() {
     }
 
     /** The age rating before the year: a thin outlined capsule, quiet, the way a cinema listing prints it. */
-    private fun capsule(cert: String) = text(cert, RATING_SP, bold = true, color = TEXT_2).apply {
-        letterSpacing = 0.04f
-        setPadding(dp(5), dp(2), dp(5), dp(2))
-        background = GradientDrawable().apply { setStroke(dp(1), TEXT_2); cornerRadius = dp(4).toFloat() }
-        alpha = RATING_ALPHA
-    }
+    private fun capsule(cert: String) = text("", SMALL, bold = true).apply { text = certMark(cert); contentDescription = "Rated $cert" }
 
     /** The critics' consensus in their words, a block of its own; a series' is its newest season's, named in the label. */
     private fun fillCritics(slot: LinearLayout) {

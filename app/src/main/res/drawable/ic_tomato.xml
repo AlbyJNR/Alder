@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tomato, drawn for CAS: marks the Rotten Tomatoes scores. In its own colours; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FFE5483A" android:pathData="M12,6.4c5.2,0 9,3.4 9,7.9c0,4.4 -4,7.5 -9,7.5s-9,-3.1 -9,-7.5c0,-4.5 3.8,-7.9 9,-7.9z" />
+    <path android:fillColor="#FF5FAE57" android:pathData="M12,2.2l1.2,3.1l3.6,-1.6l-1.7,3.2l3.5,1.1l-4.6,1.1l-2,1.9l-2,-1.9l-4.6,-1.1l3.5,-1.1l-1.7,-3.2l3.6,1.6z" />
+</vector>

@@ -1057,7 +1057,7 @@ class MainActivity : Screen() {
     /** The facts line: the age rating first when it is known ("15 · 2022 · Thriller · 4 seasons"), as the title's page has it. */
     private fun showFacts(item: Item) {
         val cert = (metas[item.id]?.certification ?: heroCerts[item.id])?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
-        heroFacts.text = listOfNotNull(cert, heroFactsBase.ifEmpty { null }).joinToString(DOT)
+        heroFacts.text = if (cert == null) heroFactsBase else android.text.SpannableStringBuilder(certMark(cert)).apply { if (heroFactsBase.isNotEmpty()) append(DOT).append(heroFactsBase) }
     }
 
     private val scoresAhead = Runnable {

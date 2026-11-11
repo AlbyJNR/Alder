@@ -243,7 +243,9 @@ internal fun imdbCertificate(imdbId: String): String? {
     imdbCertificateCache[imdbId]?.let { return it }
     return runCatching {
         val query = JSONObject().put("query", "{title(id:\"$imdbId\"){certificate{rating}}}").toString()
-        val raw = Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized"))
+        // The TV's own country's rating: IMDb answers by this header (the UK's 15 where America says TV-MA).
+        val raw = Http.post("https://api.graphql.imdb.com/", query, timeoutMs = 12_000, headers = mapOf("x-imdb-client-name" to "imdb-web-next-localized",
+            "x-imdb-user-country" to Locale.getDefault().country.ifEmpty { "GB" }))
         parseImdbCertificate(JSONObject(raw))?.also { imdbCertificateCache.capped()[imdbId] = it }
     }.onFailure { android.util.Log.w("CAS", "IMDb certificate for $imdbId failed: $it") }.getOrNull()
 }

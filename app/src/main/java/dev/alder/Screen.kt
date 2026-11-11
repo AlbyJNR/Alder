@@ -170,6 +170,35 @@ internal fun withAlpha(color: Int, alpha: Int) = (alpha shl 24) or (color and 0x
 internal const val TINT_LIGHTNESS = 0.15
 
 /** What every screen shares: the signed-in account, background work, and the few view helpers the plain UI uses. */
+/** The band colour of an age rating, British or American, film or TV; grey for one CAS does not know. */
+internal fun certColour(cert: String): Int = when (cert.trim().uppercase()) {
+    "U", "UC", "G", "TV-Y", "TV-G", "E", "0", "ALL" -> 0xFF57B36A.toInt()
+    "PG", "TV-PG", "TV-Y7", "TV-Y7-FV", "7" -> 0xFFF2C744.toInt()
+    "12", "12A", "PG-13", "TV-14", "13", "14" -> 0xFFF08A3C.toInt()
+    "15", "R", "16" -> 0xFFE8608A.toInt()
+    "18", "R18", "NC-17", "TV-MA", "X", "17" -> 0xFFDB4040.toInt()
+    else -> 0xFFB8B8BD.toInt()
+}
+
+/** Draws its text as a small filled mark: a rounded box of [fill] with the letters in [ink], centred on the line. */
+internal class CertSpan(private val fill: Int, private val ink: Int, private val pad: Float, private val radius: Float) : android.text.style.ReplacementSpan() {
+    private fun sized(paint: android.graphics.Paint) = android.graphics.Paint(paint).apply { textSize = paint.textSize * 0.8f; isFakeBoldText = true; clearShadowLayer() }
+    override fun getSize(paint: android.graphics.Paint, text: CharSequence, start: Int, end: Int, fm: android.graphics.Paint.FontMetricsInt?): Int =
+        (sized(paint).measureText(text, start, end) + pad * 2).toInt()
+    override fun draw(canvas: android.graphics.Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: android.graphics.Paint) {
+        val p = sized(paint)
+        val width = p.measureText(text, start, end) + pad * 2
+        val m = paint.fontMetrics
+        val mid = y + (m.ascent + m.descent) / 2
+        val half = p.textSize * 0.72f
+        p.color = fill
+        canvas.drawRoundRect(x, mid - half, x + width, mid + half, radius, radius, p)
+        p.color = ink
+        val pm = p.fontMetrics
+        canvas.drawText(text, start, end, x + pad, mid - (pm.ascent + pm.descent) / 2, p)
+    }
+}
+
 abstract class Screen : Activity() {
     protected val main = Handler(Looper.getMainLooper())
     /** The Stremio account of the profile in use. */
@@ -289,6 +318,16 @@ abstract class Screen : Activity() {
             }
         }
 
+    /**
+     * An age rating as its mark: the rating on the colour cinema and TV use for its band (green for all, yellow for
+     * parental guidance, orange for 12 to 14, pink for 15, red for 18), so it reads at a glance and before its
+     * letters do. As text with a span, so it sits in a line of facts or stands alone. CAS's own drawing: the
+     * boards' symbols themselves are their trademarks.
+     */
+    protected fun certMark(cert: String): CharSequence = android.text.SpannableString(cert).apply {
+        setSpan(CertSpan(certColour(cert), BASE, dp(5).toFloat(), dp(3).toFloat()), 0, length, 0)
+    }
+
     protected fun caps(value: String, color: Int = TEXT_2) = text(value.uppercase(), CAPS, bold = true, color = color).apply {
         letterSpacing = 0.12f
     }
@@ -314,9 +353,6 @@ abstract class Screen : Activity() {
     protected fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null): LinearLayout {
         val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         fun dot() { if (lead || line.childCount > 0) line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) }) }
-        fun badge(name: String) = text(name, BADGE, bold = true, color = BASE).apply {
-            setPadding(dp(4), dp(1), dp(4), dp(1)); background = rounded(TUNGSTEN, 3)
-        }
         // The rating behind a warm star, not the letters of where it is from (Alan, 2026-11-10).
         rating?.let {
             dot()
@@ -327,7 +363,10 @@ abstract class Screen : Activity() {
             line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(4) })
         }
         meters?.let {
-            dot(); line.addView(badge("RT"))
+            dot()
+            // A tomato, not the letters RT (Alan, 2026-11-11): the scores after it are Rotten Tomatoes'.
+            line.addView(android.widget.ImageView(this).apply { setImageResource(R.drawable.ic_tomato); contentDescription = "Rotten Tomatoes" },
+                LinearLayout.LayoutParams(dp(METER_ICON + 2), dp(METER_ICON + 2)))
             // The critics as a pen, the audience as a person: what each number is, with no letter to decode.
             val parts = listOfNotNull(METER_C.find(it)?.groupValues?.get(1)?.let { v -> R.drawable.ic_pen to "$v%" },
                 METER_A.find(it)?.groupValues?.get(1)?.let { v -> R.drawable.ic_person to "$v%" })
@@ -1417,10 +1456,12 @@ abstract class Screen : Activity() {
         const val WHATS_NEW_W = 480 // dp
         const val CHIP_H = 30 // a chip's least height; it grows with the TV's font size
         // Focus motion: a little overshoot on the way in, settling over 220 ms, is most of what makes focus feel weighted.
-        val FOCUS_IN: android.view.animation.Interpolator = android.view.animation.OvershootInterpolator(1.2f)
+        // Quick and nearly straight: a control is at its size 160 ms after the remote lands, with the least bounce that
+        // still reads as arriving. At 220 ms with more bounce, moving along a title's controls felt behind the remote.
+        val FOCUS_IN: android.view.animation.Interpolator = android.view.animation.OvershootInterpolator(0.7f)
         val FOCUS_OUT: android.view.animation.Interpolator = android.view.animation.DecelerateInterpolator(1.5f)
-        const val FOCUS_IN_MS = 220L
-        const val FOCUS_OUT_MS = 170L
+        const val FOCUS_IN_MS = 160L
+        const val FOCUS_OUT_MS = 120L
         const val PRESS_DIP = 0.96f // OK held: the control's scale, relative to where focus left it
         // The trailer box.
         const val TRAILER_W = 0.68f // share of the screen the box takes: a box, not a page, but big enough to watch
