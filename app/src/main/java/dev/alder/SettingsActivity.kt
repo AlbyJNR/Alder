@@ -493,15 +493,20 @@ class SettingsActivity : Screen() {
             }
             Group.TITLE -> titlePage.forEach(::choiceRow)
             Group.LISTS -> {
-                Lists.all(this).forEach { l ->
+                // Each list can be moved up or down here (Alan, 2026-11-12): this order is the order of the rows on Home.
+                val lists = Lists.all(this)
+                fun redraw() { selectedGroup = null; showGroup(Group.LISTS) }
+                lists.forEachIndexed { i, l ->
                     val count = l.items.size
-                    actionRow(l.name, if (count == 1) "1 title" else "$count titles", "Hold OK on a title on Home, TV, Movies or Library to add it here.") {
-                        choose(l.name, listOf("Rename", "Remove list", "Keep")) { picked ->
-                            when (picked) {
-                                0 -> askName("Rename ${l.name}", l.name) { name -> Lists.rename(this, l.id, name); showGroup(Group.LISTS) }
-                                1 -> { Lists.remove(this, l.id); showGroup(Group.LISTS) }
-                            }
-                        }
+                    actionRow(l.name, if (count == 1) "1 title" else "$count titles", "Select a list to move it up or down, rename it or remove it. The order here is the order on Home.") {
+                        val actions = listOfNotNull(
+                            if (i > 0) "Move up" to { Lists.move(this, l.id, -1); redraw() } else null,
+                            if (i < lists.lastIndex) "Move down" to { Lists.move(this, l.id, 1); redraw() } else null,
+                            "Rename" to { askName("Rename ${l.name}", l.name) { name -> Lists.rename(this, l.id, name); redraw() } },
+                            "Remove list" to { Lists.remove(this, l.id); redraw() },
+                            "Keep" to { },
+                        )
+                        choose(l.name, actions.map { it.first }) { picked -> actions[picked].second() }
                     }
                 }
                 actionRow("New list", "", "A name of your own: a person, a mood, a night of the week.") {

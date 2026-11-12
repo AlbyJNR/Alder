@@ -13,6 +13,10 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.66.0
+
+- Settings › Lists: select a list, then select **Move up** or **Move down**. The order in Settings is the order of the rows on Home.
+
 ## 1.65.1
 
 - Title page: press Right from the last control to go to the first name in **Cast**. Press Left from a name to go back to the control.

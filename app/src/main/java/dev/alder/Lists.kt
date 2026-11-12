@@ -44,6 +44,16 @@ object Lists {
     fun rename(c: Context, id: String, name: String) = save(c, all(c).onEach { if (it.id == id) it.name = name.trim() })
     fun remove(c: Context, id: String) = save(c, all(c).filterNot { it.id == id })
 
+    /** Moves a list one place up ([delta] -1) or down (+1): the order here is the order of the rows on Home. */
+    fun move(c: Context, id: String, delta: Int) {
+        val lists = all(c).toMutableList()
+        val at = lists.indexOfFirst { it.id == id }
+        val to = at + delta
+        if (at < 0 || to !in lists.indices) return
+        lists.add(to, lists.removeAt(at))
+        save(c, lists)
+    }
+
     /** Adds [entry] to list [id], or takes it out when it's there already: one action for the hold-OK menu. */
     fun toggle(c: Context, id: String, entry: Entry): Boolean {
         val lists = all(c)
