@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.61.1
+
+- Title page: the age rating shows before the year. Before, an empty space showed there.
+- Names with an apostrophe show correctly, for example Catherine O'Hara.
+
 ## 1.61.0
 
 - A row that is not ready shows its name and blank cards. The row comes in the same place. Before, the row came from nothing.

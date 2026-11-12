@@ -183,8 +183,12 @@ internal fun certColour(cert: String): Int = when (cert.trim().uppercase()) {
 /** Draws its text as a small filled mark: a rounded box of [fill] with the letters in [ink], centred on the line. */
 internal class CertSpan(private val fill: Int, private val ink: Int, private val pad: Float, private val radius: Float) : android.text.style.ReplacementSpan() {
     private fun sized(paint: android.graphics.Paint) = android.graphics.Paint(paint).apply { textSize = paint.textSize * 0.8f; isFakeBoldText = true; clearShadowLayer() }
-    override fun getSize(paint: android.graphics.Paint, text: CharSequence, start: Int, end: Int, fm: android.graphics.Paint.FontMetricsInt?): Int =
-        (sized(paint).measureText(text, start, end) + pad * 2).toInt()
+    override fun getSize(paint: android.graphics.Paint, text: CharSequence, start: Int, end: Int, fm: android.graphics.Paint.FontMetricsInt?): Int {
+        // The line's height comes from here when the mark is all the text has (the title page's): unanswered, the
+        // line had no height and the mark was a blank gap before the year (seen in CI's screens, 2026-11-12).
+        if (fm != null) paint.fontMetricsInt.let { m -> fm.ascent = m.ascent; fm.descent = m.descent; fm.top = m.top; fm.bottom = m.bottom; fm.leading = m.leading }
+        return (sized(paint).measureText(text, start, end) + pad * 2).toInt()
+    }
     override fun draw(canvas: android.graphics.Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: android.graphics.Paint) {
         val p = sized(paint)
         val width = p.measureText(text, start, end) + pad * 2

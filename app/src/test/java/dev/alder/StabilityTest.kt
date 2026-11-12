@@ -112,6 +112,12 @@ class StabilityTest {
         assertFalse(noSources(listOf(none, Result.failure(java.io.IOException("down"))))) // one failed: it may have had one
     }
 
+    @Test fun namesLoseTheirHtmlCodes() {
+        assertEquals("Catherine O'Hara", plain("Catherine O&apos;Hara"))
+        assertEquals("Tom & Jerry", plain("Tom &amp; Jerry"))
+        assertEquals("Danny Elfman", plain("Danny Elfman"))
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

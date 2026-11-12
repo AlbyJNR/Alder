@@ -666,6 +666,10 @@ private fun trailerRank(node: JSONObject): Int {
 
 private const val SPOT_SECONDS = 60
 
+/** A name as people write it: some meta add-ons send HTML's codes in it ("O&apos;Hara"). */
+internal fun plain(s: String): String = if ('&' !in s) s else s.replace("&apos;", "'").replace("&#39;", "'").replace("&#x27;", "'")
+    .replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ").replace("&amp;", "&")
+
 class Meta(json: JSONObject) {
     val id: String = json.getString("id")
     /** The add-on's answer, as a number: the same details again (the saved copy, then the fresh one) redraw nothing. */
@@ -685,12 +689,12 @@ class Meta(json: JSONObject) {
     val genres = json.optJSONArray("genres").strings().take(3)
     /** The IMDb id, from the id itself or the add-on's `imdb_id` field (an add-on may number titles its own way). */
     val imdbId: String? = id.takeIf { it.startsWith("tt") }?.substringBefore(':') ?: json.text("imdb_id")?.takeIf { it.startsWith("tt") }
-    val cast = json.optJSONArray("cast").strings()
+    val cast = json.optJSONArray("cast").strings().map(::plain)
     /** The age rating ("PG-13", "15", "TV-MA") when the add-on gives one; IMDb is asked otherwise (imdbCertificate). */
     val certification: String? = (json.text("certification") ?: json.text("contentRating"))?.trim()?.takeIf { it.isNotEmpty() && it.length <= 8 }
-    val director = json.optJSONArray("director").strings()
+    val director = json.optJSONArray("director").strings().map(::plain)
     /** Who wrote it, as the meta add-on names them (Cinemeta's `writer`); never the director's name twice over. */
-    val writer = (json.optJSONArray("writer") ?: json.optJSONArray("writers")).strings().map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    val writer = (json.optJSONArray("writer") ?: json.optJSONArray("writers")).strings().map { plain(it).trim() }.filter { it.isNotEmpty() }.distinct()
     /** Trailer files an add-on gives outright (a `url` in `trailerStreams`): playable in CAS's own player. */
     val trailerFiles: List<Stream> = json.optJSONArray("trailerStreams").objects().mapNotNull { t ->
         val url = t.text("url") ?: return@mapNotNull null
