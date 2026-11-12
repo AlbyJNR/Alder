@@ -62,7 +62,7 @@ class ProfilesActivity : Screen() {
                 text("", SMALL, color = TEXT_2).apply {
                     text = android.text.SpannableStringBuilder(certMark("15")).append("  ·  S1 E3  ·  Thriller")
                 }.marginTop(12),
-                scoresLine("8.4", "C97% A87%", lead = false).marginTop(8),
+                scoresLine("8.4", "C97% A87%", lead = false, meta = 82).marginTop(8),
                 text("", SMALL, color = TEXT_2).apply {
                     text = android.text.SpannableStringBuilder().apply { listOf("U", "PG", "12A", "15", "18", "TV-MA", "PG-13", "NR").forEach { append(certMark(it)).append("   ") } }
                 }.marginTop(24),

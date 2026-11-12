@@ -17,7 +17,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * (Android's own client kept five per process), HTTP/2 where a host speaks it (one connection carries a title page's
  * burst of add-on requests side by side), and a disk cache for pictures. Every call blocks, so run them off the main thread.
  */
-internal val GUEST_HOSTS = setOf("api.graphql.imdb.com", "www.rottentomatoes.com", "www.rogerebert.com")
+internal val GUEST_HOSTS = setOf("api.graphql.imdb.com", "www.rottentomatoes.com", "www.rogerebert.com", "backend.metacritic.com")
 internal const val REST_MS = 10 * 60_000L
 
 /** The longest a whole call for an answer may take, ms: its read wait and half as much again, for the connection and a slow body. */

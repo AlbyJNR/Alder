@@ -118,6 +118,21 @@ class StabilityTest {
         assertEquals("Danny Elfman", plain("Danny Elfman"))
     }
 
+    @Test fun metacriticListsAndScoresParse() {
+        val list = org.json.JSONObject("""{"data":{"items":[
+            {"title":"Slow Horses","premiereYear":2022,"criticScoreSummary":{"score":82,"reviewCount":30}},
+            {"title":"Barely Seen","premiereYear":2026,"criticScoreSummary":{"score":99,"reviewCount":3}},
+            {"title":"No Score","premiereYear":2026,"criticScoreSummary":{"score":0,"reviewCount":40}}]}}""")
+        assertEquals(listOf("Slow Horses"), parseMcList(list).map { it.title }) // too few reviews, or no score, is left out
+        assertEquals(82, mcMatch(list, "slow horses!", 2023))
+        assertNull(mcMatch(list, "Slow Horses", 2010)) // a different title of the same name
+        assertNull(mcMatch(list, "Fast Horses", null))
+        assertTrue(mcListUrl(McList.BEST_TV, 2025).contains("productType=tv&page=1&releaseYearMin=2025"))
+        assertTrue(mcSearchUrl("The Batman", false).endsWith("/search/The%20Batman/web?mcoTypeId=2&limit=5"))
+        assertTrue(setOf(metaColour(80), metaColour(50), metaColour(20)).size == 3)
+        assertEquals("Slow Horses", McPick.of(parseMcList(list)[0].json()).title)
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

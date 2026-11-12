@@ -36,5 +36,11 @@ class LiveSourcesCheck {
         } + listOfNotNull(runCatching { parseImdbSimilar(ask(imdbSimilarQuery("tt0944947", "GB"), "GB")) }
             .fold({ picks -> "similar titles: none".takeIf { picks.isEmpty() } }, { "similar titles: $it" }))
         assertTrue("IMDb lists that no longer answer:\n" + wrong.joinToString("\n"), wrong.isEmpty())
+        // Metacritic's lists, by the app's own address and parser.
+        McList.entries.forEach { l ->
+            val c = java.net.URL(mcListUrl(l, java.time.LocalDate.now().year - 1)).openConnection() as java.net.HttpURLConnection
+            c.setRequestProperty("User-Agent", "CAS"); c.connectTimeout = 15_000; c.readTimeout = 20_000
+            assertTrue("Metacritic $l has no titles", parseMcList(JSONObject(c.inputStream.bufferedReader().use { it.readText() })).isNotEmpty())
+        }
     }
 }

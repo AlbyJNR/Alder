@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.67.0
+
+- Metacritic: the Metascore of a title shows with the other ratings, as a number on green, yellow or red.
+- Movies has a **Best films on Metacritic** row. TV has a **Best TV on Metacritic** row. The rows show titles from this year and last year.
+
 ## 1.66.0
 
 - Settings › Lists: select a list, then select **Move up** or **Move down**. The order in Settings is the order of the rows on Home.

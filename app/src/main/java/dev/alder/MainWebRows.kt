@@ -84,6 +84,7 @@ internal fun MainActivity.buildWebRows(rows: List<Pair<String, (LinearLayout, In
 internal fun MainActivity.webRows(p: Page): List<Pair<String, (LinearLayout, Int) -> Unit>> {
     fun imdb(l: ImdbList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> imdbRow(s, l, g) }
     fun rt(l: RtList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> rtRow(s, l, g) }
+    fun mc(l: McList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> mcRow(s, l, g) }
     val ebert: Pair<String, (LinearLayout, Int) -> Unit> = EBERT_ROW to { s, g -> ebertRow(s, g) }
     val because: Pair<String, (LinearLayout, Int) -> Unit> = BECAUSE_ROW to { s, g -> becauseRows(s, p, g) }
     val season = christmasSeason(java.time.LocalDate.now().toString())
@@ -91,14 +92,14 @@ internal fun MainActivity.webRows(p: Page): List<Pair<String, (LinearLayout, Int
     // Home has one row from the web, under the viewer's own: the ten most popular today, numbered.
     if (p == Page.HOME) return listOf(imdb(ImdbList.TOP_TEN))
     if (simple) return when (p) {
-        Page.MOVIES -> listOfNotNull(imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.TOP_MOVIES))
-        Page.SHOWS -> listOfNotNull(imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because, rt(RtList.POPULAR_TV), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.TOP_TV))
+        Page.MOVIES -> listOfNotNull(imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because, mc(McList.BEST_MOVIES), rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.TOP_MOVIES))
+        Page.SHOWS -> listOfNotNull(imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because, mc(McList.BEST_TV), rt(RtList.POPULAR_TV), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.TOP_TV))
         else -> emptyList()
     }
     return when (p) {
-        Page.MOVIES -> listOfNotNull(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because,
+        Page.MOVIES -> listOfNotNull(ebert, mc(McList.BEST_MOVIES), rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because,
             imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
-        Page.SHOWS -> listOfNotNull(rt(RtList.POPULAR_TV), imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because,
+        Page.SHOWS -> listOfNotNull(mc(McList.BEST_TV), rt(RtList.POPULAR_TV), imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because,
             imdb(ImdbList.NEW_SERIES), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
         // Foreign: what the chosen country has made best (its series, then its films), then its services in
         // its own order, each as ten films then ten series.
@@ -238,6 +239,18 @@ internal fun MainActivity.rankedItem(pk: ImdbPick, rank: Int, poster: String? = 
 }
 
 /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */
+/** Metacritic's best reviewed of a kind, as a poster row: each card carries its Metascore to the title line. */
+internal fun MainActivity.mcRow(slot: LinearLayout, list: McList, g: Int) =
+    fetchedRow(slot, list.title, g, cached = { c -> cachedMcList(list, c)?.map(::mcItem) }, saved = { c -> savedMcList(list, c)?.map(::mcItem) }) { c -> mcList(list, c).map(::mcItem) }
+
+internal fun MainActivity.mcItem(t: McTitle): Item {
+    val pk = t.title
+    heroMeta[pk.id] = t.mc.score // known already: shown the moment the card has the remote, with nothing asked
+    val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
+    return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
+        null, 0f, resume = false, left = null, note = null, released = pk.date)
+}
+
 internal fun MainActivity.rtRow(slot: LinearLayout, list: RtList, g: Int) =
     fetchedRow(slot, list.title, g, cached = { c -> cachedRtList(list, c)?.map(::rtItem) }, saved = { c -> savedRtList(list, c)?.map(::rtItem) }) { c -> rtList(list, c).map(::rtItem) }
 

@@ -387,7 +387,7 @@ abstract class Screen : Activity() {
      * IMDb's badge and [rating], then Rotten Tomatoes' badge and [meters] ("C92% A86%"), then [tail] (the library's
      * "Added …"): a dot between each pair and, with [lead], before the first, so the line continues the facts it follows.
      */
-    internal fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null): LinearLayout {
+    internal fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null, meta: Int? = null): LinearLayout {
         val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         fun dot() { if (lead || line.childCount > 0) line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) }) }
         // The rating behind a warm star, not the letters of where it is from (Alan, 2026-11-10).
@@ -398,6 +398,15 @@ abstract class Screen : Activity() {
                 contentDescription = "IMDb rating"
             }, LinearLayout.LayoutParams(dp(METER_ICON + 1), dp(METER_ICON + 1)))
             line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(4) })
+        }
+        // The Metascore as Metacritic shows it: the number on its band's colour (green, yellow, red), a mark like the
+        // age rating's, between the star and the tomato.
+        meta?.let {
+            dot()
+            line.addView(text("", SMALL, bold = true).apply {
+                text = android.text.SpannableString("$it").apply { setSpan(CertSpan(metaColour(it), Tone.onColour, dp(5).toFloat(), dp(3).toFloat()), 0, length, 0) }
+                contentDescription = "Metacritic $it"
+            }, wrap())
         }
         meters?.let {
             dot()

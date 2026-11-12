@@ -101,6 +101,7 @@ class DetailsActivity : Screen() {
     private var similarRequested = false
     private var certificate: String? = null // the age rating, from the add-on or IMDb
     private var certificateRequested = false
+    private var metascore: Int? = null // Metacritic's score, when it has the title
     private var tomatoes: RtScores? = null // Rotten Tomatoes' meters and consensus, when it has the title
     private var tomatoesRequested = false
     private var criticsSlot: LinearLayout? = null // the critics' block, refilled where it is when Rotten Tomatoes answers
@@ -179,6 +180,10 @@ class DetailsActivity : Screen() {
             if (!tomatoesRequested && m.name.isNotBlank() && Settings.titlePage(this, SettingsActivity.TITLE_TOMATOES)) {
                 tomatoesRequested = true
                 val year = m.year?.take(4)?.toIntOrNull()
+                background({ mcScore(m.name, year, type == "series") }) { r ->
+                    metascore = r.getOrNull() ?: return@background
+                    refreshFacts()
+                }
                 background({ rtScores(m.name, year, type == "series") }) { r ->
                     tomatoes = r.getOrNull() ?: return@background
                     refreshFacts()
@@ -369,7 +374,7 @@ class DetailsActivity : Screen() {
         line.addView(text(facts, SMALL, color = TEXT_2).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END },
             LinearLayout.LayoutParams(0, -2, 1f))
         block.addView(line, LinearLayout.LayoutParams(-1, -2))
-        if (m.rating != null || tomatoesOn) block.addView(scoresLine(m.rating, meters, lead = false).apply { minimumHeight = smallLine },
+        if (m.rating != null || tomatoesOn) block.addView(scoresLine(m.rating, meters, lead = false, meta = metascore).apply { minimumHeight = smallLine },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
     }
 
@@ -951,7 +956,7 @@ class DetailsActivity : Screen() {
                 intArrayOf(veil(0xC9), veil(0x99), veil(0x00)))
         }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 3 / 5, -1))
         val facts = listOfNotNull(certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }, m.year, m.runtime,
-            m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "★ $it" },
+            m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "★ $it" }, metascore?.let { "Metacritic $it" },
             tomatoes?.critics?.let { "Tomatometer $it%" + if (tomatoes?.criticsCertified == true) " (Certified Fresh)" else "" },
             tomatoes?.audience?.let { "Popcornmeter $it%" }).joinToString(DOT)
         val story = ScrollView(this).apply {

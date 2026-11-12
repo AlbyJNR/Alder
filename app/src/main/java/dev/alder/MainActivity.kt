@@ -222,6 +222,7 @@ class MainActivity : Screen() {
     // The widest the scores can be (IMDb's widest number, both meters at 100%), measured once: building the line on
     // every focus move was a handful of views per card.
     internal var heroSynopsis = "" // the focused title's whole description; heroAbout shows what fits, cut at a sentence
+    internal val heroMeta = HashMap<String, Int?>() // Metascores by title id; null once asked and Metacritic has none
     internal val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
     internal val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
     internal var wideRow = false // the row the remote is in has wide cards (Continue Watching): the hero sits lower
@@ -1049,7 +1050,7 @@ class MainActivity : Screen() {
         heroAdded.text = addedLine
         val tail = heroAdded.takeIf { page == Page.LIBRARY && addedLine.isNotEmpty() }
         heroScores.removeAllViews()
-        heroScores.addView(scoresLine(rating, rt, lead = false, tail = tail))
+        heroScores.addView(scoresLine(rating, rt, lead = false, tail = tail, meta = heroMeta[item.id]))
     }
 
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
@@ -1081,6 +1082,14 @@ class MainActivity : Screen() {
             background({ rtScores(item.name, year, item.type == "series") }) { r ->
                 heroRtScores[item.id] = r.getOrNull()
                 if (heroItem === item && mode == Mode.BROWSE) showScores(item)
+            }
+        }
+        if (item.id.startsWith("tt") && item.id !in heroMeta && item.name.isNotBlank()) {
+            heroMeta[item.id] = null // asked once; replaced when it answers
+            val year = metas[item.id]?.year?.take(4)?.toIntOrNull() ?: item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }?.take(4)?.toIntOrNull()
+            background({ mcScore(item.name, year, item.type == "series") }) { r ->
+                heroMeta[item.id] = r.getOrNull()
+                if (heroItem === item && mode == Mode.BROWSE && r.getOrNull() != null) showScores(item)
             }
         }
         val rated = metas[item.id]?.rating != null || item.facts.any { it.startsWith("IMDb") } || item.id in heroImdbRatings
