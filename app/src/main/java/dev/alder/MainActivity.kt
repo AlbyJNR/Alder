@@ -176,7 +176,7 @@ class MainActivity : Screen() {
      * and the long one down to the cards. As views over the art they were two more layers the GPU blended every frame,
      * a third of this TV's frame time.
      */
-    internal val shaded = Images.Look(if (Tone.light) "shaded-wide-light" else "shaded-wide") { src ->
+    internal val shaded = Images.Look(if (Tone.light) "shaded-wide-light2" else "shaded-wide") { src ->
         val w = artW
         val h = resources.displayMetrics.heightPixels
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -192,7 +192,9 @@ class MainActivity : Screen() {
         // Dense behind the title's words (the left half), then letting go, so the art stays sharp on the right.
         val shade = Paint().apply {
             shader = LinearGradient(0f, 0f, w * 0.74f, 0f,
-                intArrayOf(withAlpha(wall, if (bright) 0xF7 else 0xF2), withAlpha(wall, if (bright) 0xD0 else 0xA0), withAlpha(wall, 0)),
+                // On the light ground the words are dark and the picture under them must be nearly gone: lettering in the art
+                // itself (a poster's title, a slogan) showed through a thinner wash and tangled with the description.
+                intArrayOf(withAlpha(wall, if (bright || Tone.light) 0xF7 else 0xF2), withAlpha(wall, if (Tone.light) 0xE6 else if (bright) 0xD0 else 0xA0), withAlpha(wall, 0)),
                 floatArrayOf(0f, 0.4f, 1f), Shader.TileMode.CLAMP)
         }
         canvas.drawRect(0f, 0f, w * 0.74f, h.toFloat(), shade)
@@ -2015,7 +2017,14 @@ class MainActivity : Screen() {
             else listOf((if (saved) "Remove from My List" else "Add to My List") to { setInMyList(item, !saved) })
         val wholeRow = rows.firstOrNull { r -> r.cards.any { it.item === item } }?.takeIf { !it.grid && it.items.size >= SEE_ALL_MIN }
             ?.let { r -> listOf("See all of “${r.title}”" to { seeAll(r) }) } ?: emptyList()
-        val own = myList + wholeRow + listOwn + moves + when {
+        // Trailer first (Alan, 2026-11-12): the title's trailer in the box, from the row, without opening its page.
+        // IMDb's own clip for the title; the card's, where the row is a trailer list.
+        val trailer = if (!profile.kids && item.id.startsWith("tt") && (item.type == "movie" || item.type == "series")) listOf("Trailer" to {
+            showTrailerClip(item.name, { (item.trailerId?.let(::imdbVideoStreams) ?: emptyList()) + imdbTrailerStreams(item.id.substringBefore(':')) }) {
+                choose("Trailer unavailable", listOf("OK"), "No trailer was found for this title.") {}
+            }
+        }) else emptyList()
+        val own = trailer + myList + wholeRow + listOwn + moves + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })

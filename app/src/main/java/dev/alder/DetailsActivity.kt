@@ -320,8 +320,8 @@ class DetailsActivity : Screen() {
 
     /**
      * The page's tabs, along its foot (Alan, 2026-11-12, after Disney+'s title page): the block above has one job,
-     * Play, and everything else the page holds is named here in words: Episodes (a series) or More like this,
-     * Trailer, Details. Down from the block comes here; OK opens the one under the remote, Back returns to it.
+     * Play, and everything else the page holds is named here in words: Episodes (a series) or More like this, and
+     * Details. (Trailer is a control beside Play.) Down from the block comes here; OK opens the one under the remote, Back returns to it.
      * Drawn again in place when More like this arrives, the remote kept on its tab.
      */
     private fun addMoreHint() {
@@ -332,7 +332,6 @@ class DetailsActivity : Screen() {
         val tabs = listOfNotNull(
             if (hasEpisodes) "Episodes" to { showGuide() } else null,
             if (!hasEpisodes && ::similarOverlay.isInitialized) "More like this" to { showSimilar() } else null,
-            trailerAction?.let { "Trailer" to it },
             previewAction?.let { "Preview" to it },
             if (meta != null) "Details" to { showInfo() } else null,
         )
@@ -411,6 +410,22 @@ class DetailsActivity : Screen() {
     }
 
     /** Down within the information blocks moves to the next name, not to the episodes, while there is one below. */
+    private var cameFrom: View? = null // the control Right left for the names beside the title: Left returns to it
+
+    /**
+     * Right from the last control on Play's line goes to the first name in the blocks beside the title (the top of
+     * Cast), wherever that is on the screen. Android's own search took the name level with the controls, which is
+     * the Director's, half-way down: the remote seemed to skip the cast (Alan, 2026-11-12).
+     */
+    private fun sideEntry(): Boolean {
+        val row = actionRow1 as? android.view.ViewGroup ?: return false
+        val from = currentFocus?.takeIf { isInside(it, row) } ?: return false
+        if (from.focusSearch(View.FOCUS_RIGHT)?.let { isInside(it, row) } == true) return false // more controls to the right first
+        val first = sideColumn?.getFocusables(View.FOCUS_DOWN)?.firstOrNull() ?: return false
+        cameFrom = from
+        return first.requestFocus()
+    }
+
     private fun nextBelowInSide(): Boolean {
         val side = sideColumn ?: return false
         val from = currentFocus?.takeIf { isInside(it, side) } ?: return false
@@ -506,7 +521,17 @@ class DetailsActivity : Screen() {
             val word = text(if (resumeAt > 0) "Resume" else "Play", BODY, bold = true).onArt()
             addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(10) })
             addView(word, wrap().apply { marginEnd = dp(18) })
-            listOfNotNull(startOver, listButton).forEachIndexed { i, orb ->
+            // Trailer beside Play again, as a round control with its own mark (Alan, 2026-11-12): a frame of film
+            // with a play mark, dark on the lit face when the remote is on it.
+            val trailerOrb = trailerAction?.let { play ->
+                iconButton("", "Trailer") { play() }.apply {
+                    fun mark(lit: Boolean) { foreground = centred(R.drawable.ic_trailer, 19, if (lit) BASE else TEXT) }
+                    val focus = onFocusChangeListener
+                    setOnFocusChangeListener { v, has -> focus?.onFocusChange(v, has); mark(has) }
+                    mark(false)
+                }
+            }
+            listOfNotNull(trailerOrb, startOver, listButton).forEachIndexed { i, orb ->
                 addView(orb, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginStart = dp(if (i == 0) 6 else 10) })
             }
         }
@@ -1159,6 +1184,13 @@ class DetailsActivity : Screen() {
             } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
                 (hero.findViewWithTag<View>(MORE_HINT) as? android.view.ViewGroup)?.let { it.childCount > 0 && it.getChildAt(it.childCount - 1) === currentFocus } == true) {
                 return true // the last tab is the end of the line: Right does not jump up into the blocks beside the title
+            } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && sideEntry() ) {
+                return true
+            } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT &&
+                currentFocus?.let { f -> sideColumn?.let { isInside(f, it) } } == true) {
+                // Left from any name goes back to the control the remote came from, or to Play.
+                (cameFrom?.takeIf { it.isAttachedToWindow } ?: playButton.takeIf { ::playButton.isInitialized })?.requestFocus()
+                return true
             } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 // Up from a tab goes back to Play, wherever along the foot the tab is.
                 val strip = hero.findViewWithTag<View>(MORE_HINT)

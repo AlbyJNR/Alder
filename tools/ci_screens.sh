@@ -15,6 +15,9 @@ adb install "$APK" > /dev/null
 adb logcat -c
 adb shell am start -n uk.albyjnr.cas/dev.alder.ProfilesActivity --es testKey "$KEY" > /dev/null
 sleep 35; shot 01-home
+# A held OK on the first title: its menu, Trailer first.
+adb shell input keyevent --longpress KEYCODE_DPAD_CENTER; sleep 3; shot 01a-hold-menu
+key KEYCODE_BACK 3
 # Along the first row to its end and one press past it: the whole row as a grid.
 for i in $(seq 1 12); do key KEYCODE_DPAD_RIGHT 1; done; shot 01b-row-end
 key KEYCODE_DPAD_RIGHT 6; shot 01c-see-all
@@ -26,6 +29,9 @@ key KEYCODE_DPAD_RIGHT 3; shot 05-tv
 key KEYCODE_DPAD_DOWN 3; key KEYCODE_DPAD_DOWN 6; shot 06-tv-row3
 key KEYCODE_DPAD_LEFT 2; key KEYCODE_DPAD_DOWN 12; key KEYCODE_DPAD_RIGHT 3; shot 07-movies
 key KEYCODE_DPAD_CENTER 12; shot 08-title
+key KEYCODE_DPAD_RIGHT 2; shot 08a-on-trailer
+key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_RIGHT 2; shot 08b-right-to-cast
+key KEYCODE_DPAD_DOWN 2; key KEYCODE_DPAD_LEFT 2; shot 08c-left-back
 key KEYCODE_DPAD_DOWN 3; shot 09-title-tabs
 key KEYCODE_DPAD_CENTER 6; shot 11-tab-first-open
 key KEYCODE_BACK 3; shot 12-tab-closed

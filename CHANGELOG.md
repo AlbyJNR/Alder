@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.65.1
+
+- Title page: press Right from the last control to go to the first name in **Cast**. Press Left from a name to go back to the control.
+- Title page: **Trailer** is a round control with an icon, next to Play. Before, it was a tab at the foot of the page.
+- Hold OK on a title in a row: **Trailer** is the first choice. It plays the trailer without opening the page.
+
 ## 1.65.0
 
 - See all: at the end of a row, press Right again. CAS shows all titles of the row on one screen.
