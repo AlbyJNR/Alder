@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.62.0
+
+- Title page: Play has the line to itself, with Start over and My List. The other parts of the page are tabs along the foot: **Episodes** or **More like this**, **Trailer**, **Details**.
+- Press Down to go to the tabs. Press OK to open a tab. Press Back to close it. Press Up to go back to Play.
+
 ## 1.61.1
 
 - Title page: the age rating shows before the year. Before, an empty space showed there.

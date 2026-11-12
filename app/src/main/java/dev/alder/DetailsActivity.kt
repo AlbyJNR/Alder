@@ -315,18 +315,37 @@ class DetailsActivity : Screen() {
         }
     }
 
-    /** "▾ Episodes" or "▾ More like this" under the block, once there is something below; added in place when it comes. */
+    private var trailerAction: (() -> Unit)? = null // what the Trailer tab plays; set with the watch block
+    private var previewAction: (() -> Unit)? = null // and the Preview tab, where the profile has it
+
+    /**
+     * The page's tabs, along its foot (Alan, 2026-11-12, after Disney+'s title page): the block above has one job,
+     * Play, and everything else the page holds is named here in words: Episodes (a series) or More like this,
+     * Trailer, Details. Down from the block comes here; OK opens the one under the remote, Back returns to it.
+     * Drawn again in place when More like this arrives, the remote kept on its tab.
+     */
     private fun addMoreHint() {
-        hero.findViewWithTag<View>(MORE_HINT)?.let(hero::removeView)
+        val old = hero.findViewWithTag<View>(MORE_HINT)
+        val was = (currentFocus as? TextView)?.takeIf { old != null && isInside(it, old) }?.text?.toString()
+        old?.let(hero::removeView)
         val hasEpisodes = type == "series" && meta?.videos?.isNotEmpty() == true
-        if (!hasEpisodes && !::similarOverlay.isInitialized) return
-        hero.addView(caps(if (hasEpisodes) "▾  Episodes" else "▾  More like this", TEXT_2).onArt().apply {
-            tag = MORE_HINT
-            isFocusable = true
-            setOnClickListener { if (hasEpisodes) showGuide() else showSimilar() }
-            rowFocus(rest = { null })
-        }, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
-            leftMargin = dp(PAD); bottomMargin = dp(32)
+        val tabs = listOfNotNull(
+            if (hasEpisodes) "Episodes" to { showGuide() } else null,
+            if (!hasEpisodes && ::similarOverlay.isInitialized) "More like this" to { showSimilar() } else null,
+            trailerAction?.let { "Trailer" to it },
+            previewAction?.let { "Preview" to it },
+            if (meta != null) "Details" to { showInfo() } else null,
+        )
+        if (tabs.isEmpty()) return
+        val strip = LinearLayout(this).apply { tag = MORE_HINT; clipChildren = false; gravity = Gravity.CENTER_VERTICAL }
+        tabs.forEachIndexed { i, (label, open) ->
+            val tab = chip(label).apply { setOnClickListener { open() } }
+            if (label == "Details") infoButton = tab // closing Details hands the remote back to its tab
+            strip.addView(tab, LinearLayout.LayoutParams(-2, -2).apply { if (i > 0) marginStart = dp(8) })
+            if (label == was) tab.post { tab.requestFocus() }
+        }
+        hero.addView(strip, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START).apply {
+            leftMargin = dp(PAD); bottomMargin = dp(24)
         })
     }
 
@@ -461,7 +480,6 @@ class DetailsActivity : Screen() {
                 when (i) { 0 -> openSources(target?.first ?: metaId, startOver = true); 1 -> removeFromContinue() }
             }
         } else null
-        infoButton = iconButton("ⓘ", "More information") { showInfo() }
         listButton = iconButton(if (Library.inList(item)) "✓" else "+", "My List") { toggleList() }.apply {
             // Held: the viewer's own lists (Kids, AC…), the rows under Continue on Home.
             setOnLongClickListener { listsMenu(Lists.Entry(metaId, type, m.name, m.poster ?: poster)); true }
@@ -469,15 +487,15 @@ class DetailsActivity : Screen() {
         // A trailer file (IMDb's, or the add-on's own) plays in the box on every TV; a title with only a YouTube id
         // takes the YouTube route Settings chose. Shown whenever IMDb could have one: every IMDb-numbered title.
         val ytId = m.trailers.firstOrNull()
-        val trailer = if (Settings.titlePage(this, SettingsActivity.TITLE_TRAILER))
-            glassButton("Trailer") {
-                showTrailerClip(m.name, { (listedTrailer?.let(::imdbVideoStreams) ?: emptyList()) + m.trailerFiles + (m.imdbId?.let(::imdbTrailerStreams) ?: emptyList()) }) {
-                    if (ytId != null) showTrailer(ytId, m.name)
-                    else choose("Trailer unavailable", listOf("OK"), "No trailer was found for this title.") {}
-                }
-            } else null
-        val preview = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW) && Settings.everything(this))
-            glassButton("Preview") { if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) } else null
+        // Trailer and Preview are tabs along the page's foot (addMoreHint), not controls beside Play.
+        trailerAction = if (Settings.titlePage(this, SettingsActivity.TITLE_TRAILER)) ({
+            showTrailerClip(m.name, { (listedTrailer?.let(::imdbVideoStreams) ?: emptyList()) + m.trailerFiles + (m.imdbId?.let(::imdbTrailerStreams) ?: emptyList()) }) {
+                if (ytId != null) showTrailer(ytId, m.name)
+                else choose("Trailer unavailable", listOf("OK"), "No trailer was found for this title.") {}
+            }
+        }) else null
+        previewAction = if (Settings.titlePage(this, SettingsActivity.TITLE_PREVIEW) && Settings.everything(this))
+            ({ if (unaired != null) notAired(unaired) else preview(target?.first ?: metaId, m) }) else null
         // One line of controls, as the Apple TV app sets them: Play's white disc first, always (a title not out yet
         // keeps the same order, and Play says when it is out), the worded glass controls beside it, then the small
         // round ones a step apart. The column is wide enough for all of them, so nothing is squeezed out of the line.
@@ -485,11 +503,11 @@ class DetailsActivity : Screen() {
             clipChildren = false
             gravity = Gravity.CENTER_VERTICAL // the glass controls and the orbs sit on the disc's centre line
             // The disc says what it does in a word beside it, where the line has the room (no Preview on it).
-            val word = if (preview == null) text(if (resumeAt > 0) "Resume" else "Play", BODY, bold = true).onArt() else null
-            addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(if (word != null) 10 else 14) })
-            word?.let { addView(it, wrap().apply { marginEnd = dp(18) }) }
-            listOfNotNull(trailer, preview).forEach { addView(it, LinearLayout.LayoutParams(-2, dp(BUTTON_H)).apply { marginEnd = dp(8) }) }
-            listOfNotNull(startOver, listButton, infoButton).forEachIndexed { i, orb ->
+            // Play, in a word beside its disc, then only what acts on this title: start over, My List.
+            val word = text(if (resumeAt > 0) "Resume" else "Play", BODY, bold = true).onArt()
+            addView(playButton, LinearLayout.LayoutParams(dp(DISC), dp(DISC)).apply { marginEnd = dp(10) })
+            addView(word, wrap().apply { marginEnd = dp(18) })
+            listOfNotNull(startOver, listButton).forEachIndexed { i, orb ->
                 addView(orb, LinearLayout.LayoutParams(dp(ORB), dp(ORB)).apply { marginStart = dp(if (i == 0) 6 else 10) })
             }
         }
@@ -890,7 +908,7 @@ class DetailsActivity : Screen() {
         guide.animate().alpha(0f).translationY(dp(24).toFloat()).setDuration(220).withEndAction {
             guide.visibility = View.GONE
             hero.visibility = View.VISIBLE
-            if (::playButton.isInitialized) playButton.requestFocus()
+            (keyed(hero, "Episodes") ?: playButton.takeIf { ::playButton.isInitialized })?.requestFocus()
         }.start()
     }
 
@@ -971,7 +989,7 @@ class DetailsActivity : Screen() {
             root.removeView(overlay)
             if (infoOpen) return@withEndAction // opened again before this one had gone: the new one holds the page
             hero.visibility = View.VISIBLE
-            infoButton.requestFocus()
+            (keyed(hero, "Details") ?: playButton).requestFocus()
         }.start()
     }
 
@@ -1062,7 +1080,7 @@ class DetailsActivity : Screen() {
         similarOverlay.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(180).withEndAction {
             similarOverlay.visibility = View.GONE
             hero.visibility = View.VISIBLE
-            playButton.requestFocus()
+            (keyed(hero, "More like this") ?: playButton).requestFocus()
         }.start()
     }
 
@@ -1135,10 +1153,14 @@ class DetailsActivity : Screen() {
                 hideSimilar()
                 return true
             } else if (!infoOpen && !similarOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN &&
-                currentFocus?.let { isInside(it, hero) } == true && !nextBelowInSide() &&
-                (if (type == "series") ::guide.isInitialized else ::similarOverlay.isInitialized)) {
-                if (type == "series") showGuide() else showSimilar()
-                return true
+                currentFocus?.let { isInside(it, hero) } == true && !nextBelowInSide()) {
+                // Down from the block goes to the tabs along the foot; on the tabs there is nothing below.
+                val strip = hero.findViewWithTag<View>(MORE_HINT) as? android.view.ViewGroup
+                if (strip != null) { if (currentFocus?.let { isInside(it, strip) } != true) strip.getChildAt(0)?.requestFocus(); return true }
+            } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                // Up from a tab goes back to Play, wherever along the foot the tab is.
+                val strip = hero.findViewWithTag<View>(MORE_HINT)
+                if (strip != null && currentFocus?.let { isInside(it, strip) } == true && ::playButton.isInitialized) { playButton.requestFocus(); return true }
             }
         }
         return super.dispatchKeyEvent(event)

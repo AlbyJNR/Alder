@@ -22,7 +22,11 @@ key KEYCODE_DPAD_RIGHT 3; shot 05-tv
 key KEYCODE_DPAD_DOWN 3; key KEYCODE_DPAD_DOWN 6; shot 06-tv-row3
 key KEYCODE_DPAD_LEFT 2; key KEYCODE_DPAD_DOWN 12; key KEYCODE_DPAD_RIGHT 3; shot 07-movies
 key KEYCODE_DPAD_CENTER 12; shot 08-title
-key KEYCODE_DPAD_DOWN 3; shot 09-title-down
+key KEYCODE_DPAD_DOWN 3; shot 09-title-tabs
+key KEYCODE_DPAD_CENTER 6; shot 11-tab-first-open
+key KEYCODE_BACK 3; shot 12-tab-closed
+key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_CENTER 6; shot 13-tab-details
+key KEYCODE_BACK 3; key KEYCODE_DPAD_UP 2; shot 14-back-on-play
 key KEYCODE_BACK 3; key KEYCODE_BACK 3; shot 10-back
 adb logcat -d | grep -vF "$KEY" > screens/logcat.txt || true
 if grep -q "FATAL EXCEPTION" screens/logcat.txt; then echo "::error::CAS crashed on the signed-in walk"; grep -A 20 "FATAL EXCEPTION" screens/logcat.txt | head -40; exit 1; fi
