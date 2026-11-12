@@ -97,7 +97,7 @@ class PersonActivity : Screen() {
             Images.load(p.photo, photo, dp(PHOTO_W))
         }
         about.addView(text(p.name, SERIF_TITLE, serif = true).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END })
-        if (p.jobs.isNotEmpty()) about.addView(caps(p.jobs.take(2).joinToString("  ·  "), TUNGSTEN).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }.marginTop(8))
+        if (p.jobs.isNotEmpty()) about.addView(caps(p.jobs.take(2).joinToString("  ·  ")).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }.marginTop(8))
         listOfNotNull(p.born?.let { "Born $it" }, p.birthplace).joinToString(DOT).takeIf { it.isNotEmpty() }?.let {
             about.addView(text(it, SMALL, color = TEXT_3).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }.marginTop(8))
         }

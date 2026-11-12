@@ -2,17 +2,15 @@
 
 Run from anywhere: python3 tools/cas_brand.py
 
-The mark is an aperture: a C-shaped ring with a dot, the C of CAS and a lens looking back. Monochrome, geometric,
-and legible at launcher size.
+CAS is the family's name, and the mark is the family: four figures, two grown and two small, side by side, the
+smallest in the warm accent (Alan chose concepts A and B, 2026-11-12).
 
-- drawable-xhdpi/banner.png (320x180): the Fire TV / Android TV launcher tile, set as both android:banner and
-  android:icon (Fire TV's launcher draws a sideloaded app's tile from the icon, and showed the square one with grey
-  bars either side). The whole tile is the brand: a lit charcoal surface with a warm glow behind the mark, the mark
-  and the wordmark large across it, no border.
-- logo_transparent.png (512x512): the bare mark; the adaptive icon's foreground and the Watch Next mark.
-- drawable/ic_mark.xml: the same mark as a vector, for the wordmark on every screen (Screen.brand()).
+- drawable-xhdpi/banner.png (320x180): the Fire TV / Android TV launcher tile, set as android:banner and
+  android:icon. Concept A: the family, then the name, on a lit charcoal plate.
+- drawable-nodpi/logo_transparent.png (512x512): the adaptive app icon's foreground. Concept B: the name over a
+  line, the family standing under it.
+- drawable/ic_mark.xml: the family as a vector in one colour, for the wordmark on every screen (Screen.brand()).
 """
-import math
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
@@ -22,106 +20,82 @@ DEST = ROOT / 'app/src/main/res/drawable-nodpi'
 TILE = ROOT / 'app/src/main/res/drawable-xhdpi'
 VECTOR = ROOT / 'app/src/main/res/drawable/ic_mark.xml'
 
-BASE = (8, 9, 11)        # #08090B, Screen.BASE
-LIFT = (30, 32, 38)      # the top of the gradient: barely lighter, so the tile reads as a surface, not a hole
-INK = (245, 245, 247)    # #F5F5F7, Screen.TEXT
-WARM = (243, 231, 211)   # #F3E7D3, Screen.TUNGSTEN: the lens, lit
-GLOW = (120, 96, 70)     # the warm light behind the mark, at its brightest before it fades
-S = 4                    # supersampling: drawn large, then shrunk, so the curves are smooth
-GAP_DEG = 35             # half the opening of the C, in degrees, either side of the right
+BASE = (18, 19, 22)      # the dark ground, Tone.base
+LIFT = (38, 40, 46)      # the top of the plate: barely lighter, so the tile reads as a surface
+INK = (236, 236, 239)    # the off-white of the words on the dark ground
+WARM = (243, 231, 211)   # the accent: the smallest of the four
+S = 4                    # supersampling
+HEIGHTS = [1.0, 0.92, 0.66, 0.52]  # the four, tallest first
 
 
 def plate(size):
-    """Vertical charcoal gradient, LIFT at the top to BASE at the bottom."""
     w, h = size
     im = Image.new('RGB', size, BASE)
     px = im.load()
     for y in range(h):
-        t = (y / max(1, h - 1)) ** 2  # ease: most of the lift stays near the top
+        t = (y / max(1, h - 1)) ** 2
         row = tuple(round(LIFT[i] + (BASE[i] - LIFT[i]) * t) for i in range(3))
         for x in range(w):
             px[x, y] = row
     return im.convert('RGBA')
 
 
-def mark(draw, cx, cy, r, stroke, lens=INK):
-    """The aperture: ring open on the right, the lens (dot) at the centre, lit warm where colour is allowed."""
-    draw.arc([cx - r, cy - r, cx + r, cy + r], start=GAP_DEG, end=360 - GAP_DEG, fill=INK, width=stroke)
-    dr = r * 0.24
-    draw.ellipse([cx - dr, cy - dr, cx + dr, cy + dr], fill=lens)
+def figure(cx, base, h):
+    """One of the four: (head circle, body box, body corner radius) for a figure [h] tall standing on [base]."""
+    r = h * 0.24
+    bw = h * 0.36
+    top = base - h + 2 * r + h * 0.07
+    return (cx, base - h + r, r), (cx - bw, top, cx + bw, base), min(bw * 0.95, (base - top) / 2)
 
 
-def glow(im, cx, cy, radius):
-    """A soft warm light behind the mark: the tile reads as a lit surface, as the big services' tiles do."""
-    w, h = im.size
-    layer = Image.new('RGBA', im.size, (0, 0, 0, 0))
-    px = layer.load()
-    for y in range(h):
-        for x in range(w):
-            d = math.hypot(x - cx, y - cy) / radius
-            if d < 1:
-                a = round(255 * (1 - d) ** 2 * 0.55)
-                px[x, y] = (*GLOW, a)
-    return Image.alpha_composite(im, layer)
+def family(draw, x, base, unit, gap, fill, accent):
+    for i, k in enumerate(HEIGHTS):
+        (hx, hy, r), box, rad = figure(x + i * gap, base, unit * k)
+        c = accent if i == 3 else fill
+        draw.ellipse([(hx - r) * S, (hy - r) * S, (hx + r) * S, (hy + r) * S], fill=c)
+        draw.rounded_rectangle([v * S for v in box], radius=int(rad * S), fill=c)
 
 
-def wordmark(draw, cx, cy, font_size, tracking=0.14, weight=650, fill=INK):
-    """'CAS' set in Inter, letterspaced and optically centred on (cx, cy)."""
-    font = ImageFont.truetype(str(FONT), font_size)
-    font.set_variation_by_axes([32, weight])  # Inter's axes are [optical size, weight]; 32 is its display cut
-    gap = font_size * tracking
-    widths = [draw.textlength(c, font=font) for c in 'CAS']
-    total = sum(widths) + gap * 2
-    x = cx - total / 2
-    box = draw.textbbox((0, 0), 'CAS', font=font)
-    y = cy - (box[3] - box[1]) / 2 - box[1]
-    for c, width in zip('CAS', widths):
-        draw.text((x, y), c, fill=fill, font=font)
-        x += width + gap
+def word(draw, x, y, size, fill, tracking=0.10, weight=650):
+    font = ImageFont.truetype(str(FONT), size * S)
+    font.set_variation_by_axes([32, weight])
+    for ch in 'CAS':
+        draw.text((x * S, y * S), ch, font=font, fill=fill)
+        x += draw.textlength(ch, font=font) / S + size * tracking
+    return x
 
 
-def shrink(im, size):
-    return im.resize(size, Image.LANCZOS)
-
-
-# Banner: the mark large at left with its warm light, the wordmark at right, both on one optical centre line,
-# filling the tile the way the big services' tiles do.
-G = 2  # the glow is drawn at a lower supersample: it is soft anyway, and the per-pixel loop is slow at S
-im = plate((320 * G, 180 * G))
-im = glow(im, 84 * G, 90 * G, 150 * G)
-im = im.resize((320 * S, 180 * S), Image.BICUBIC)
+# The tile: the family, then the name.
+im = plate((320 * S, 180 * S))
 d = ImageDraw.Draw(im)
-mark(d, 84 * S, 90 * S, 42 * S, 10 * S, lens=WARM)
-wordmark(d, 212 * S, 90 * S, 60 * S, tracking=0.12)
+family(d, 44, 120, 50, 37, INK, WARM)
+word(d, 184, 61, 52, INK)
 TILE.mkdir(exist_ok=True)
-shrink(im, (320, 180)).convert('RGB').save(TILE / 'banner.png', optimize=True)
-old = DEST / 'banner.webp'
-if old.exists():
-    old.unlink()
+im.resize((320, 180), Image.LANCZOS).convert('RGB').save(TILE / 'banner.png', optimize=True)
 
-# The bare mark, for the adaptive icon (its inset keeps it inside the safe zone) and Watch Next.
+# The app icon's foreground: the name over a line, the family under it.
 im = Image.new('RGBA', (512 * S, 512 * S), (0, 0, 0, 0))
-mark(ImageDraw.Draw(im), 256 * S, 256 * S, 168 * S, 40 * S, lens=WARM)
-shrink(im, (512, 512)).save(DEST / 'logo_transparent.png')
+d = ImageDraw.Draw(im)
+end = word(d, 96, 96, 132, INK)
+d.rounded_rectangle([96 * S, 262 * S, (end - 13) * S, 272 * S], radius=5 * S, fill=INK)
+family(d, 132, 420, 104, 88, INK, WARM)
+im.resize((512, 512), Image.LANCZOS).save(DEST / 'logo_transparent.png')
 
-# The vector: one arc path for the ring (as a thick stroke) and a circle for the dot, in a 24 dp box.
-cx = cy = 12.0
-r = 8.2
-a0, a1 = math.radians(GAP_DEG), math.radians(360 - GAP_DEG)
-x0, y0 = cx + r * math.cos(a0), cy + r * math.sin(a0)
-x1, y1 = cx + r * math.cos(a1), cy + r * math.sin(a1)
-ring = f"M{x0:.2f},{y0:.2f} A{r},{r} 0 1 1 {x1:.2f},{y1:.2f}"
-dot_r = r * 0.22
-dot = f"M{cx - dot_r:.2f},{cy} a{dot_r:.2f},{dot_r:.2f} 0 1 0 {2 * dot_r:.2f},0 a{dot_r:.2f},{dot_r:.2f} 0 1 0 {-2 * dot_r:.2f},0"
-VECTOR.write_text(f'''<?xml version="1.0" encoding="utf-8"?>
-<!-- The CAS mark: an aperture. Generated by tools/cas_brand.py; tint it like text. -->
+# The vector: the four in one colour, in a 46 x 24 box; tint it like text.
+paths = []
+for i, k in enumerate(HEIGHTS):
+    (hx, hy, r), (l, t, rt, b), rad = figure(5.4 + i * 11.2, 22.5, 20.5 * k)
+    paths.append(f"M{hx - r:.2f},{hy:.2f}a{r:.2f},{r:.2f} 0 1,0 {2 * r:.2f},0a{r:.2f},{r:.2f} 0 1,0 {-2 * r:.2f},0z")
+    paths.append(f"M{l + rad:.2f},{t:.2f}H{rt - rad:.2f}a{rad:.2f},{rad:.2f} 0 0,1 {rad:.2f},{rad:.2f}V{b - rad:.2f}a{rad:.2f},{rad:.2f} 0 0,1 {-rad:.2f},{rad:.2f}"
+                 f"H{l + rad:.2f}a{rad:.2f},{rad:.2f} 0 0,1 {-rad:.2f},{-rad:.2f}V{t + rad:.2f}a{rad:.2f},{rad:.2f} 0 0,1 {rad:.2f},{-rad:.2f}z")
+VECTOR.write_text('''<?xml version="1.0" encoding="utf-8"?>
+<!-- The CAS mark: the family of four. Generated by tools/cas_brand.py; tint it like text. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
+    android:width="46dp"
     android:height="24dp"
-    android:viewportWidth="24"
+    android:viewportWidth="46"
     android:viewportHeight="24">
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineCap="round" android:fillColor="#00000000" android:pathData="{ring}" />
-    <path android:fillColor="#FFFFFFFF" android:pathData="{dot}" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="''' + ' '.join(paths) + '''" />
 </vector>
 ''')
 print('wrote', TILE / 'banner.png', DEST / 'logo_transparent.png', VECTOR.name)

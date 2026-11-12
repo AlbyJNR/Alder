@@ -410,7 +410,7 @@ class SettingsActivity : Screen() {
             groupLabels[item]?.setTextColor(if (item == group) TEXT else if (item == Group.STORAGE || item == Group.ABOUT) TEXT_3 else TEXT_2)
             if (!view.hasFocus()) view.background = if (item == group) tile(8) else null
         }
-        detailTitle.text = group.label.uppercase() // caps() only uppercases the words it was made with
+        detailTitle.text = group.label // caps() only uppercases the words it was made with
         detailRows.removeAllViews()
         rowsScroll.scrollTo(0, 0)
         choiceRows.clear()

@@ -286,7 +286,8 @@ class SearchActivity : Screen() {
             setOnClickListener { input.requestFocus() }
         }
         nav.addView(searchTab, LinearLayout.LayoutParams(dp(44), dp(30)))
-        listOf("Home", "TV", "Movies", "Library").forEach { page ->
+        // The short CAS has no Library page: its bar here names only the pages its rail has.
+        listOf("Home", "TV", "Movies", "Library").filter { it != "Library" || Settings.everything(this) }.forEach { page ->
             nav.addView(text(page, BODY, color = TEXT_2).apply {
                 gravity = Gravity.CENTER
                 setPadding(dp(12), 0, dp(12), 0)
@@ -676,7 +677,8 @@ class SearchActivity : Screen() {
 
     private fun card(meta: Meta, caption: TextView, scroller: HorizontalScrollView, firstInRow: Boolean): View {
         val image = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(BASE) }
-        val shade = View(this).apply { setBackgroundColor(BASE); alpha = 0.5f }
+        val rest = if (Tone.light) LIGHT_WASH else 0.5f // a poster not under the remote: set back on the dark ground, barely washed on the light
+        val shade = View(this).apply { setBackgroundColor(BASE); alpha = rest }
         val card = FrameLayout(this).apply {
             tag = "${meta.type}:${meta.id}"
             outlineProvider = object : ViewOutlineProvider() {
@@ -692,7 +694,7 @@ class SearchActivity : Screen() {
                 scroller.clipToPadding = true
                 resultsScroll.clipChildren = true
                 resultsScroll.clipToPadding = true
-                shade.animate().alpha(if (has) 0f else 0.5f).setDuration(150).start()
+                shade.animate().alpha(if (has) 0f else rest).setDuration(150).start()
                 if (has) {
                     // The focused row snaps to the pane's top, as on Home: scrolling just far enough left Shows cut off.
                     // Rows above it draw nothing: the pane didn't clip them, and they sat over the title's words.
@@ -761,7 +763,7 @@ class SearchActivity : Screen() {
         heroName.text = meta.name
         heroName.visibility = View.GONE
         heroLogo.visibility = View.VISIBLE
-        Images.load(meta.logo ?: Images.logoFor(meta.id), heroLogo, dp(210), urgent = true, failed = {
+        Images.load((meta.logo ?: Images.logoFor(meta.id)).takeIf { !Tone.light }, heroLogo, dp(210), urgent = true, failed = {
             if (focused === meta) { heroLogo.visibility = View.GONE; heroName.visibility = View.VISIBLE }
         })
         heroFacts.text = listOfNotNull(meta.year, meta.genres.firstOrNull(), meta.runtime?.let(::runtime)).joinToString("  ·  ") +

@@ -89,6 +89,7 @@ jobs:
             adb logcat -c
             adb shell am start -n uk.albyjnr.cas/dev.alder.ProfilesActivity
             sleep 20
+            adb exec-out screencap -p > smoke-first.png
             adb shell input keyevent KEYCODE_DPAD_CENTER
             sleep 3
             adb exec-out screencap -p > smoke.png
@@ -102,6 +103,7 @@ jobs:
           name: CAS-smoke
           path: |
             smoke.png
+            smoke-first.png
             logcat.txt
           if-no-files-found: ignore
 

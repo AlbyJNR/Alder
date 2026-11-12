@@ -687,7 +687,7 @@ class PlayerActivity : Screen() {
         val card = column(Gravity.START).apply {
             setPadding(dp(18), dp(16), dp(18), dp(16))
             background = glass(14)
-            addView(caps("Keeps buffering", TUNGSTEN))
+            addView(caps("Keeps buffering"))
             addView(text("Switch to ${lower}p?", SERIF_TITLE, serif = true),
                 wrap().apply { topMargin = dp(4) })
             addView(text("This ${height}p source stopped 3 times in a minute. A smaller file may play more smoothly from ${clock(position())}.",
@@ -737,7 +737,7 @@ class PlayerActivity : Screen() {
             addView(choose, wrap().apply { marginStart = dp(10) })
         }
         val card = column(Gravity.START,
-            caps("Not playing", TUNGSTEN),
+            caps("Not playing"),
             text("This isn't playing right now.", SERIF_TITLE, serif = true).marginTop(6),
             text("Try again in a moment, or choose a different source.", SMALL, color = TEXT_2).marginTop(6),
             buttons.marginTop(16)
@@ -779,7 +779,7 @@ class PlayerActivity : Screen() {
             setPadding(dp(18), dp(16), dp(18), dp(16))
             // Video can't be frosted: a dark base under the glass keeps it readable over white end cards.
             background = android.graphics.drawable.LayerDrawable(arrayOf(rounded(BASE and 0xD9FFFFFF.toInt(), 14), glass(14)))
-            addView(caps("Up next", TUNGSTEN).onArt())
+            addView(caps("Up next").onArt())
             // Where it sits in the season first, then its name: a long name stops at two lines rather than filling the card.
             addView(text("S${next.season} E${next.episode}", SMALL, color = TEXT_2).onArt(), wrap().apply { topMargin = dp(5) })
             addView(text(next.title.ifBlank { "Episode ${next.episode}" }, SERIF_HERO, serif = true).onArt().apply {
@@ -1006,7 +1006,7 @@ class PlayerActivity : Screen() {
         subtitle = text(intent.getStringExtra("episode")?.substringBefore("  ·  ").orEmpty(), SMALL, color = TEXT_2).onArt()
         pauseFacts = text("", SMALL, color = TEXT_2).onArt()
         pauseInfo = column(Gravity.START).apply {
-            addView(caps("Paused", TUNGSTEN).onArt())
+            addView(caps("Paused").onArt())
             addView(pauseTitle, LinearLayout.LayoutParams(dp(480), -2).apply { topMargin = dp(6) })
             addView(pauseFacts, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
         }
@@ -1356,7 +1356,7 @@ class PlayerActivity : Screen() {
     private fun section(list: LinearLayout, heading: String, labels: List<String>, chosen: Int, closes: Boolean = false, pick: (Int) -> Unit): View {
         // The heading names the choice in use ("SUBTITLES · SPANISH"), so it reads before any scrolling.
         fun headingFor(index: Int) = (listOf(heading) + listOfNotNull(labels.getOrNull(index)?.substringBefore("  ·  "))).joinToString(" · ")
-        val title = caps(headingFor(chosen), TUNGSTEN)
+        val title = caps(headingFor(chosen))
         list.addView(title, wrap().apply {
             topMargin = dp(18); bottomMargin = dp(5)
         })
@@ -1391,7 +1391,7 @@ class PlayerActivity : Screen() {
                 setOnClickListener {
                     pick(index)
                     checks.forEachIndexed { i, icon -> icon.visibility = if (i == index) View.VISIBLE else View.INVISIBLE }
-                    title.text = headingFor(index).uppercase()
+                    title.text = headingFor(index)
                     names.forEachIndexed { i, word -> word.setTextColor(if (i == index) TEXT else TEXT_2) }
                     if (closes) main.postDelayed({ if (options.visibility == View.VISIBLE) closeOptions() }, PICK_SEEN)
                 }

@@ -1403,7 +1403,7 @@ class MainActivity : Screen() {
                 // Home holds only Continue and Watchly's picks, so a new account sees nothing there without a word.
                 // Quiet, one line, and on Home hidden again as soon as a Continue row arrives: a two-line note under
                 // that row peeked into the caption band at the bottom of the screen.
-                val note = text(if (p == Page.HOME) "Picks for you appear here once Watchly is installed on this profile's Stremio account."
+                val note = text(if (p == Page.HOME) "What you start to watch shows here, ready to carry on."
                     else "None of your add-ons has $what catalogs. Add one (AIOMetadata, Cinemeta) in Stremio.", SMALL, color = TEXT_3)
                     .apply { setPadding(dp(EDGE), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
                 content.addView(note)
@@ -2139,7 +2139,7 @@ class MainActivity : Screen() {
         // Rows below the active one keep their names hidden: one peeking in at the bottom sat under the caption.
         // The hint on the right names the next row instead.
         visible.forEachIndexed { i, row -> row.peek(i <= active) }
-        nextRowHint.text = visible.getOrNull(active + 1)?.let { "▾  ${it.title.uppercase()}" } ?: ""
+        nextRowHint.text = visible.getOrNull(active + 1)?.let { "▾  ${it.title}" } ?: ""
         nextRowHint.visibility = if (nextRowHint.text.isEmpty()) View.GONE else View.VISIBLE
         clearHint()
     }

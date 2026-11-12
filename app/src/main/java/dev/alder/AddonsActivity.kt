@@ -37,7 +37,7 @@ class AddonsActivity : Screen() {
         val height = (metrics.heightPixels / metrics.density).toInt()
         val panelWidth = (width * PANEL_W).toInt()
         list = column(Gravity.START).apply { setPadding(dp(16), dp(8), dp(16), dp(20)) }
-        helpName = caps("", TUNGSTEN).onArt()
+        helpName = caps("").onArt()
         helpBody = text("", BODY, color = TEXT_2).onArt()
         // A shaded pane so the note stays readable over bright art.
         help = column(Gravity.START, helpName, helpBody.marginTop(8)).apply {
@@ -150,7 +150,7 @@ class AddonsActivity : Screen() {
             move?.visibility = if (has) View.VISIBLE else View.GONE
             if (has) {
                 help.visibility = if (addon != null) View.VISIBLE else View.INVISIBLE
-                if (addon != null) { helpName.text = name.uppercase(); helpBody.text = addonHelp(addon, index) }
+                if (addon != null) { helpName.text = name; helpBody.text = addonHelp(addon, index) }
             }
         })
         contentDescription = if (addon == null) name else "${index + 1}. $name. $role. $host. Move or remove"

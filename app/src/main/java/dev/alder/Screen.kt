@@ -363,9 +363,11 @@ abstract class Screen : Activity() {
         setSpan(CertSpan(certColour(cert), Tone.onColour, dp(5).toFloat(), dp(3).toFloat()), 0, length, 0)
     }
 
-    protected fun caps(value: String, color: Int = TEXT_2) = text(value.uppercase(), CAPS, bold = true, color = color).apply {
-        letterSpacing = 0.12f
-    }
+    /**
+     * A heading or a label: its own words, in bold (the name is from when these were spaced capitals). Sentence case,
+     * as BBC iPlayer sets its headings: capitals in a row have no shape to read by, and are the harder for older eyes.
+     */
+    protected fun caps(value: String, color: Int = TEXT_2) = text(value, SMALL, bold = true, color = color)
 
     protected fun column(gravity: Int, vararg views: View) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -392,7 +394,7 @@ abstract class Screen : Activity() {
         rating?.let {
             dot()
             line.addView(android.widget.ImageView(this).apply {
-                setImageResource(R.drawable.ic_star); imageTintList = android.content.res.ColorStateList.valueOf(TUNGSTEN)
+                setImageResource(R.drawable.ic_star); imageTintList = android.content.res.ColorStateList.valueOf(TEXT_2)
                 contentDescription = "IMDb rating"
             }, LinearLayout.LayoutParams(dp(METER_ICON + 1), dp(METER_ICON + 1)))
             line.addView(text(it, SMALL, color = TEXT_2).onArt(), wrap().apply { marginStart = dp(4) })
@@ -1037,12 +1039,12 @@ abstract class Screen : Activity() {
     /** CAS wordmark: a single, quiet signature on every entry screen. */
     protected fun brand(size: Float = WORDMARK) = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
-        // The aperture, as tall as the capitals beside it.
-        val markPx = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, size * 0.95f, resources.displayMetrics).toInt()
+        // The family of four (CAS is the family's name), a little taller than the capitals beside it; its box is 46 by 24.
+        val markPx = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, size * 1.05f, resources.displayMetrics).toInt()
         addView(ImageView(this@Screen).apply {
             setImageResource(R.drawable.ic_mark)
             imageTintList = android.content.res.ColorStateList.valueOf(TEXT)
-        }, LinearLayout.LayoutParams(markPx, markPx).apply { marginEnd = (markPx * 0.42f).toInt() })
+        }, LinearLayout.LayoutParams(markPx * 46 / 24, markPx).apply { marginEnd = (markPx * 0.34f).toInt() })
         addView(text("CAS", size, bold = true).apply {
             letterSpacing = 0.16f
             includeFontPadding = false
@@ -1051,11 +1053,9 @@ abstract class Screen : Activity() {
     }
 
     /** The IMDb tag beside a rating, as tall as the letters. */
-    protected fun imdbTag() = text("IMDb", SMALL, bold = true, color = BASE).apply {
-        background = rounded(TUNGSTEN, 3)
+    protected fun imdbTag() = text("★", SMALL, color = TEXT_2).apply { // the star the scores line has, where Search set the letters IMDb
         includeFontPadding = false
-        setLineSpacing(0f, 1f)
-        setPadding(dp(4), dp(1), dp(4), dp(1))
+        contentDescription = "IMDb rating"
     }
 
     /** Null animates loading; for countdowns set progress to fraction × max as time changes. */
@@ -1208,7 +1208,7 @@ abstract class Screen : Activity() {
         foreground = if (on) GradientDrawable().apply {
             setColor(Color.TRANSPARENT)
             cornerRadius = dp(radiusDp).toFloat()
-            setStroke(dp(1), TUNGSTEN_RIM) // a hairline: the glow and the lift carry focus
+            setStroke(dp(FOCUS_RIM), TEXT) // a clear rim in the words' own colour: plain from across the room, on either ground
         } else null
         if (on && android.os.Build.VERSION.SDK_INT >= 28) {
             val poster = posterBitmap(this)
@@ -1422,7 +1422,7 @@ abstract class Screen : Activity() {
         }
         val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
         val list = column(Gravity.START).apply { setPadding(dp(22), dp(20), dp(22), dp(18)) }
-        list.addView(caps("What's new", TUNGSTEN))
+        list.addView(caps("What's new"))
         list.addView(text("CAS $version", SERIF_TITLE, serif = true).marginTop(4))
         val entries = column(Gravity.START)
         list.addView(entries, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
@@ -1532,6 +1532,7 @@ abstract class Screen : Activity() {
         const val CARD_GROW = 1.06f
         const val DISC_GROW = 1.1f // the white disc: bigger growth than a card, it is the one thing on its line
         const val DISC = 52 // dp, the title page's Play
+        const val FOCUS_RIM = 2 // dp, the rim round the poster under the remote
         const val LIGHT_WASH = 0.16f // how far a poster not under the remote is washed towards the light ground
         const val LIGHT_DIM = 0.55f // brightness of the rows around the focused one (focus by light)
         const val CHIP_GROW = 1.04f // a wide chip grown as much as a card filled the gap to its neighbour
@@ -1564,8 +1565,10 @@ abstract class Screen : Activity() {
         // soft off-white and its words a dark charcoal; the dark ground is charcoal and its words an off-white.
         val BASE get() = Tone.base
         val TEXT get() = Tone.text
-        val TEXT_2 get() = (TEXT and 0x00FFFFFF) or (0xB8 shl 24)
-        val TEXT_3 get() = (TEXT and 0x00FFFFFF) or (0x73 shl 24)
+        // The second and third voices. Stronger on the light ground: grey words over a pale picture need more of
+        // themselves than pale words over a dark one to be read as easily.
+        val TEXT_2 get() = (TEXT and 0x00FFFFFF) or ((if (Tone.light) 0xDB else 0xB8) shl 24)
+        val TEXT_3 get() = (TEXT and 0x00FFFFFF) or ((if (Tone.light) 0xA6 else 0x73) shl 24)
         val TUNGSTEN get() = if (Tone.light) 0xFF8A5A22.toInt() else 0xFFF3E7D3.toInt() // the accent: a warm bronze on the light ground, a warm lit white on the dark
         val ALERT get() = if (Tone.light) 0xFFB5472F.toInt() else 0xFFF0A08C.toInt() // an error's words: the one colour that is not ink
         val TUNGSTEN_RIM get() = ink(0x99)

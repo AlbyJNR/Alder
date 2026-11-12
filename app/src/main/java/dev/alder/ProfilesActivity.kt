@@ -448,7 +448,7 @@ class ProfilesActivity : Screen() {
         val swatches = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val marks = mutableListOf<TextView>()
         Profiles.COLORS.forEachIndexed { index, color ->
-            val mark = text(if (draftColor == color) "✓" else "", SMALL, bold = true, color = BASE).apply {
+            val mark = text(if (draftColor == color) "✓" else "", SMALL, bold = true, color = Tone.onColour).apply { // on a portrait colour: dark in both modes
                 gravity = Gravity.CENTER
                 isFocusable = true
                 fun face(focused: Boolean) = GradientDrawable().apply {
@@ -468,17 +468,22 @@ class ProfilesActivity : Screen() {
         }
         val copy = column(Gravity.START,
             text(if (first) "Welcome to CAS" else "New profile", SERIF_TITLE, serif = true),
-            text("Give this profile a name and colour.", BODY, color = TEXT_2).marginTop(4),
+            // The first screen says what CAS is and what to do, in plain words; a later profile only needs the second half.
+            text(if (first) "CAS plays films and TV from your Stremio account. Type a name for the person watching, then select Continue."
+                else "Type a name for this person, choose a colour, then select Continue.", BODY, color = TEXT_2).marginTop(4),
             name.apply { layoutParams = LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(16) } },
             keyboard.apply { layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) } },
-            caps("Portrait colour", TUNGSTEN).marginTop(13),
+            caps("Portrait colour").marginTop(13),
             swatches.marginTop(7),
             error.marginTop(5),
-            next.marginTop(7),
         ).apply { gravity = Gravity.CENTER_VERTICAL }
+        // Continue stands on its own under the portrait, in plain sight and one press to the right of the keyboard
+        // (Alan, 2026-11-12: at the foot of the left column it was past the bottom of the screen, and the way on
+        // was not clear).
         val preview = column(Gravity.CENTER,
             avatar,
             previewName.marginTop(16),
+            next.marginTop(28),
         ).apply { gravity = Gravity.CENTER }
         val content = onboardingFrame(if (first) "step 1 of 2" else "step 1 of 3", copy, preview, dp(65), 1.05f, 0.95f)
         setWindowed(content, onboardingBackdrop())
@@ -656,11 +661,13 @@ class ProfilesActivity : Screen() {
     }
 
     private fun onboardingBackdrop(useLastFilm: Boolean = true) = ImageView(this).apply {
-        setImageResource(R.drawable.cas_backdrop)
+        // The backdrop is a dark picture, for the dark mode. On the light ground the screen is the ground itself: the
+        // dark picture under a pale wash was a grey smudge behind the profile's disc (the launch test's picture, 1.63.0).
+        if (Tone.light) setBackgroundColor(BASE) else setImageResource(R.drawable.cas_backdrop)
         scaleType = ImageView.ScaleType.CENTER_CROP
         // Dim, as the doc asks: the copy and code sit over it. A darkening filter, not alpha: the window has no
         // background, so a see-through backdrop would show the last frame instead of darkening.
-        if (useLastFilm) setColorFilter(android.graphics.Color.argb(166, 8, 9, 11), android.graphics.PorterDuff.Mode.SRC_ATOP)
+        if (useLastFilm) setColorFilter(veil(if (Tone.light) 0xD9 else 0xA6), android.graphics.PorterDuff.Mode.SRC_ATOP)
         if (useLastFilm) Profiles.active(this@ProfilesActivity)?.let { profile ->
             background({ Stremio.savedLibrary(profile.authKey)?.let(Library::continueWatching)?.firstOrNull()?.optString("_id") }) { result ->
                 result.getOrNull()?.let(Images::backgroundFor)?.let { url -> Images.load(url, this, resources.displayMetrics.widthPixels) }
@@ -700,7 +707,7 @@ class ProfilesActivity : Screen() {
 
     // 48 and 19 are glyph sizes for the two fixed discs (100 and 26 dp), not text sizes: they go with the disc.
     private fun onboardingAvatar(initial: String, size: Int, color: Int = draftColor) = text(initial, if (size > 50) 48f else 19f,
-        serif = true, color = BASE).apply {
+        serif = true, color = Tone.onColour).apply { // the initial on its portrait colour: dark in both modes
         gravity = Gravity.CENTER
         background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -815,7 +822,7 @@ class ProfilesActivity : Screen() {
         val bmp = Bitmap.createBitmap(n * px, n * px, Bitmap.Config.RGB_565)
         bmp.eraseColor(TEXT)
         val canvas = Canvas(bmp)
-        val paint = Paint().apply { color = BASE }
+        val paint = Paint().apply { color = Tone.onColour } // the code's dark squares, on white: the same in both modes, or a phone cannot read it
         for (r in m.indices) for (c in m.indices) if (m[r][c]) {
             canvas.drawRect(((c + 4) * px).toFloat(), ((r + 4) * px).toFloat(), ((c + 5) * px).toFloat(), ((r + 5) * px).toFloat(), paint)
         }

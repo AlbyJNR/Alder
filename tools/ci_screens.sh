@@ -27,7 +27,14 @@ key KEYCODE_DPAD_CENTER 6; shot 11-tab-first-open
 key KEYCODE_BACK 3; shot 12-tab-closed
 key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_CENTER 6; shot 13-tab-details
 key KEYCODE_BACK 3; key KEYCODE_DPAD_UP 2; shot 14-back-on-play
-key KEYCODE_BACK 3; key KEYCODE_BACK 3; shot 10-back
+key KEYCODE_DPAD_CENTER 10; shot 15-play-pressed
+key KEYCODE_BACK 3; key KEYCODE_BACK 3; key KEYCODE_BACK 3; shot 10-back
+# From the rail on Movies: up to Search, then to Settings.
+key KEYCODE_DPAD_LEFT 2; key KEYCODE_DPAD_UP 1; key KEYCODE_DPAD_UP 1; key KEYCODE_DPAD_UP 2; key KEYCODE_DPAD_CENTER 8; shot 16-search
+key KEYCODE_BACK 3; key KEYCODE_DPAD_UP 2; key KEYCODE_DPAD_CENTER 3; shot 17-settings-menu
+key KEYCODE_DPAD_DOWN 2; key KEYCODE_DPAD_CENTER 6; shot 18-settings
+key KEYCODE_DPAD_DOWN 2; shot 19-settings-profile
+key KEYCODE_BACK 3
 # The same account in the dark mode: Home, a row down, and a title page.
 adb shell am start -S -n uk.albyjnr.cas/dev.alder.ProfilesActivity --ez casDark true > /dev/null
 sleep 30; shot 20-dark-home

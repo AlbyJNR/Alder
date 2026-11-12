@@ -461,9 +461,8 @@ class DetailsActivity : Screen() {
         val lead = whereLead(episode != null, resumeAt > 0, episode?.let { it.season > 1 || it.episode > 1 } == true)
         if (where.isNotEmpty() && (episode != null || resumeAt > 0 || unaired != null || comingOut != null)) stack.addView(text("", SMALL, bold = true).onArt().apply {
             maxLines = 1; ellipsize = TextUtils.TruncateAt.END
-            this.text = if (lead == null) where else android.text.SpannableString("${lead.uppercase()}   $where").apply {
+            this.text = if (lead == null) where else android.text.SpannableString("$lead   $where").apply {
                 setSpan(android.text.style.ForegroundColorSpan(TUNGSTEN), 0, lead.length, 0)
-                setSpan(android.text.style.RelativeSizeSpan(CAPS / SMALL), 0, lead.length, 0)
             }
         }.marginTop(18))
         if (remaining != null) stack.addView(progressBar(resumeAt.toFloat() / duration), LinearLayout.LayoutParams(dp(240), dp(3)).apply { topMargin = dp(8) })

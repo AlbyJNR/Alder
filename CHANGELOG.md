@@ -13,6 +13,20 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.64.0
+
+- CAS has a new logo: the family of four, with the name. It shows on the launcher tile, on the app icon and on each screen.
+- Headings show as normal words in bold. Before, they showed in capital letters.
+- The poster under the remote has a clear outline.
+- Small text is darker in the light mode, so it is easier to read.
+- New profile: **Continue** shows below the portrait, where you can see it.
+
+## 1.63.1
+
+- The first screen of CAS is correct in the light mode. Before, a dark shape showed behind the profile, and you could not see the initial.
+- The sign-in code shows dark squares in the two modes, so a phone can read it.
+- The first screen says what CAS is and what to do.
+
 ## 1.63.0
 
 - CAS has a light mode and a dark mode. The light mode is the default. To change it, go to Settings › Profile › **Appearance**.
