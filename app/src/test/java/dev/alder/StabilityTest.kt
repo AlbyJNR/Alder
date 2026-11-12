@@ -105,6 +105,13 @@ class StabilityTest {
         assertTrue(setOf("U", "PG", "12", "15", "18", "Unrated").map(::certColour).toSet().size == 6)
     }
 
+    @Test fun nothingToPlayIsSaidOnlyWhenEveryAddonAnsweredWithNone() {
+        val none = Result.success(Addon.Streams(emptyList(), 2))
+        assertTrue(noSources(listOf(none, none)))
+        assertFalse(noSources(emptyList())) // no stream add-ons: not known
+        assertFalse(noSources(listOf(none, Result.failure(java.io.IOException("down"))))) // one failed: it may have had one
+    }
+
     @Test fun onlyARefusingOrBrokenSiteRests() {
         assertTrue(restsAfter(403))
         assertTrue(restsAfter(429))

@@ -13,6 +13,14 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.61.0
+
+- A row that is not ready shows its name and blank cards. The row comes in the same place. Before, the row came from nothing.
+- TV and Movies go back to the row that you were on when you open them again.
+- Home in the short CAS has one **Continue** row for titles in progress and series with a new episode. With **Show everything** on, **New episodes** keeps its row.
+- Title page: when your add-ons have no source for a title, the page says "Not available to play right now" before you select Play.
+- Focus comes and goes in the same time on each control.
+
 ## 1.60.1
 
 - Title page: movement between Play, Trailer and Preview is quicker. The TV does less work for each move.

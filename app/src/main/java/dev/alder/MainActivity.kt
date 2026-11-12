@@ -1220,6 +1220,10 @@ class MainActivity : Screen() {
             genreChips.clear()
             countryChips.clear()
         }
+        // Leaving a page: the row and the card the remote was on (or the row in the band) are kept for the way back.
+        if (p != page) rows.firstOrNull { it.view.hasFocus() }.let { r -> r ?: rows.firstOrNull { it.view === heldRow } }
+            ?.takeIf { it.title.isNotEmpty() }?.let { r -> places[page] = r.title to (r.cards.getOrNull(r.selected)?.tag as? String).orEmpty() }
+        pendingPlace = places[p]
         val switched = p != page
         page = p
         val grid = p == Page.LIBRARY
@@ -1318,8 +1322,10 @@ class MainActivity : Screen() {
                 slot.removeAllViews()
                 if (p == Page.HOME) {
                     // Continue holds what's part-watched; a series back only for its new episode has the row below.
-                    val items = cw.filter { (it.optJSONObject("state")?.optLong("timeOffset") ?: 0L) > 0 }.map { libraryItem(it, news[it.optString("_id")]) }
-                    val fresh = Library.withNewEpisodes(list, news).map { libraryItem(it, news[it.optString("_id")]) }
+                    val items = cw.filter { simple || (it.optJSONObject("state")?.optLong("timeOffset") ?: 0L) > 0 }.map { libraryItem(it, news[it.optString("_id")]) }
+                    // The short CAS has one row for both (Apple's Up Next): what is part-watched and the series with a
+                    // new episode, each by its latest moment. With Show everything on, New episodes keeps its own row.
+                    val fresh = if (simple) emptyList() else Library.withNewEpisodes(list, news).map { libraryItem(it, news[it.optString("_id")]) }
                     val lists = Lists.all(this).filter { it.items.isNotEmpty() }
                     homeEmptyNote?.visibility = if (items.isEmpty() && fresh.isEmpty() && lists.isEmpty()) View.VISIBLE else View.GONE
                     if (items.isNotEmpty()) {
@@ -1427,6 +1433,7 @@ class MainActivity : Screen() {
                 if (p.isCatalog && genres.any { it.equals(title, true) } && title !in genreNames) genreNames += title
                 val rowCatalogs = sources.map { it.first }
                 val slot = sectionSlots[i]
+                waiting(slot, title)
                 val key = catalogAnswerKey(p.label, title, picked, rowCatalogs.map { c ->
                     "${c.addon.transportUrl}/${c.type}/${c.id}"
                 })
@@ -1487,10 +1494,17 @@ class MainActivity : Screen() {
                     // Build nearby rows first, spacing the others within this small batch across frames.
                     fun add() {
                         if (g != generation || version != rowVersion) return
-                        if (items.isEmpty()) { if (completed == rowCatalogs.size) main.post { loadMoreSections?.invoke() }; return }
+                        if (items.isEmpty()) {
+                            if (completed == rowCatalogs.size) {
+                                if (rows.none { it.view.parent === slot }) slot.removeAllViews() // nothing came: its blank cards go
+                                main.post { loadMoreSections?.invoke() }
+                            }
+                            return
+                        }
                         val old = rows.firstOrNull { it.view.parent === slot }
                         if (old?.view?.hasFocus() == true) { old.pendingUpdate = ::add; return }
-                        old?.let { it.cards.forEach { card -> card.unload() }; rows.remove(it); slot.removeAllViews() }
+                        old?.let { it.cards.forEach { card -> card.unload() }; rows.remove(it) }
+                        slot.removeAllViews() // the old row, or the blank cards that held its place
                         val made = row(title, items.take(maxOf(START, old?.items?.size ?: START)), more)
                         slot.addView(made.view)
                         if (i == 0) android.util.Log.d("CAS", "page ${p.label}: first row in ${android.os.SystemClock.uptimeMillis() - opened} ms")
@@ -2062,6 +2076,7 @@ class MainActivity : Screen() {
     private fun row(title: String, items: List<Item>, more: ((Int) -> List<Item>)? = null, wide: Boolean = false, grid: Boolean = false, listId: String? = null, marked: Boolean = false): Row =
         Row(title, items, more, wide, grid, listId, marked).also {
         rows += it
+        pendingPlace?.takeIf { place -> place.first == title }?.let { place -> pendingPlace = null; main.post { returnTo(it, place.second) } }
         main.post(::updateImages)
         // Its slot (the page's direct child holding it) is named for the row, so the viewer's order can place it.
         if (title.isNotEmpty()) main.post { (it.view.parent as? View)?.takeIf { s -> s.parent === content }?.let { s -> s.tag = "row:$title"; arrangeRows() } }
@@ -2135,13 +2150,16 @@ class MainActivity : Screen() {
         jump = false
         val back = restoreCard?.let { tag -> rows.firstNotNullOfOrNull { r -> r.cards.firstOrNull { it.tag == tag } } }
         restoreCard = null
-        if (back != null) back.requestFocus() else firstRow()?.focusFirst()
+        if (back != null) back.requestFocus() else (heldRowNow() ?: firstRow())?.focusFirst()
     }
 
     private val heroTop = Runnable {
-        val first = firstRow()?.takeIf { header.hasFocus() && mode == Mode.BROWSE } ?: return@Runnable
+        val first = (heldRowNow() ?: firstRow())?.takeIf { header.hasFocus() && mode == Mode.BROWSE } ?: return@Runnable
         first.items[first.selected].takeIf { it !== heroItem }?.let { fill(it); showHero(it) }
     }
+
+    /** The row held in the band with the remote elsewhere (the page's remembered row), if it is still on the page. */
+    private fun heldRowNow(): Row? = rows.firstOrNull { it.view === heldRow && it.view.isAttachedToWindow }
 
     /** The row nearest the top of the page: where Up goes back to the cinema from. */
     private fun firstRow(): Row? = rows.filter { it.view.isAttachedToWindow }.minByOrNull { offsetIn(it.view) }
@@ -2631,6 +2649,24 @@ class MainActivity : Screen() {
         }
     }
 
+    /**
+     * A row that has been asked for and not answered yet: its name and a line of quiet blank cards in [slot], the
+     * size of the row to come, so the page has its shape at once and the row arrives in place (Netflix's way). The
+     * row replaces it; one that never comes (the site failed, or had nothing) takes it away after [GHOST_MS].
+     */
+    private fun waiting(slot: LinearLayout, title: String) {
+        if (slot.childCount > 0 || page == Page.LIBRARY) return
+        val ghost = column(Gravity.START,
+            caps(title).onArt().apply { setPadding(dp(EDGE), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END; alpha = QUIET },
+            LinearLayout(this).apply {
+                setPadding(dp(EDGE), dp(ROW_TOP_ROOM), dp(PAD), dp(ROW_BOTTOM_ROOM))
+                repeat(GHOSTS) { i -> addView(View(context).apply { background = rounded(GHOST, 6) },
+                    LinearLayout.LayoutParams(dp(CARD_W), dp(CARD_H)).apply { if (i > 0) marginStart = dp(CARD_GAP) }) }
+            })
+        slot.addView(ghost)
+        main.postDelayed({ if (ghost.parent === slot) slot.removeView(ghost) }, GHOST_MS)
+    }
+
     /** One of IMDb's lists as a row in [slot]: last time's from disk at once, today's in its place when it differs. */
     private fun imdbRow(slot: LinearLayout, list: ImdbList, g: Int) {
         val today = java.time.LocalDate.now().toString()
@@ -2649,6 +2685,7 @@ class MainActivity : Screen() {
         }
         val country = imdbCountry()
         cachedImdbList(list, today, country)?.let { show(it); return } // fetched within the hour: no disk, no network
+        waiting(slot, list.title)
         background({ savedImdbList(list, today, country) }) { r -> r.getOrNull()?.let(::show) }
         background({ imdbList(list, today, country) }) { r ->
             r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
@@ -2721,6 +2758,7 @@ class MainActivity : Screen() {
             slot.addView(row(title, all.take(START), later(all)).view)
         }
         cached(country)?.let { show(it); return }
+        waiting(slot, title)
         background({ saved(country) }) { r -> r.getOrNull()?.let(::show) }
         background({ fetch(country) }) { r ->
             r.exceptionOrNull()?.let { android.util.Log.w("CAS", "$title failed: $it") }
@@ -2819,6 +2857,21 @@ class MainActivity : Screen() {
             track.animate().alpha(if (n > 1 && mode == Mode.BROWSE && page == Page.LIVE) 1f else 0f).setDuration(200).start()
             main.postDelayed(hideTrack, 1200)
         }
+    }
+
+    private val places = mutableMapOf<Page, Pair<String, String>>() // each page's row (its title) and card (its tag), as the remote left them
+    private var pendingPlace: Pair<String, String>? = null // the open page's, until its row arrives
+
+    /**
+     * The row the remote was on the last time this page was open has arrived: the band goes to it, and to its card
+     * when the remote is already in the rows. With the remote in the rail the row waits in the band, and the rail's
+     * OK (or Right) goes into it. Nothing moves once the viewer has pressed a key on this visit.
+     */
+    private fun returnTo(r: Row, cardTag: String) {
+        if (touched || mode != Mode.BROWSE || !r.view.isAttachedToWindow) return
+        val at = r.cards.indexOfFirst { it.tag == cardTag }.takeIf { it in 0 until PLACE_CARDS } ?: 0 // a card far along is off the screen: the row's start
+        r.selected = at
+        if (header.hasFocus()) { heldRow = r.view; snapY = -1; holdRow(); heroTop.run() } else r.cards[at].requestFocus()
     }
 
     private var snapY = -1 // where snapTo last sent the band: a row that is elsewhere after a layout was pushed
@@ -2927,7 +2980,11 @@ class MainActivity : Screen() {
         const val NAV_GAP = 4 // dp between the rail's entries
         const val RAIL_X = 16 // dp from the screen's edge to the rail
         const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
-        const val RAIL_OPEN_MS = 140L // the rail opening to its names, and closing
+        const val RAIL_OPEN_MS = 160L // the rail opening to its names, and closing: the time a control takes to gain focus
+        const val GHOSTS = 9 // blank cards in a row that is on its way: the screen's width and one more
+        const val GHOST = 0x14FFFFFF // their face
+        const val GHOST_MS = 10_000L // how long they wait for a row that does not come
+        const val PLACE_CARDS = 7 // cards from a row's start that are on the screen: a remembered card further along gives way to the first
         const val RAIL_SHADE_W = 300 // dp, the shade behind the open rail
         const val EDGE = 84 // dp from the screen's edge to the rows and the hero, clear of the rail
         const val WARM_AFTER = 3000L // ms after launch before other pages' posters are fetched ahead

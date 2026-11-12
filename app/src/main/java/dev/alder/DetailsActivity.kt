@@ -54,6 +54,10 @@ internal fun whereLead(series: Boolean, started: Boolean, pastFirst: Boolean): S
     else -> null
 }
 
+/** Every add-on answered, and not one source among them is a video: there is nothing to play. A failed add-on leaves it unknown. */
+internal fun noSources(answers: Collection<Result<Addon.Streams>>): Boolean =
+    answers.isNotEmpty() && answers.all { it.isSuccess } && answers.none { a -> a.getOrNull()?.playable?.any { it.isVideo } == true }
+
 class DetailsActivity : Screen() {
     private val type by lazy { intent.getStringExtra("type") ?: "movie" }
     private val metaId by lazy { intent.getStringExtra("id")!! }
@@ -490,6 +494,20 @@ class DetailsActivity : Screen() {
             }
         }
         stack.addView(actionRow1, wrap().apply { topMargin = dp(if (stack.childCount > before) 16 else 28) })
+        // The sources asked for above have all answered and none can play: said here, before Play is pressed, in
+        // plain words (the opposite of a Play button that leads to an empty list). Nothing shows while they are
+        // still answering, when an add-on failed (it may yet have one), or for a title not out yet.
+        if (unaired == null && comingOut == null && target?.first != null || type == "movie" && unaired == null && comingOut == null) {
+            val playId = target?.first ?: metaId
+            val note = text("Not available to play right now", SMALL, color = TEXT_2).onArt().apply { visibility = View.GONE }
+            stack.addView(note, wrap().apply { topMargin = dp(10) })
+            val state = watchState
+            val app = applicationContext
+            Thread({
+                val answers = runCatching { Sources.awaited(app, key, type, playId) }.getOrNull() ?: return@Thread
+                main.post { if (!isFinishing && !isDestroyed && watchState == state && noSources(answers.values)) note.visibility = View.VISIBLE }
+            }, "cas-sources-note").apply { isDaemon = true }.start()
+        }
         leadControl = playButton
     }
 

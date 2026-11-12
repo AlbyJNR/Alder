@@ -41,6 +41,20 @@ object Sources {
         return addons.associate { a -> a.id to (saved(authKey, type, videoId, a) ?: Result.failure(IllegalStateException("no answer"))) }
     }
 
+    /**
+     * The answers once the fetch ahead for this video has finished: waits for it (to [AWAIT_MS]) and reads what it
+     * kept, so asking costs no second round of requests. Blocks: its own thread, never the main one.
+     */
+    fun awaited(c: Context, authKey: String, type: String, videoId: String): Map<String, Result<Addon.Streams>>? {
+        val k = key(authKey, type, videoId)
+        val until = System.currentTimeMillis() + AWAIT_MS
+        while (k in inFlight && System.currentTimeMillis() < until) Thread.sleep(250)
+        if (k in inFlight || cache[k]?.let { System.currentTimeMillis() - it.at < TTL } != true) return null
+        return all(c, authKey, type, videoId)
+    }
+
+    private const val AWAIT_MS = 40_000L
+
     /** Fetches ahead, once, in the background; nothing happens when the sources are already kept or being fetched. */
     fun prefetch(c: Context, authKey: String, type: String, videoId: String) {
         val k = key(authKey, type, videoId)

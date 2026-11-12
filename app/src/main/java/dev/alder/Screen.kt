@@ -1157,7 +1157,7 @@ abstract class Screen : Activity() {
         val parts = if (this is ViewGroup && childCount > 0) (0 until childCount).map { getChildAt(it) } else listOf(this)
         for (part in parts) {
             val rest = restAlpha.getOrPut(part) { part.alpha }
-            part.animate().alpha(rest * level).setDuration(if (level < from) 180 else 120).start()
+            part.animate().alpha(rest * level).setDuration(if (level < from) FOCUS_IN_MS else FOCUS_OUT_MS).start()
         }
     }
 
@@ -1185,8 +1185,9 @@ abstract class Screen : Activity() {
                 r.getOrNull()?.let { glow -> glowCache[this] = poster to glow; if (hasFocus()) outlineSpotShadowColor = glow }
             }
         }
-        grow(on)
-            .translationZ(if (on) dp(CARD_LIFT).toFloat() else 0f).setDuration(150).start()
+        // One motion for every control: the lift is set, the growth takes the focus times (see FOCUS_IN_MS).
+        translationZ = if (on) dp(CARD_LIFT).toFloat() else 0f
+        grow(on).start()
     }
 
     /** The screen's art, behind its glass: what [glassOver] frosts. Screens with art behind them name it. */
