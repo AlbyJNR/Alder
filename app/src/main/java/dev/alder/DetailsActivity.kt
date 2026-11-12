@@ -1157,6 +1157,9 @@ class DetailsActivity : Screen() {
                 // Down from the block goes to the tabs along the foot; on the tabs there is nothing below.
                 val strip = hero.findViewWithTag<View>(MORE_HINT) as? android.view.ViewGroup
                 if (strip != null) { if (currentFocus?.let { isInside(it, strip) } != true) strip.getChildAt(0)?.requestFocus(); return true }
+            } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT &&
+                (hero.findViewWithTag<View>(MORE_HINT) as? android.view.ViewGroup)?.let { it.childCount > 0 && it.getChildAt(it.childCount - 1) === currentFocus } == true) {
+                return true // the last tab is the end of the line: Right does not jump up into the blocks beside the title
             } else if (!infoOpen && !similarOpen && !guideOpen && event.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 // Up from a tab goes back to Play, wherever along the foot the tab is.
                 val strip = hero.findViewWithTag<View>(MORE_HINT)
