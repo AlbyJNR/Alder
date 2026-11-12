@@ -15,6 +15,10 @@ adb install "$APK" > /dev/null
 adb logcat -c
 adb shell am start -n uk.albyjnr.cas/dev.alder.ProfilesActivity --es testKey "$KEY" > /dev/null
 sleep 35; shot 01-home
+# Along the first row to its end and one press past it: the whole row as a grid.
+for i in $(seq 1 12); do key KEYCODE_DPAD_RIGHT 1; done; shot 01b-row-end
+key KEYCODE_DPAD_RIGHT 6; shot 01c-see-all
+key KEYCODE_BACK 3; for i in $(seq 1 12); do key KEYCODE_DPAD_LEFT 1; done
 key KEYCODE_DPAD_DOWN 3; shot 02-home-row2
 key KEYCODE_DPAD_LEFT 2; shot 03-rail-open
 key KEYCODE_DPAD_DOWN 12; shot 04-tv-rail

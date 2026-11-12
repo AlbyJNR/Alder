@@ -50,6 +50,7 @@
         <activity android:name=".MainActivity" android:screenOrientation="landscape" />
         <activity android:name=".SearchActivity" android:screenOrientation="landscape" />
         <activity android:name=".PersonActivity" android:screenOrientation="landscape" />
+        <activity android:name=".GridActivity" android:screenOrientation="landscape" />
         <activity android:name=".SettingsActivity" android:screenOrientation="landscape" />
         <activity android:name=".AddonsActivity" android:screenOrientation="landscape" />
         <activity android:name=".DetailsActivity" android:screenOrientation="landscape" />

@@ -101,82 +101,82 @@ internal fun catalogAnswerKey(page: String, title: String, genre: String?, sourc
 //    where you are and Resume, moving on to the next every ADVANCE. OK resumes; any other key returns to where you were.
 //    The TV's own screensaver takes over later (10 min on the test TV), so nothing stays still for hours.
 class MainActivity : Screen() {
-    private enum class Page(val label: String, val icon: Int) {
+    internal enum class Page(val label: String, val icon: Int) {
         HOME("Home", R.drawable.ic_home), SHOWS("TV", R.drawable.ic_tv), MOVIES("Movies", R.drawable.ic_movie),
         IMDB("Content", R.drawable.ic_star), FOREIGN("Foreign", R.drawable.ic_globe), LIVE("Live", R.drawable.ic_tv), LIBRARY("Library", R.drawable.ic_library)
     }
-    private enum class Mode { CINEMA, BROWSE }
-    private enum class ListFilter { ALL, MOVIES, SHOWS }
-    private enum class ListSort { RECENT, NAME, UNWATCHED, NEW }
+    internal enum class Mode { CINEMA, BROWSE }
+    internal enum class ListFilter { ALL, MOVIES, SHOWS }
+    internal enum class ListSort { RECENT, NAME, UNWATCHED, NEW }
 
-    private lateinit var profile: Profile
+    internal lateinit var profile: Profile
     override val backdrop get() = art
-    private lateinit var scroller: ScrollView
-    private lateinit var content: LinearLayout
-    private lateinit var header: FrameLayout
-    private lateinit var genreStrip: HorizontalScrollView
-    private val genreChips = mutableMapOf<String?, TextView>()
-    private val countryChips = mutableMapOf<String, TextView>() // the Foreign page's, by ISO code
-    private val listFilterChips = mutableMapOf<ListFilter, TextView>()
-    private val listSortChips = mutableMapOf<ListSort, TextView>()
-    private var lastListChip: TextView? = null
-    private val navItems = mutableMapOf<Page, View>()
-    private lateinit var wordmark: View // "CAS", top right, now that the rail holds the pages
-    private var page = Page.HOME
-    private val Page.isCatalog get() = this == Page.SHOWS || this == Page.MOVIES
-    private var mode = Mode.BROWSE
-    private var library: List<JSONObject> = emptyList()
+    internal lateinit var scroller: ScrollView
+    internal lateinit var content: LinearLayout
+    internal lateinit var header: FrameLayout
+    internal lateinit var genreStrip: HorizontalScrollView
+    internal val genreChips = mutableMapOf<String?, TextView>()
+    internal val countryChips = mutableMapOf<String, TextView>() // the Foreign page's, by ISO code
+    internal val listFilterChips = mutableMapOf<ListFilter, TextView>()
+    internal val listSortChips = mutableMapOf<ListSort, TextView>()
+    internal var lastListChip: TextView? = null
+    internal val navItems = mutableMapOf<Page, View>()
+    internal lateinit var wordmark: View // "CAS", top right, now that the rail holds the pages
+    internal var page = Page.HOME
+    internal val Page.isCatalog get() = this == Page.SHOWS || this == Page.MOVIES
+    internal var mode = Mode.BROWSE
+    internal var library: List<JSONObject> = emptyList()
     // ponytail: row answers this session, including their catalogs; unbounded, but a few hundred titles per page.
-    private val answers = java.util.concurrent.ConcurrentHashMap<String, List<Pair<List<Meta>, Boolean>>>()
-    private var genre: String? = null
-    private var jumpTo: String? = null // a chip's row that wasn't made yet when OK was pressed
-    private var listFilter = ListFilter.ALL
-    private var listSort = ListSort.RECENT
-    private var librarySlot: LinearLayout? = null
-    private var listTotal = 0
-    private var listRows = 0
-    private var listBuild = 0
-    private lateinit var listCount: TextView
-    private lateinit var listHint: TextView
-    private lateinit var heroAdded: TextView
-    private var addedLine = "" // the library's "Added 3 days ago", drawn after the scores by showScores
-    private var search: View? = null
-    private val rows = mutableListOf<Row>()
-    private var focusedSomething = false
+    internal val answers = java.util.concurrent.ConcurrentHashMap<String, List<Pair<List<Meta>, Boolean>>>()
+    internal var genre: String? = null
+    internal var jumpTo: String? = null // a chip's row that wasn't made yet when OK was pressed
+    internal var listFilter = ListFilter.ALL
+    internal var listSort = ListSort.RECENT
+    internal var librarySlot: LinearLayout? = null
+    internal var listTotal = 0
+    internal var listRows = 0
+    internal var listBuild = 0
+    internal lateinit var listCount: TextView
+    internal lateinit var listHint: TextView
+    internal lateinit var heroAdded: TextView
+    internal var addedLine = "" // the library's "Added 3 days ago", drawn after the scores by showScores
+    internal var search: View? = null
+    internal val rows = mutableListOf<Row>()
+    internal var focusedSomething = false
     // Full details, fetched once per title and kept for the [META_KEEP] used last: a series' details carry every
     // episode it has, and an evening's browsing kept thousands of them until CAS closed. Main thread only.
-    private val metas: MutableMap<String, Meta> = object : LinkedHashMap<String, Meta>(64, 0.75f, true) {
+    internal val metas: MutableMap<String, Meta> = object : LinkedHashMap<String, Meta>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Meta>?) = size > META_KEEP
     }
 
     // The art, at full strength and full bleed, over the previous title's art while it crossfades in.
-    private lateinit var art: ImageView
-    private lateinit var artBack: ImageView
+    internal lateinit var art: ImageView
+    internal lateinit var artBack: ImageView
     // Not glass: a light darkening of the art's top edge while the top bar shows. The left and bottom shades are painted
     // into the art itself ([shaded]).
-    private lateinit var topShade: View
+    internal lateinit var topShade: View
     // Brief row-position cue in the left margin, beside the cards.
-    private lateinit var track: FrameLayout
-    private lateinit var thumb: View
+    internal lateinit var track: FrameLayout
+    internal lateinit var thumb: View
     // A chevron in the right margin while the row the remote is in has more cards past the screen's edge.
-    private lateinit var moreHint: ImageView
-    private lateinit var nextRowHint: TextView
-    private var homeEmptyNote: TextView? = null // Home's "Picks for you…" note; shown only while Home has no row at all
-    private lateinit var cardCaption: TextView
-    private var captionX = 0 // px from the left margin to the focused card, where its caption goes
-    private var browseRowTop = 0
-    private var browseRowH = 0
-    private var indicatedRow: View? = null
-    private val hideTrack = Runnable { track.animate().alpha(0f).setDuration(250).start() }
-    private var artTask = Runnable {}
-    private val artW by lazy { resources.displayMetrics.widthPixels }
+    internal lateinit var moreHint: ImageView
+    internal lateinit var nextRowHint: TextView
+    internal var homeEmptyNote: TextView? = null // Home's "Picks for you…" note; shown only while Home has no row at all
+    internal lateinit var cardCaption: TextView
+    internal var captionX = 0 // px from the left margin to the focused card, where its caption goes
+    internal var browseRowTop = 0
+    internal var browseRowH = 0
+    internal var indicatedRow: View? = null
+    internal val hideTrack = Runnable { track.animate().alpha(0f).setDuration(250).start() }
+    internal var artTask = Runnable {}
+    internal val artW by lazy { resources.displayMetrics.widthPixels }
 
     /**
      * The art cropped to the screen with its shades painted in, once per picture: the left darkening behind the words
      * and the long one down to the cards. As views over the art they were two more layers the GPU blended every frame,
      * a third of this TV's frame time.
      */
-    private val shaded = Images.Look(if (Tone.light) "shaded-wide-light" else "shaded-wide") { src ->
+    internal val shaded = Images.Look(if (Tone.light) "shaded-wide-light" else "shaded-wide") { src ->
         val w = artW
         val h = resources.displayMetrics.heightPixels
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -210,35 +210,35 @@ class MainActivity : Screen() {
     }
 
     // Browse: the focused title, top left.
-    private var heroItem: Item? = null
-    private lateinit var browseInfo: LinearLayout
-    private lateinit var heroName: TextView
-    private lateinit var heroLogo: ImageView
-    private lateinit var heroFacts: TextView
-    private lateinit var heroScores: LinearLayout // IMDb, RT, Added: beside the facts or on the line under them
-    private val smallLine by lazy { text("", SMALL).lineHeight }
+    internal var heroItem: Item? = null
+    internal lateinit var browseInfo: LinearLayout
+    internal lateinit var heroName: TextView
+    internal lateinit var heroLogo: ImageView
+    internal lateinit var heroFacts: TextView
+    internal lateinit var heroScores: LinearLayout // IMDb, RT, Added: beside the facts or on the line under them
+    internal val smallLine by lazy { text("", SMALL).lineHeight }
     // The widest the scores can be (IMDb's widest number, both meters at 100%), measured once: building the line on
     // every focus move was a handful of views per card.
-    private var heroSynopsis = "" // the focused title's whole description; heroAbout shows what fits, cut at a sentence
-    private val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
-    private val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
-    private var wideRow = false // the row the remote is in has wide cards (Continue Watching): the hero sits lower
-    private lateinit var heroAbout: TextView
+    internal var heroSynopsis = "" // the focused title's whole description; heroAbout shows what fits, cut at a sentence
+    internal val heroRtScores = HashMap<String, RtScores?>() // by title id; null once looked up and not on Rotten Tomatoes
+    internal val heroImdbRatings = HashMap<String, String?>() // for cards whose add-on gave no rating
+    internal var wideRow = false // the row the remote is in has wide cards (Continue Watching): the hero sits lower
+    internal lateinit var heroAbout: TextView
 
     // Cinema: one title, low on the left; the stage takes the remote's keys while it shows.
-    private var cinema: List<Item> = emptyList()
-    private var cinemaAt = 0
-    private lateinit var stage: FrameLayout
-    private lateinit var cinemaInfo: LinearLayout
-    private lateinit var cinemaName: TextView
-    private lateinit var cinemaLogo: ImageView
-    private lateinit var cinemaClock: TextClock // the cinema's own large clock; the top bar has the browsing one
-    private lateinit var cinemaLine: TextView
-    private lateinit var cinemaPlay: TextView
-    private lateinit var dots: LinearLayout
+    internal var cinema: List<Item> = emptyList()
+    internal var cinemaAt = 0
+    internal lateinit var stage: FrameLayout
+    internal lateinit var cinemaInfo: LinearLayout
+    internal lateinit var cinemaName: TextView
+    internal lateinit var cinemaLogo: ImageView
+    internal lateinit var cinemaClock: TextClock // the cinema's own large clock; the top bar has the browsing one
+    internal lateinit var cinemaLine: TextView
+    internal lateinit var cinemaPlay: TextView
+    internal lateinit var dots: LinearLayout
 
     /** A title in a row or the cinema. Details the catalog didn't send are filled in from the meta addon. */
-    private class Item(
+    internal class Item(
         val id: String, val type: String, val name: String, val poster: String?,
         var art: String?, var logo: String?, var about: String, var facts: List<String>,
         val videoId: String?, val progress: Float,
@@ -265,18 +265,18 @@ class MainActivity : Screen() {
     }
 
     // Title details, newest request first, so the cards on screen get theirs before the ones scrolled past.
-    private val metaPool = Images.newestFirst(6)
-    private var generation = 0 // which showPage answers belong to: late ones from an earlier page are dropped
-    private var loadMoreSections: (() -> Unit)? = null
-    private var touched = false // a key was pressed since the page opened: fresh data then waits for the next visit
-    private var cinemaReady = false // the cinema's title has its art and logo (or gave up waiting) and may show
-    private var cinemaToken = Any()
-    private var beforeCinema: View? = null // where the remote was when the cinema took over
-    private var cinemaAwake = false
-    private var cinemaWakeKey = -1
-    private val idle = Runnable { enterCinema() }
-    private var homeDimmed = false
-    private val advance = Runnable { if (mode == Mode.CINEMA && cinema.size > 1) showCinema((cinemaAt + 1) % cinema.size) }
+    internal val metaPool = Images.newestFirst(6)
+    internal var generation = 0 // which showPage answers belong to: late ones from an earlier page are dropped
+    internal var loadMoreSections: (() -> Unit)? = null
+    internal var touched = false // a key was pressed since the page opened: fresh data then waits for the next visit
+    internal var cinemaReady = false // the cinema's title has its art and logo (or gave up waiting) and may show
+    internal var cinemaToken = Any()
+    internal var beforeCinema: View? = null // where the remote was when the cinema took over
+    internal var cinemaAwake = false
+    internal var cinemaWakeKey = -1
+    internal val idle = Runnable { enterCinema() }
+    internal var homeDimmed = false
+    internal val advance = Runnable { if (mode == Mode.CINEMA && cinema.size > 1) showCinema((cinemaAt + 1) % cinema.size) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -407,7 +407,7 @@ class MainActivity : Screen() {
     }
 
     /** A page by its name on screen or in code; "My List" is what Search and older callers call the Library. */
-    private fun pageNamed(name: String?) = name?.let { n ->
+    internal fun pageNamed(name: String?) = name?.let { n ->
         Page.entries.firstOrNull { it != Page.IMDB && (it.label.equals(n, true) || it.name.equals(n, true)) } ?: Page.LIBRARY.takeIf { n.equals("My List", true) }
     }
 
@@ -419,7 +419,7 @@ class MainActivity : Screen() {
      * A page's rows: catalogs with the same purpose share a row, and Shows and Movies end with a row per main genre (the
      * first catalog that filters by it) unless a row of that name is already there; the chips jump to these rows.
      */
-    private fun sections(p: Page, shelves: List<Pair<Addon.Catalog, Shelf>>): List<Triple<String, List<Pair<Addon.Catalog, Shelf>>, String?>> {
+    internal fun sections(p: Page, shelves: List<Pair<Addon.Catalog, Shelf>>): List<Triple<String, List<Pair<Addon.Catalog, Shelf>>, String?>> {
         val genres = catalogGenres(shelves.flatMap { it.first.genres })
         return if (!p.isCatalog) shelves.map { Triple(it.second.title, listOf(it), null as String?) } else {
             val merged = shelves.groupBy { shortRowName(it.second.title, genres) }.map { (name, list) -> Triple(name, list, null as String?) }
@@ -432,7 +432,7 @@ class MainActivity : Screen() {
      * Shows' and Movies' rows read from disk into memory ahead, so the first switch to them builds at once too; and My
      * List's first three rows of posters fetched, so its grid doesn't open dark on the left while they download.
      */
-    private fun warmPages() = background({
+    internal fun warmPages() = background({
         Stremio.savedLibrary(profile.authKey).orEmpty()
             .filter { !it.optBoolean("removed") && it.optString("type") in listOf("movie", "series") }
             .sortedByDescending { it.optString("_ctime") }.take(LIST_COLUMNS * 3)
@@ -472,7 +472,7 @@ class MainActivity : Screen() {
         main.postDelayed(refreshOnReturn, 700)
     }
 
-    private val refreshOnReturn = Runnable {
+    internal val refreshOnReturn = Runnable {
         if (isFinishing || isDestroyed) return@Runnable
         // A row shown again in Settings › Profile › Hidden rows: the page is built afresh with it.
         if (hiddenSeen != null && Settings.hiddenRows(this) != hiddenSeen) return@Runnable showPage(page)
@@ -481,19 +481,19 @@ class MainActivity : Screen() {
         // The add-on list rarely changes while CAS is open: asked again at most every few minutes, not on every return.
         if (android.os.SystemClock.uptimeMillis() - lastAddonCheck > ADDON_RECHECK) refreshAddons?.invoke()
     }
-    private var lastAddonCheck = 0L
+    internal var lastAddonCheck = 0L
 
-    private var refreshAddons: (() -> Unit)? = null // the open page's add-on check, run again on coming back to CAS
+    internal var refreshAddons: (() -> Unit)? = null // the open page's add-on check, run again on coming back to CAS
 
-    private var refreshLibrary: (() -> Unit)? = null // the open page's library rows (Home, Library), asked again
-    private var showLibraryNow: ((List<JSONObject>) -> Unit)? = null // the open page's library rows drawn from a list in hand
-    private var homeSlot: LinearLayout? = null // Home's slot of Continue, New episodes and the viewer's lists
-    private var listsSeen = "" // the lists as drawn (Lists.signature); drawn again in place when they change
-    private var restoreCard: String? = null // the card the remote was on when Android let the process go (onSaveInstanceState)
-    private val cinemaRest = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } // ten minutes in: the TV's own screensaver or sleep may follow
-    private var newsChecking = false // NewEpisodes.refresh is running for Home
-    private var hiddenSeen: Set<String>? = null // the hidden rows the open page was built without; changed in Settings → rebuilt
-    private var last: View? = null // where the remote last was in the rows
+    internal var refreshLibrary: (() -> Unit)? = null // the open page's library rows (Home, Library), asked again
+    internal var showLibraryNow: ((List<JSONObject>) -> Unit)? = null // the open page's library rows drawn from a list in hand
+    internal var homeSlot: LinearLayout? = null // Home's slot of Continue, New episodes and the viewer's lists
+    internal var listsSeen = "" // the lists as drawn (Lists.signature); drawn again in place when they change
+    internal var restoreCard: String? = null // the card the remote was on when Android let the process go (onSaveInstanceState)
+    internal val cinemaRest = Runnable { window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) } // ten minutes in: the TV's own screensaver or sleep may follow
+    internal var newsChecking = false // NewEpisodes.refresh is running for Home
+    internal var hiddenSeen: Set<String>? = null // the hidden rows the open page was built without; changed in Settings → rebuilt
+    internal var last: View? = null // where the remote last was in the rows
 
     override fun onResume() {
         super.onResume()
@@ -531,7 +531,7 @@ class MainActivity : Screen() {
     }
 
     /** The screensaver's clock: IDLE from the last key, while Settings wants it. */
-    private fun restIdle() {
+    internal fun restIdle() {
         main.removeCallbacks(idle)
         if (Settings.homeCinema(this)) main.postDelayed(idle, IDLE)
     }
@@ -635,7 +635,7 @@ class MainActivity : Screen() {
         return super.dispatchKeyEvent(event)
     }
 
-    private fun dimHome(on: Boolean) {
+    internal fun dimHome(on: Boolean) {
         if ((page != Page.HOME && !page.isCatalog && page != Page.LIBRARY && page != Page.IMDB && page != Page.FOREIGN) || mode != Mode.BROWSE || homeDimmed == on) return
         homeDimmed = on
         val alpha = if (on) 0.3f else 1f
@@ -650,7 +650,7 @@ class MainActivity : Screen() {
         listHint.animate().alpha(alpha).setDuration(400).start()
     }
 
-    private fun switchProfile() {
+    internal fun switchProfile() {
         // From a Kids profile, Home stays underneath: Back on the picker's PIN screen returns to it.
         if (::profile.isInitialized && profile.kids) return startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true))
         startActivity(Intent(this, ProfilesActivity::class.java).putExtra("pick", true)
@@ -660,21 +660,21 @@ class MainActivity : Screen() {
 
     // ---------- the rail ----------
 
-    private lateinit var nav: LinearLayout // the capsule of entries
-    private lateinit var profileEntry: View
-    private lateinit var profileAvatar: TextView // the initial in its disc
-    private val railIcons = mutableMapOf<View, ImageView>()
-    private val railNames = mutableMapOf<View, TextView>()
+    internal lateinit var nav: LinearLayout // the capsule of entries
+    internal lateinit var profileEntry: View
+    internal lateinit var profileAvatar: TextView // the initial in its disc
+    internal val railIcons = mutableMapOf<View, ImageView>()
+    internal val railNames = mutableMapOf<View, TextView>()
 
     /** An entry's name, beside its glyph: shown while the remote is in the rail (see [nameRail]). */
-    private fun railName(label: String) = text(label, SMALL, bold = true, color = TEXT_2).apply {
+    internal fun railName(label: String) = text(label, SMALL, bold = true, color = TEXT_2).apply {
         maxLines = 1
         visibility = View.GONE
         setPadding(dp(2), 0, dp(16), 0)
     }
 
     /** One rail entry: a glyph in a round cell with its name beside it. Focus lights the cell. */
-    private fun entry(icon: Int, label: String): FrameLayout = FrameLayout(this).apply {
+    internal fun entry(icon: Int, label: String): FrameLayout = FrameLayout(this).apply {
         isFocusable = true
         contentDescription = label
         val glyph = ImageView(context).apply { setImageResource(icon); setPadding(dp(9), dp(9), dp(9), dp(9)) }
@@ -690,7 +690,7 @@ class MainActivity : Screen() {
      * his parents read words, not pictures), and closes again as the remote leaves. Your profile first, then Search
      * and the pages. The open page is lit, the focused entry white.
      */
-    private fun header(): View {
+    internal fun header(): View {
         header = object : FrameLayout(this) {
             // Coming across from the rows, the remote lands on the page you're on.
             override fun addFocusables(views: ArrayList<View>, direction: Int, focusableMode: Int) {
@@ -757,14 +757,14 @@ class MainActivity : Screen() {
     }
 
 
-    private var everythingBuilt: Boolean? = null // Show everything as the rail and the pages were built with it
-    private val simple get() = everythingBuilt == false && !profile.kids // the short CAS: three pages, few rows
+    internal var everythingBuilt: Boolean? = null // Show everything as the rail and the pages were built with it
+    internal val simple get() = everythingBuilt == false && !profile.kids // the short CAS: three pages, few rows
 
-    private var pending = Page.HOME
-    private var jump = false // OK on a page's name: go down into its rows once they're in
-    private val switchPage = Runnable { if (pending != page && navItems[pending]?.isFocused == true) { jump = false; showPage(pending) } }
+    internal var pending = Page.HOME
+    internal var jump = false // OK on a page's name: go down into its rows once they're in
+    internal val switchPage = Runnable { if (pending != page && navItems[pending]?.isFocused == true) { jump = false; showPage(pending) } }
 
-    private fun profileMenu() {
+    internal fun profileMenu() {
         // A Kids profile has no Settings; switching away asks the PIN that leaves it (the picker does the asking).
         if (profile.kids) return choose(profile.name, listOf("Switch profile", "Keep watching")) { i -> if (i == 0) switchProfile() }
         choose(profile.name, listOf("Switch profile", "Settings")) { i ->
@@ -773,7 +773,7 @@ class MainActivity : Screen() {
     }
 
     /** The focused entry on white, the open page lit. */
-    private fun styleNav() {
+    internal fun styleNav() {
         if (!::nav.isInitialized) return
         val entries = navItems.map { (p, v) -> v to p } + listOfNotNull(search?.let { it to null }, profileEntry to null)
         entries.forEach { (item, p) ->
@@ -795,7 +795,7 @@ class MainActivity : Screen() {
     }
 
     /** The names show while the remote is in the rail, and the capsule darkens to carry them over the art. */
-    private val nameRail = Runnable {
+    internal val nameRail = Runnable {
         if (!::nav.isInitialized) return@Runnable
         val open = header.hasFocus()
         if (railNames.values.all { (it.visibility == View.VISIBLE) == open }) return@Runnable
@@ -816,7 +816,7 @@ class MainActivity : Screen() {
      * the new one is in, so nothing flashes dark or soft. Art that's already here shows at once; otherwise it waits a
      * beat, so racing along a row doesn't start a download per card.
      */
-    private fun showArt(item: Item, ready: (() -> Unit)? = null) {
+    internal fun showArt(item: Item, ready: (() -> Unit)? = null) {
         main.removeCallbacks(artTask)
         // The poster only once it's certain there's no art: a poster cropped to the screen is blurry and half a face.
         val url = item.art ?: item.poster?.takeIf { item.settled } ?: return
@@ -848,7 +848,7 @@ class MainActivity : Screen() {
     }
 
     /** Gets [item]'s full-screen art ready ahead (fetching its details first if need be), so moving to it is instant. */
-    private fun warm(item: Item) {
+    internal fun warm(item: Item) {
         if (item.warming) return
         item.warming = true
         item.logo?.let { Images.prefetch(it, dp(LOGO_W)) }
@@ -858,7 +858,7 @@ class MainActivity : Screen() {
     }
 
     /** What's on screen for the mode. */
-    private fun chrome() {
+    internal fun chrome() {
         val cinemaOn = mode == Mode.CINEMA
         val headerOn = !cinemaOn || header.hasFocus()
         header.animate().alpha(if (headerOn) 1f else 0f).setDuration(250).start()
@@ -884,7 +884,7 @@ class MainActivity : Screen() {
 
     // ---------- cinema ----------
 
-    private fun stage(): View {
+    internal fun stage(): View {
         cinemaName = text("", SERIF_HERO, serif = true).onArt().apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(520) }
         cinemaLogo = ImageView(this).apply { adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_START; maxHeight = dp(LOGO_H); maxWidth = dp(LOGO_W) }
         cinemaLine = text("", SMALL, color = TEXT).onArt().apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END; maxWidth = dp(INFO_W) }
@@ -916,7 +916,7 @@ class MainActivity : Screen() {
     }
 
     /** Cinema title [index]: its art, logo, where you are (episode, its name, time left) and Resume. */
-    private fun showCinema(index: Int) {
+    internal fun showCinema(index: Int) {
         val item = cinema.getOrNull(index) ?: return
         val same = cinemaAt == index && cinemaReady && cinemaName.text.toString() == item.name
         cinemaAt = index
@@ -951,7 +951,7 @@ class MainActivity : Screen() {
         if (mode == Mode.CINEMA) main.postDelayed(advance, ADVANCE)
     }
 
-    private fun enterCinema() {
+    internal fun enterCinema() {
         if (cinema.isEmpty() || mode == Mode.CINEMA) return
         // The TV is idle: a new version, if there is one, installs now with nothing to press (Settings › About › Updates).
         background({ Updates.quiet(applicationContext) }) { r -> android.util.Log.i("CAS", "overnight update: ${r.getOrNull()}") }
@@ -976,7 +976,7 @@ class MainActivity : Screen() {
     }
 
     /** Wakes from the cinema to where the remote was; the card taking focus brings its own art back. */
-    private fun enterBrowse() {
+    internal fun enterBrowse() {
         mode = Mode.BROWSE
         dimHome(false)
         main.removeCallbacks(advance)
@@ -993,7 +993,7 @@ class MainActivity : Screen() {
 
     // ---------- browse: the focused title, top left ----------
 
-    private fun browseInfo(): View {
+    internal fun browseInfo(): View {
         heroName = text("", SERIF_HERO, serif = true).onArt().apply {
             maxLines = 2; ellipsize = TextUtils.TruncateAt.END
             // The area is a fixed height: at large font sizes a two-line name shrinks to fit instead of clipping.
@@ -1036,7 +1036,7 @@ class MainActivity : Screen() {
      * Rotten Tomatoes' C and A from the card (its own rows carry them) or from the lookup [scoresAhead] made. Both
      * are drawn at once when known, so moving along a row shows them without a wait the second time.
      */
-    private fun showScores(item: Item) {
+    internal fun showScores(item: Item) {
         val meta = metas[item.id]
         val rating = (meta?.rating ?: item.facts.firstOrNull { it.startsWith("IMDb") }?.removePrefix("IMDb ") ?: heroImdbRatings[item.id])
             ?.takeIf { it.isNotBlank() }
@@ -1051,16 +1051,16 @@ class MainActivity : Screen() {
     }
 
     /** A moment after a card takes focus: the scores it lacks are asked for, and drawn if it is still the one. */
-    private var heroFactsBase = "" // the facts line without the age rating
-    private val heroCerts = mutableMapOf<String, String?>() // age ratings looked up for the title block; null: asked, none yet
+    internal var heroFactsBase = "" // the facts line without the age rating
+    internal val heroCerts = mutableMapOf<String, String?>() // age ratings looked up for the title block; null: asked, none yet
 
     /** The facts line: the age rating first when it is known ("15 · 2022 · Thriller · 4 seasons"), as the title's page has it. */
-    private fun showFacts(item: Item) {
+    internal fun showFacts(item: Item) {
         val cert = (metas[item.id]?.certification ?: heroCerts[item.id])?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }
         heroFacts.text = if (cert == null) heroFactsBase else android.text.SpannableStringBuilder(certMark(cert)).apply { if (heroFactsBase.isNotEmpty()) append(DOT).append(heroFactsBase) }
     }
 
-    private val scoresAhead = Runnable {
+    internal val scoresAhead = Runnable {
         val item = heroItem ?: return@Runnable
         if (mode != Mode.BROWSE || item.type == COUNTRY) return@Runnable
         // The age rating, asked once the remote rests on a title, as the scores are.
@@ -1092,7 +1092,7 @@ class MainActivity : Screen() {
     }
 
     /** The focused title: its art across the screen, and logo, facts (and time left) and description top left. */
-    private val sourcesAhead = Runnable {
+    internal val sourcesAhead = Runnable {
         val item = heroItem ?: return@Runnable
         if (mode != Mode.BROWSE) return@Runnable
         // A film, or a series with its next episode known (Continue): ask the add-ons now, so Play starts at once.
@@ -1100,7 +1100,7 @@ class MainActivity : Screen() {
         Sources.prefetch(this, profile.authKey, item.type, videoId)
     }
 
-    private fun showHero(item: Item) {
+    internal fun showHero(item: Item) {
         main.removeCallbacks(sourcesAhead)
         main.postDelayed(sourcesAhead, SOURCES_AHEAD_WAIT)
         // A new title's words fade up with its art instead of snapping (the fade itself runs below, once).
@@ -1147,7 +1147,7 @@ class MainActivity : Screen() {
     }
 
     /** The description ends at a sentence where its lines run out, never mid-word with dots; measured once laid out. */
-    private fun fitSynopsis() {
+    internal fun fitSynopsis() {
         val full = heroSynopsis
         heroAbout.post {
             if (heroSynopsis != full) return@post
@@ -1160,7 +1160,7 @@ class MainActivity : Screen() {
         }
     }
 
-    private fun showCaption(item: Item) {
+    internal fun showCaption(item: Item) {
         // Time left only: "Stopped at 1:02:14" said the same thing a second way.
         val remaining = item.left?.split(DOT)?.lastOrNull { it.endsWith("left") }
         val meta = metas[item.id]
@@ -1173,13 +1173,13 @@ class MainActivity : Screen() {
         cardCaption.post(::placeCaption)
     }
 
-    private fun placeCaption() {
+    internal fun placeCaption() {
         cardCaption.translationX = minOf(captionX, cardCaption.rootView.width - dp(EDGE) - dp(PAD) - cardCaption.width).coerceAtLeast(0).toFloat()
         clearHint()
     }
 
     /** The next row's name and the caption share one line: a long caption that reaches the name hides it. */
-    private fun clearHint() {
+    internal fun clearHint() {
         if (nextRowHint.text.isEmpty() || cardCaption.visibility != View.VISIBLE) return
         nextRowHint.post {
             val captionEnd = cardCaption.left + cardCaption.translationX + cardCaption.width
@@ -1188,7 +1188,7 @@ class MainActivity : Screen() {
     }
 
     /** One quiet line for a title in progress: the episode and its name (or, for a film, its facts), then the time left. */
-    private fun where(item: Item): String {
+    internal fun where(item: Item): String {
         val parts = item.left?.split(DOT).orEmpty()
         val code = parts.firstOrNull { it.startsWith("S") && " E" in it }
         val about = if (code != null) listOfNotNull(code, episode(item)?.title?.takeIf { it.isNotEmpty() }) else item.facts
@@ -1196,14 +1196,14 @@ class MainActivity : Screen() {
     }
 
     /** "Series · 2022 · Crime": the kind, the year and the first genre, nothing that needs reading twice. */
-    private fun facts(item: Item): String {
+    internal fun facts(item: Item): String {
         val year = item.facts.firstOrNull { it.firstOrNull()?.isDigit() == true }
         val genre = item.facts.firstOrNull { it.firstOrNull()?.isDigit() == false && !it.startsWith("IMDb") && '%' !in it }?.substringBefore(",")
         return listOfNotNull(if (item.type == "series") "Series" else "Movie", year, genre).joinToString(DOT)
     }
 
     /** The episode Continue Watching points at, once the title's details are in. */
-    private fun episode(item: Item) = item.videoId?.let { v -> metas[item.id]?.videos?.firstOrNull { it.id == v } }
+    internal fun episode(item: Item) = item.videoId?.let { v -> metas[item.id]?.videos?.firstOrNull { it.id == v } }
 
     // ---------- pages ----------
 
@@ -1212,7 +1212,7 @@ class MainActivity : Screen() {
      * and asks the network behind them: catalogs refresh for the next visit, and the library replaces what's shown
      * only if it changed and the remote hasn't been touched yet.
      */
-    private fun showPage(p: Page, quick: Boolean = true) {
+    internal fun showPage(p: Page, quick: Boolean = true) {
         dimHome(false)
         if (p != page) {
             genre = null // a genre belongs to the page it was picked on
@@ -1585,9 +1585,9 @@ class MainActivity : Screen() {
         refreshAddons = { lastAddonCheck = android.os.SystemClock.uptimeMillis(); checkAddons {} }
     }
 
-    private class Shelf(val page: Page, val title: String, val rank: Int)
+    internal class Shelf(val page: Page, val title: String, val rank: Int)
 
-    private fun showListChips() {
+    internal fun showListChips() {
         genreStrip.removeAllViews()
         genreChips.clear()
         listFilterChips.clear()
@@ -1621,7 +1621,7 @@ class MainActivity : Screen() {
         genreStrip.addView(line)
     }
 
-    private fun styleListChips() {
+    internal fun styleListChips() {
         listFilterChips.forEach { (value, view) -> view.select(when (value) {
             ListFilter.ALL -> "All"; ListFilter.MOVIES -> "Movies"; ListFilter.SHOWS -> "TV"
         }, value == listFilter) }
@@ -1631,16 +1631,16 @@ class MainActivity : Screen() {
     }
 
     // Made once, not per focus move; only the main thread parses with it.
-    private val addedParser by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") } }
+    internal val addedParser by lazy { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") } }
 
-    private fun addedAgo(value: String): String {
+    internal fun addedAgo(value: String): String {
         val whenAdded = runCatching { addedParser.parse(value)?.time }.getOrNull() ?: return "recently"
         return android.text.format.DateUtils.getRelativeTimeSpanString(whenAdded, System.currentTimeMillis(),
             android.text.format.DateUtils.DAY_IN_MILLIS).toString()
     }
 
     /** All, then one chip per genre row on the page; a chip jumps to its row, and the dot follows the row in use. */
-    private fun showGenreChips(names: List<String>) {
+    internal fun showGenreChips(names: List<String>) {
         val hadFocus = genreStrip.hasFocus()
         val focusedGenre = genreChips.entries.firstOrNull { it.value.hasFocus() }?.key
         genreStrip.removeAllViews()
@@ -1666,21 +1666,21 @@ class MainActivity : Screen() {
     }
 
     /** The chip the page's top line returns to: Library's last filter, a catalog page's genre, the Foreign page's country. */
-    private fun topChip(): TextView? = when (page) {
+    internal fun topChip(): TextView? = when (page) {
         Page.LIBRARY -> lastListChip ?: listFilterChips[listFilter]
         Page.FOREIGN -> countryChips[if (foreignCountry() == WORLD) WORLD else PICK]
         else -> genreChips[genre] ?: genreChips.values.firstOrNull() // no genre open: the first chip
     }
 
     /** The country IMDb's lists are asked from: the TV's own, else the UK. (A choice of countries was tried and dropped: it changed little.) */
-    private fun imdbCountry(): String = Locale.getDefault().country.ifEmpty { "GB" }
+    internal fun imdbCountry(): String = Locale.getDefault().country.ifEmpty { "GB" }
 
     /** The Foreign page's choice, kept across visits: a country's code, or [WORLD] (every country's best, one row each). */
-    private fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> c == WORLD || JW_COUNTRIES.any { it.code == c } } ?: WORLD
+    internal fun foreignCountry(): String = Settings.foreignCountry(this).takeIf { c -> c == WORLD || JW_COUNTRIES.any { it.code == c } } ?: WORLD
 
 
     /** The Foreign page's choice changes: kept, the page rebuilt for it, the remote on the top line's control for it. */
-    private fun switchCountry(code: String) {
+    internal fun switchCountry(code: String) {
         if (code == foreignCountry()) return
         Settings.setForeignCountry(this, code)
         showPage(Page.FOREIGN)
@@ -1692,7 +1692,7 @@ class MainActivity : Screen() {
      * the country in use, which opens the picker, a grid of them all one press away. In World a row's first card is
      * that country's door as well, so a country is entered from where the remote already is.
      */
-    private fun showCountryChips() {
+    internal fun showCountryChips() {
         val hadFocus = genreStrip.hasFocus()
         genreStrip.removeAllViews()
         genreChips.clear()
@@ -1726,7 +1726,7 @@ class MainActivity : Screen() {
      * as posters, and the services its top tens come from. The side-panel pattern of Prime Video and Plex: the eye
      * moves one way, the preview answers "what is in there" before OK. OK enters; Back closes.
      */
-    private fun countryPicker() {
+    internal fun countryPicker() {
         if (isFinishing || isDestroyed) return
         val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
         val current = foreignCountry()
@@ -1823,21 +1823,21 @@ class MainActivity : Screen() {
     }
 
     /** The flag's colours corner to corner, at dusk. */
-    private fun flagGradient(code: String) = GradientDrawable(GradientDrawable.Orientation.TL_BR, flagColours(code).map(::dusk).toIntArray())
+    internal fun flagGradient(code: String) = GradientDrawable(GradientDrawable.Orientation.TL_BR, flagColours(code).map(::dusk).toIntArray())
         .apply { cornerRadius = dp(TILE_RADIUS).toFloat() }
 
     /** A flag's colour as it reads at dusk: half way to the page's dark, so white words sit on it and it is still itself. */
-    private fun dusk(c: Int): Int {
+    internal fun dusk(c: Int): Int {
         fun part(shift: Int, dark: Int) = (((c shr shift) and 255) * 0.5f + dark * 0.5f).toInt()
         return (0xFF shl 24) or (part(16, 0x14) shl 16) or (part(8, 0x16) shl 8) or part(0, 0x1A)
     }
 
     /** A World row's first card: the country itself, which OK enters. */
-    private fun doorItem(c: JwCountry) = Item("country:${c.code}", COUNTRY, c.label, null, null, null,
+    internal fun doorItem(c: JwCountry) = Item("country:${c.code}", COUNTRY, c.label, null, null, null,
         "Highest rated ${c.demonym} TV and films, and the top tens on ${c.services.joinToString { it.name }}.",
         listOf("${c.services.size} services", "Open for the lot"), null, 0f, resume = false, left = null).apply { filled = true; settled = true }
 
-    private fun markChip(rowTitle: String) {
+    internal fun markChip(rowTitle: String) {
         val open = rowTitle.takeIf { it in genreChips }
         genre = open // Back and Down from the top bar return to this chip
         genreChips.forEach { (value, chip) -> chip.select(value ?: "", value == open) }
@@ -1849,7 +1849,7 @@ class MainActivity : Screen() {
      * suffix. Personal picks come first (rank 0–1), then what's popular (2), then themed lists (3). Sport has no page
      * yet, so its catalogs are left out.
      */
-    private fun shelf(c: Addon.Catalog): Shelf? {
+    internal fun shelf(c: Addon.Catalog): Shelf? {
         // Anything that isn't a film or a series (sport, TV channels, events) goes to Live, under its own name.
         val typePage = when (c.type) { "movie" -> Page.MOVIES; "series" -> Page.SHOWS; else -> return Shelf(Page.LIVE, tidy(c.name), 3) }
         val india = mapOf(
@@ -1870,11 +1870,11 @@ class MainActivity : Screen() {
     }
 
     /** Addon names as a person would write them: no "TV Shows:" label, no run-together keyword tags. */
-    private fun tidy(name: String) = name.removePrefix("TV Shows: ").removePrefix("MyTrakt - ")
+    internal fun tidy(name: String) = name.removePrefix("TV Shows: ").removePrefix("MyTrakt - ")
         // ponytail: Watchly glues TMDB keyword tags onto theme names ("Comedy Aftercreditsstinger"); a word this long is one.
         .split(" ").filter { it.length < 16 }.joinToString(" ")
 
-    private fun startCinema(items: List<Item>) {
+    internal fun startCinema(items: List<Item>) {
         cinema = items
         cinemaAt = 0
         if (mode != Mode.CINEMA) return
@@ -1884,10 +1884,10 @@ class MainActivity : Screen() {
     }
 
     /** A page's place for rows that come and go (the library, the viewer's lists): they stack, one under the other. */
-    private fun slot() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also { content.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+    internal fun slot() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also { content.addView(it, LinearLayout.LayoutParams(-1, -2)) }
 
     /** One of the viewer's lists as a row: its titles, newest additions first. */
-    private fun listRow(l: Lists.ListDef): Row {
+    internal fun listRow(l: Lists.ListDef): Row {
         val items = l.items.map { e -> Item(e.id, e.type, e.name, e.poster, null, Images.logoFor(e.id), "", emptyList(), null, 0f, resume = false, left = null) }
         return row(l.name, items.take(START), later(items), listId = l.id)
     }
@@ -1897,7 +1897,7 @@ class MainActivity : Screen() {
      * they stand, and Continue and the rest do not move. The remote stays on its card, or on the same place in a list
      * that lost one. Before, the whole slot was fetched and built again, and every row jumped.
      */
-    private fun redrawLists() {
+    internal fun redrawLists() {
         val slot = homeSlot?.takeIf { page == Page.HOME && it.isAttachedToWindow } ?: return
         listsSeen = Lists.signature(this)
         val focused = currentFocus
@@ -1914,7 +1914,7 @@ class MainActivity : Screen() {
         back?.requestFocus()
     }
 
-    private fun redrawLibrary() {
+    internal fun redrawLibrary() {
         val slot = librarySlot ?: return
         val was = currentFocus?.takeIf { isInside(it, slot) }?.tag
         rows.filter { isInside(it.view, slot) }.forEach { row -> row.cards.forEach { it.unload() }; rows.remove(row) }
@@ -1925,7 +1925,7 @@ class MainActivity : Screen() {
         else firstRow()?.items?.firstOrNull()?.let { fill(it); showHero(it) }
     }
 
-    private fun showLibrary(slot: LinearLayout) {
+    internal fun showLibrary(slot: LinearLayout) {
         val all = library.filter { !it.optBoolean("removed") && it.optString("type") in listOf("movie", "series") }
             .filter { listFilter == ListFilter.ALL || it.optString("type") == if (listFilter == ListFilter.MOVIES) "movie" else "series" }
         val news = NewEpisodes.all(this, profile.id, library)
@@ -1965,13 +1965,24 @@ class MainActivity : Screen() {
         slot.addView(column)
     }
 
-    private fun libraryFinished(item: JSONObject): Boolean {
+    internal fun libraryFinished(item: JSONObject): Boolean {
         val state = item.optJSONObject("state") ?: return false
         return state.optInt("timesWatched") > 0 && state.optLong("timeOffset") == 0L
     }
 
+    /** The whole of [r] as a grid on a screen of its own (GridActivity): for a row long enough to be worth looking over at once. */
+    internal fun seeAll(r: Row) {
+        val all = r.items.filter { it.type == "movie" || it.type == "series" }
+        if (r.grid || all.size < SEE_ALL_MIN) return
+        val items = org.json.JSONArray(all.take(SEE_ALL_MAX).map { item ->
+            JSONObject().put("id", item.id).put("type", item.type).put("name", item.name).put("poster", item.poster ?: "")
+                .put("year", item.facts.firstOrNull { f -> f.length == 4 && f.all(Char::isDigit) } ?: "")
+        })
+        startActivity(Intent(this, GridActivity::class.java).putExtra("title", r.title).putExtra("items", items.toString()))
+    }
+
     /** Hold OK on any card: what the row offers for the title, then the viewer's own lists. */
-    private fun holdMenu(item: Item) {
+    internal fun holdMenu(item: Item) {
         if (item.type == COUNTRY) return
         // Held in one of the viewer's own rows: that list can be edited from here, not only in Settings › Lists.
         val inList = rows.firstOrNull { r -> r.listId != null && r.cards.any { it.item === item } }?.listId?.let { id -> Lists.all(this).firstOrNull { it.id == id } }
@@ -2002,7 +2013,9 @@ class MainActivity : Screen() {
         val saved = Library.inList((library + Stremio.knownLibrary(profile.authKey).orEmpty()).firstOrNull { it.optString("_id") == item.id })
         val myList = if (page == Page.LIBRARY || profile.kids || !(item.type == "movie" || item.type == "series")) emptyList()
             else listOf((if (saved) "Remove from My List" else "Add to My List") to { setInMyList(item, !saved) })
-        val own = myList + listOwn + moves + when {
+        val wholeRow = rows.firstOrNull { r -> r.cards.any { it.item === item } }?.takeIf { !it.grid && it.items.size >= SEE_ALL_MIN }
+            ?.let { r -> listOf("See all of “${r.title}”" to { seeAll(r) }) } ?: emptyList()
+        val own = myList + wholeRow + listOwn + moves + when {
             page == Page.LIBRARY -> listOf("Remove from My List" to { libraryEdit(item, 0) }) +
                 (if (item.finished) emptyList() else listOf("Mark as watched" to { libraryEdit(item, 1) }))
             item.resume && page == Page.HOME -> listOf("Choose a source" to { play(item, pick = true) }, "Remove from Continue Watching" to { hideFromContinue(item) })
@@ -2012,7 +2025,7 @@ class MainActivity : Screen() {
     }
 
     /** Held OK › Add to My List (or Remove): the title into the Stremio library, its watch history kept, and a word to say so. */
-    private fun setInMyList(item: Item, on: Boolean) {
+    internal fun setInMyList(item: Item, on: Boolean) {
         val key = profile.authKey
         val known = (library + Stremio.knownLibrary(key).orEmpty()).firstOrNull { it.optString("_id") == item.id }
         val entry = known?.let { JSONObject(it.toString()) } ?: Library.newItem(item.id, item.type, item.name, item.poster)
@@ -2029,7 +2042,7 @@ class MainActivity : Screen() {
         }
     }
 
-    private fun libraryEdit(item: Item, selected: Int) {
+    internal fun libraryEdit(item: Item, selected: Int) {
         val original = library.firstOrNull { it.optString("_id") == item.id } ?: return
         run {
             val updated = JSONObject(original.toString())
@@ -2049,7 +2062,7 @@ class MainActivity : Screen() {
     }
 
     /** Hold OK on a Continue Watching title, "Remove from Continue Watching": the title off the row, remembered in Settings. */
-    private fun hideFromContinue(item: Item) {
+    internal fun hideFromContinue(item: Item) {
         run {
             val original = library.firstOrNull { it.optString("_id") == item.id } ?: return
             val updated = JSONObject(original.toString())
@@ -2071,10 +2084,10 @@ class MainActivity : Screen() {
     // ---------- rows ----------
 
     /** The rest of a list already in hand, a page at a time: a row of hundreds of cards would be slow to build. */
-    private fun later(all: List<Item>): ((Int) -> List<Item>)? =
+    internal fun later(all: List<Item>): ((Int) -> List<Item>)? =
         if (all.size <= START) null else { from -> all.drop(from).take(PAGE) }
 
-    private fun row(title: String, items: List<Item>, more: ((Int) -> List<Item>)? = null, wide: Boolean = false, grid: Boolean = false, listId: String? = null, marked: Boolean = false): Row =
+    internal fun row(title: String, items: List<Item>, more: ((Int) -> List<Item>)? = null, wide: Boolean = false, grid: Boolean = false, listId: String? = null, marked: Boolean = false): Row =
         Row(title, items, more, wide, grid, listId, marked).also {
         rows += it
         pendingPlace?.takeIf { place -> place.first == title }?.let { place -> pendingPlace = null; main.post { returnTo(it, place.second) } }
@@ -2093,15 +2106,15 @@ class MainActivity : Screen() {
     }
 
     /** The page's row slots, named, top to bottom as they stand. */
-    private fun rowSlots(): List<View> = (0 until content.childCount).map { content.getChildAt(it) }.filter { (it.tag as? String)?.startsWith("row:") == true }
-    private fun slotTitle(slot: View) = (slot.tag as String).removePrefix("row:")
+    internal fun rowSlots(): List<View> = (0 until content.childCount).map { content.getChildAt(it) }.filter { (it.tag as? String)?.startsWith("row:") == true }
+    internal fun slotTitle(slot: View) = (slot.tag as String).removePrefix("row:")
 
     /**
      * The viewer's order of this page's rows (hold OK › Move row up/down), applied to the slots on screen: the rows
      * named in it in that order, any others after in their own order. The slots keep the positions the page gave
      * them; only which slot sits where changes, and the remote stays on its title.
      */
-    private fun arrangeRows() {
+    internal fun arrangeRows() {
         val order = Settings.rowOrder(this, page.label)
         if (order.isEmpty()) return
         val slots = rowSlots()
@@ -2118,7 +2131,7 @@ class MainActivity : Screen() {
     }
 
     /** Moves the row in [slot] one place up ([delta] -1) or down (+1) and keeps that order for this page and profile. */
-    private fun moveRow(slot: View, delta: Int) {
+    internal fun moveRow(slot: View, delta: Int) {
         val titles = rowSlots().map(::slotTitle).toMutableList()
         val at = titles.indexOf(slotTitle(slot))
         val to = at + delta
@@ -2128,9 +2141,9 @@ class MainActivity : Screen() {
         arrangeRows()
     }
 
-    private val nextRowCheck = Runnable { updateNextRow() }
+    internal val nextRowCheck = Runnable { updateNextRow() }
 
-    private fun updateNextRow() {
+    internal fun updateNextRow() {
         if (page != Page.HOME && !page.isCatalog) return
         val visible = rows.filter { it.view.isAttachedToWindow }.sortedBy { offsetIn(it.view) }
         // No row in use (the remote is on the chips or the top bar): the row sitting in the band counts.
@@ -2144,7 +2157,7 @@ class MainActivity : Screen() {
         clearHint()
     }
 
-    private val focusTop = Runnable {
+    internal val focusTop = Runnable {
         if (focusedSomething || mode != Mode.BROWSE) return@Runnable
         focusedSomething = true
         if (header.hasFocus() && !jump) return@Runnable
@@ -2154,16 +2167,16 @@ class MainActivity : Screen() {
         if (back != null) back.requestFocus() else (heldRowNow() ?: firstRow())?.focusFirst()
     }
 
-    private val heroTop = Runnable {
+    internal val heroTop = Runnable {
         val first = (heldRowNow() ?: firstRow())?.takeIf { header.hasFocus() && mode == Mode.BROWSE } ?: return@Runnable
         first.items[first.selected].takeIf { it !== heroItem }?.let { fill(it); showHero(it) }
     }
 
     /** The row held in the band with the remote elsewhere (the page's remembered row), if it is still on the page. */
-    private fun heldRowNow(): Row? = rows.firstOrNull { it.view === heldRow && it.view.isAttachedToWindow }
+    internal fun heldRowNow(): Row? = rows.firstOrNull { it.view === heldRow && it.view.isAttachedToWindow }
 
     /** The row nearest the top of the page: where Up goes back to the cinema from. */
-    private fun firstRow(): Row? = rows.filter { it.view.isAttachedToWindow }.minByOrNull { offsetIn(it.view) }
+    internal fun firstRow(): Row? = rows.filter { it.view.isAttachedToWindow }.minByOrNull { offsetIn(it.view) }
 
     /**
      * One row of wide art cards along the bottom of the screen; only the focused row shows, the art fills the rest.
@@ -2176,13 +2189,15 @@ class MainActivity : Screen() {
      * (Continue Watching) shows 16:9 art with the name, time left and progress on the card, two poster columns wide, and
      * ends on the same foot line as the poster rows.
      */
-    private inner class Row(val title: String, first: List<Item>, private var more: ((Int) -> List<Item>)?, val wide: Boolean = false, val grid: Boolean = false, val listId: String? = null,
+    internal inner class Row(val title: String, first: List<Item>, private var more: ((Int) -> List<Item>)?, val wide: Boolean = false, val grid: Boolean = false, val listId: String? = null,
                             val marked: Boolean = false) { // marked: its posters wear the new-episode mark (New episodes)
         val cardW = if (grid) LIST_W else if (wide) WIDE_W else CARD_W
         val cardH = if (grid) LIST_H else if (wide) WIDE_H else CARD_H
         val items = first.toMutableList()
         val cards = items.mapIndexed { i, item -> Card(item, i) }.toMutableList()
         private var fetching = false
+        /** Every title this row will have is in it: nothing further to fetch. */
+        val complete get() = more == null && !fetching
         var selected = 0
         var pendingUpdate: (() -> Unit)? = null
         var active = false
@@ -2203,9 +2218,12 @@ class MainActivity : Screen() {
                 if (!left && event.keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) return super.dispatchKeyEvent(event)
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     held = event.repeatCount > 0
-                    cards.getOrNull(selected + if (left) -1 else 1)?.requestFocus()
+                    val next = cards.getOrNull(selected + if (left) -1 else 1)
+                    // A press on past the last title of a row that has no more to bring opens the whole row as a
+                    // grid (See all). Not while the key is held: racing to a row's end stops there.
+                    if (next == null && !left && !held && complete) seeAll(this@Row) else next?.requestFocus()
                 } else held = false
-                return true // at either end the remote simply stays put
+                return true // at the start, and at an end with more to come, the remote simply stays put
             }
 
             // Coming in from above or below, the remote lands on the card this row last had.
@@ -2497,7 +2515,7 @@ class MainActivity : Screen() {
     // ---------- items ----------
 
     /** Art, logo and facts the catalog didn't send, fetched once per title from the meta addon. */
-    private fun fill(item: Item) {
+    internal fun fill(item: Item) {
         if (item.filled) return
         item.filled = true
         metas[item.id]?.let { applyMeta(item, it); return }
@@ -2516,7 +2534,7 @@ class MainActivity : Screen() {
         }
     }
 
-    private fun applyMeta(item: Item, m: Meta) {
+    internal fun applyMeta(item: Item, m: Meta) {
         // A series in My List: its episode list says whether a new episode is out (the mark on its card follows).
         if (item.type == "series") library.firstOrNull { it.optString("_id") == item.id && !it.optBoolean("removed") }?.let { raw ->
             val n = NewEpisodes.record(this, profile.id, raw, m)?.count ?: 0
@@ -2533,14 +2551,14 @@ class MainActivity : Screen() {
     }
 
     /** [item] has all it will get: cards, the hero and the cinema waiting on it go ahead. */
-    private fun settle(item: Item) {
+    internal fun settle(item: Item) {
         item.settled = true
         item.onFill.forEach { it() }
         if (heroItem === item && mode == Mode.BROWSE) showHero(item)
         if (mode == Mode.CINEMA && cinema.getOrNull(cinemaAt) === item) showCinema(cinemaAt)
     }
 
-    private fun facts(m: Meta) = listOfNotNull(
+    internal fun facts(m: Meta) = listOfNotNull(
         m.genres.take(2).joinToString(", ").ifEmpty { null }, m.year, m.rating?.let { "IMDb $it" },
     )
 
@@ -2551,249 +2569,11 @@ class MainActivity : Screen() {
      * most popular films and TV), numbered. The hero adds when a title is out; OK opens the title page as anywhere,
      * where Trailer plays the trailer IMDb listed. Last time's lists first, from disk; today's replace them.
      */
-    private fun buildImdb(g: Int) = buildWebRows(webRows(Page.IMDB), g)
+    // The rows read from the web are in MainWebRows.kt.
+    internal var webRowsMore: (() -> Unit)? = null
 
-    private var webRowsMore: (() -> Unit)? = null
 
-    /**
-     * The web rows in waves, not all at once: their slots go in now, in order, so the page's shape is fixed; the
-     * first few fill at once, the rest three at a time as the page scrolls or every couple of seconds, whichever
-     * comes first. A cold Content page then costs a handful of requests before it's usable, not a hundred.
-     */
-    private fun buildWebRows(rows: List<Pair<String, (LinearLayout, Int) -> Unit>>, g: Int,
-        tail: List<Pair<String, (LinearLayout, Int) -> Unit>> = emptyList(), between: () -> Unit = {}) {
-        val pending = rows.map { it.second to slot() }.toMutableList()
-        between() // the catalogs' slots, so the tail rows close the page under them
-        pending += tail.map { it.second to slot() }
-        fun fill(n: Int) { repeat(n) { pending.removeFirstOrNull()?.let { (build, slot) -> build(slot, g) } } }
-        fill(WEB_ROWS_FIRST)
-        webRowsMore = { if (g == generation && pending.isNotEmpty()) fill(WEB_ROWS_WAVE) else if (pending.isEmpty()) webRowsMore = null }
-        val wave = object : Runnable { override fun run() { if (g != generation) return; webRowsMore?.invoke(); if (pending.isNotEmpty()) main.postDelayed(this, WEB_ROWS_PAUSE) } }
-        main.postDelayed(wave, WEB_ROWS_PAUSE)
-    }
-
-    /**
-     * The rows read from the web, by page and in order (Alan's, 2026-11-05 and 2026-11-07): title to builder. Movies
-     * opens with RogerEbert.com's reviews and Rotten Tomatoes' Certified Fresh, then in season IMDb's Christmas films,
-     * then "Because you watched" rows from the viewer's own library, IMDb's box office, family films and popular
-     * films. TV opens with Rotten Tomatoes' popular series, then Christmas TV in season, "Because you watched",
-     * IMDb's new series, family TV and popular TV. On both, the Top 250 ([TAIL_ROWS]) closes the page under the
-     * add-ons' catalogs (Alan, 2026-11-06). Content has everything: the trailer lists (with this month's most
-     * anticipated), the reviews and Rotten Tomatoes, what's popular on each streaming service, the charts, the
-     * family and seasonal rows, and the two Top 250s at the bottom.
-     */
-    private fun webRows(p: Page): List<Pair<String, (LinearLayout, Int) -> Unit>> {
-        fun imdb(l: ImdbList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> imdbRow(s, l, g) }
-        fun rt(l: RtList): Pair<String, (LinearLayout, Int) -> Unit> = l.title to { s, g -> rtRow(s, l, g) }
-        val ebert: Pair<String, (LinearLayout, Int) -> Unit> = EBERT_ROW to { s, g -> ebertRow(s, g) }
-        val because: Pair<String, (LinearLayout, Int) -> Unit> = BECAUSE_ROW to { s, g -> becauseRows(s, p, g) }
-        val season = christmasSeason(java.time.LocalDate.now().toString())
-        // The short CAS: no two rows that say the same thing (the box office and the reviews go; one "popular" each).
-        // Home has one row from the web, under the viewer's own: the ten most popular today, numbered.
-        if (p == Page.HOME) return listOf(imdb(ImdbList.TOP_TEN))
-        if (simple) return when (p) {
-            Page.MOVIES -> listOfNotNull(imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.TOP_MOVIES))
-            Page.SHOWS -> listOfNotNull(imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because, rt(RtList.POPULAR_TV), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.TOP_TV))
-            else -> emptyList()
-        }
-        return when (p) {
-            Page.MOVIES -> listOfNotNull(ebert, rt(RtList.FRESH_IN_CINEMAS), imdb(ImdbList.CHRISTMAS_MOVIES).takeIf { season }, because,
-                imdb(ImdbList.BOX_OFFICE), imdb(ImdbList.FAMILY_MOVIES), imdb(ImdbList.HOT_MOVIES), imdb(ImdbList.TOP_MOVIES))
-            Page.SHOWS -> listOfNotNull(rt(RtList.POPULAR_TV), imdb(ImdbList.CHRISTMAS_TV).takeIf { season }, because,
-                imdb(ImdbList.NEW_SERIES), imdb(ImdbList.FAMILY_TV), imdb(ImdbList.HOT_TV), imdb(ImdbList.TOP_TV))
-            // Foreign: what the chosen country has made best (its series, then its films), then its services in
-            // its own order, each as ten films then ten series.
-            // World: every country's highest rated TV, one row each, to scroll down through rather than hop chips.
-            Page.FOREIGN -> if (foreignCountry() == WORLD) JW_COUNTRIES.map { c ->
-                val title = "${c.label}: highest rated TV"
-                title to { slot: LinearLayout, g: Int -> bestRow(slot, c, true, g, title, lead = doorItem(c)) }
-            } else jwCountry(foreignCountry())?.let { c ->
-                listOf(true, false).map { tv -> c.bestTitle(tv) to { slot: LinearLayout, g: Int -> bestRow(slot, c, tv, g) } } +
-                    c.services.flatMap { s -> listOf(JwList(s, false), JwList(s, true)) }.map { l -> l.title to { slot: LinearLayout, g: Int -> jwRow(slot, l, g) } }
-            }.orEmpty()
-            Page.IMDB -> listOf(ImdbList.TRENDING, ImdbList.ANTICIPATED, ImdbList.THIS_MONTH, ImdbList.POPULAR, ImdbList.RECENT).map(::imdb) +
-                ebert + rt(RtList.FRESH_IN_CINEMAS) + rt(RtList.POPULAR_TV) +
-                listOf(ImdbList.ON_NETFLIX, ImdbList.ON_PRIME, ImdbList.ON_DISNEY, ImdbList.ON_APPLE, ImdbList.ON_MAX, ImdbList.ON_PEACOCK).map(::imdb) +
-                listOf(ImdbList.BOX_OFFICE, ImdbList.HOT_MOVIES, ImdbList.HOT_TV, ImdbList.NEW_SERIES).map(::imdb) +
-                (if (season) listOf(ImdbList.CHRISTMAS_MOVIES, ImdbList.CHRISTMAS_TV) else emptyList()).map(::imdb) +
-                listOf(ImdbList.FAMILY_MOVIES, ImdbList.FAMILY_TV).map(::imdb) +
-                listOf(ImdbList.TOP_MOVIES, ImdbList.TOP_TV).map(::imdb)
-            else -> emptyList()
-        }
-    }
-
-    /**
-     * "Because you watched …" (Alan, 2026-11-07): for the last title ([BECAUSE_SEEDS]) of the page's kind the viewer
-     * watched, the titles IMDb finds most like each, bar what is in the library already. One row each, in [slot].
-     * The seeds come from the library as this process has it (Home read it), else last time's from disk: no request.
-     * A row the viewer hid (by its own title) stays hidden; the next seed is not promoted in its place.
-     */
-    private fun becauseRows(slot: LinearLayout, p: Page, g: Int) {
-        val key = profile.authKey
-        val today = java.time.LocalDate.now().toString()
-        val kind = if (p == Page.SHOWS) "series" else "movie"
-        background({
-            val items = Stremio.knownLibrary(key) ?: Stremio.savedLibrary(key).orEmpty()
-            val have = items.filter { !it.optBoolean("removed") }.map { it.optString("_id") }.toSet()
-            val seeds = items.filter { it.optString("type") == kind && it.optString("_id").startsWith("tt") && it.optJSONObject("state")?.text("lastWatched") != null }
-                .sortedByDescending { it.optJSONObject("state")?.text("lastWatched") }.take(BECAUSE_SEEDS).map { it.optString("_id") to it.optString("name") }
-            seeds to have
-        }) { r ->
-            val (seeds, have) = r.getOrNull() ?: return@background
-            if (g != generation) return@background
-            seeds.forEach { (id, name) ->
-                val title = "$BECAUSE_ROW $name"
-                if ("${p.label}|$title" in hiddenSeen.orEmpty()) return@forEach
-                val sub = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also { slot.addView(it, LinearLayout.LayoutParams(-1, -2)) }
-                fun items(picks: List<ImdbPick>?) = picks?.filter { it.id !in have && it.id != id }?.map { imdbItem(it, today) }
-                fetchedRow(sub, title, g, cached = { c -> items(cachedImdbSimilar(id, c)) }, saved = { c -> items(savedImdbSimilar(id, c)) }) { c -> items(imdbSimilar(id, c)).orEmpty() }
-            }
-        }
-    }
-
-    /**
-     * A row that has been asked for and not answered yet: its name and a line of quiet blank cards in [slot], the
-     * size of the row to come, so the page has its shape at once and the row arrives in place (Netflix's way). The
-     * row replaces it; one that never comes (the site failed, or had nothing) takes it away after [GHOST_MS].
-     */
-    private fun waiting(slot: LinearLayout, title: String) {
-        if (slot.childCount > 0 || page == Page.LIBRARY) return
-        val ghost = column(Gravity.START,
-            caps(title).onArt().apply { setPadding(dp(EDGE), 0, dp(PAD), 0); maxLines = 1; ellipsize = TextUtils.TruncateAt.END; alpha = QUIET },
-            LinearLayout(this).apply {
-                setPadding(dp(EDGE), dp(ROW_TOP_ROOM), dp(PAD), dp(ROW_BOTTOM_ROOM))
-                repeat(GHOSTS) { i -> addView(View(context).apply { background = rounded(GHOST, 6) },
-                    LinearLayout.LayoutParams(dp(CARD_W), dp(CARD_H)).apply { if (i > 0) marginStart = dp(CARD_GAP) }) }
-            })
-        slot.addView(ghost)
-        main.postDelayed({ if (ghost.parent === slot) slot.removeView(ghost) }, GHOST_MS)
-    }
-
-    /** One of IMDb's lists as a row in [slot]: last time's from disk at once, today's in its place when it differs. */
-    private fun imdbRow(slot: LinearLayout, list: ImdbList, g: Int) {
-        val today = java.time.LocalDate.now().toString()
-        var shownIds = emptyList<String>()
-        fun clear() {
-            rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
-            slot.removeAllViews()
-        }
-        fun show(picks: List<ImdbPick>) {
-            val ids = picks.map { it.id }
-            if (g != generation || picks.isEmpty() || ids == shownIds) return
-            shownIds = ids
-            clear()
-            val items = picks.map { imdbItem(it, today, list.trailers, numbered = list == ImdbList.TOP_TEN) }
-            slot.addView(row(list.title, items.take(START), later(items)).view)
-        }
-        val country = imdbCountry()
-        cachedImdbList(list, today, country)?.let { show(it); return } // fetched within the hour: no disk, no network
-        waiting(slot, list.title)
-        background({ savedImdbList(list, today, country) }) { r -> r.getOrNull()?.let(::show) }
-        background({ imdbList(list, today, country) }) { r ->
-            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "IMDb list $list failed: $it") }
-            r.getOrNull()?.let(::show)
-        }
-    }
-
-    private fun imdbItem(pk: ImdbPick, today: String, trailers: Boolean = false, numbered: Boolean = false): Item {
-        val note = when {
-            pk.rank != null -> "No. ${pk.rank}"
-            pk.date != null && pk.date > today -> shortDay(pk.date, today)?.let { if (pk.type == "movie") "In cinemas $it" else "From $it" }
-            else -> null
-        }
-        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" }, pk.gross)
-        return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = note, trailerId = pk.trailerId?.takeIf { trailers }, released = pk.date,
-            rank = pk.rank.takeIf { numbered }) // Top 10: the numeral on the card
-    }
-
-    /**
-     * RogerEbert.com's newest reviews as a poster row, on Movies and the IMDb page: the film as IMDb knows it, the
-     * critic's name on the card, their one-line verdict where the plot would go. The site's star ratings are not in
-     * its feed, so the IMDb rating stands in. Last time's row from disk first, today's in its place.
-     */
-    private fun ebertRow(slot: LinearLayout, g: Int) {
-        val today = java.time.LocalDate.now().toString()
-        fetchedRow(slot, EBERT_ROW, g, cached = { c -> cachedEbertReviews(c)?.map { ebertItem(it, today) } },
-            saved = { c -> savedEbertReviews(c)?.map { ebertItem(it, today) } }) { c -> ebertReviews(c).map { ebertItem(it, today) } }
-    }
-
-    /** A service's ten in the Foreign page's country, as a poster row numbered from one. */
-    private fun jwRow(slot: LinearLayout, list: JwList, g: Int) =
-        fetchedRow(slot, list.title, g, country = foreignCountry(), cached = { c -> cachedJwList(list, c)?.map(::jwItem) },
-            saved = { c -> savedJwList(list, c)?.map(::jwItem) }) { c -> jwList(list, c).map(::jwItem) }
-
-    private fun jwItem(t: JwTitle) = rankedItem(t.title, t.rank, t.poster)
-
-    /** IMDb's highest rated series or films from the Foreign page's country, numbered from one. */
-    private fun bestRow(slot: LinearLayout, c: JwCountry, tv: Boolean, g: Int, title: String = c.bestTitle(tv), lead: Item? = null) =
-        fetchedRow(slot, title, g, country = c.code, lead = lead, cached = { cachedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } },
-            saved = { savedBest(c, tv)?.map { rankedItem(it, it.rank ?: 0) } }) { bestList(c, tv).map { rankedItem(it, it.rank ?: 0) } }
-
-    private fun rankedItem(pk: ImdbPick, rank: Int, poster: String? = null): Item {
-        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" })
-        val origin = listOfNotNull(pk.countries.firstOrNull(), pk.languages.firstOrNull()).joinToString(DOT).ifEmpty { null }
-        return Item(pk.id, pk.type, pk.name, pk.poster ?: poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = "No. $rank".takeIf { rank > 0 }, released = pk.date,
-            rank = rank.takeIf { it > 0 }, original = pk.original, origin = origin)
-    }
-
-    /** A Rotten Tomatoes list as a poster row: the Tomatometer on the card, both scores on the title line. */
-    private fun rtRow(slot: LinearLayout, list: RtList, g: Int) =
-        fetchedRow(slot, list.title, g, cached = { c -> cachedRtList(list, c)?.map(::rtItem) }, saved = { c -> savedRtList(list, c)?.map(::rtItem) }) { c -> rtList(list, c).map(::rtItem) }
-
-    /**
-     * A row whose titles come from the web: [cached] (fetched within the hour) draws it at once with nothing read
-     * or asked; otherwise the one file the last run kept ([saved]) fills it, and [fetch] runs live behind it. Each
-     * answer replaces the row only when its titles differ from those shown.
-     */
-    private fun fetchedRow(slot: LinearLayout, title: String, g: Int, country: String = imdbCountry(), lead: Item? = null,
-                           cached: (String) -> List<Item>?, saved: (String) -> List<Item>?, fetch: (String) -> List<Item>) {
-        var shownIds = emptyList<String>()
-        fun show(items: List<Item>) {
-            val ids = items.map { it.id }
-            if (g != generation || items.isEmpty() || ids == shownIds) return
-            shownIds = ids
-            rows.filter { isInside(it.view, slot) }.forEach { r -> r.cards.forEach { it.unload() }; rows.remove(r) }
-            slot.removeAllViews()
-            val all = listOfNotNull(lead) + items // a World row opens with its country's door
-            slot.addView(row(title, all.take(START), later(all)).view)
-        }
-        cached(country)?.let { show(it); return }
-        waiting(slot, title)
-        background({ saved(country) }) { r -> r.getOrNull()?.let(::show) }
-        background({ fetch(country) }) { r ->
-            r.exceptionOrNull()?.let { android.util.Log.w("CAS", "$title failed: $it") }
-            r.getOrNull()?.let(::show)
-        }
-    }
-
-    private fun rtItem(t: RtTitle): Item {
-        val pk = t.title
-        val rt = t.rt
-        // Scores the short way Alan asked for: C for critics, A for audience.
-        val meters = listOfNotNull(rt.critics?.let { "C$it%" }, rt.audience?.let { "A$it%" }).joinToString(" ").ifEmpty { null }
-        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, meters, "Certified Fresh".takeIf { rt.certified }, pk.rating?.let { "IMDb $it" })
-        val note = meters
-        return Item(pk.id, pk.type, pk.name, pk.poster ?: rt.poster, null, Images.logoFor(pk.id), pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = note, released = pk.date)
-    }
-
-    private fun ebertItem(e: EbertPick, today: String): Item {
-        val pk = e.title
-        val said = e.review.verdict?.let { v -> "\u201C$v\u201D" + (e.review.critic?.let { " \u2014 $it" } ?: "") }
-        val facts = listOfNotNull(pk.genres.take(2).joinToString(", ").ifEmpty { null }, pk.year, pk.rating?.let { "IMDb $it" },
-            e.review.date?.let { d -> shortDay(d, today)?.let { "Reviewed $it" } })
-        return Item(pk.id, pk.type, pk.name, pk.poster, null, Images.logoFor(pk.id), said ?: pk.plot ?: "", facts,
-            null, 0f, resume = false, left = null, note = e.review.critic, released = pk.date)
-    }
-
-    private fun metaItem(m: Meta) = Item(
-        m.id, m.type, m.name, m.poster, m.background, m.logo ?: Images.logoFor(m.id), m.description ?: "", facts(m),
-        null, 0f, resume = false, left = null,
-    )
-
-    private fun libraryItem(item: JSONObject, news: NewEpisodes.News? = null): Item {
+    internal fun libraryItem(item: JSONObject, news: NewEpisodes.News? = null): Item {
         val s = item.optJSONObject("state") ?: JSONObject()
         val duration = s.optLong("duration")
         val offset = s.optLong("timeOffset")
@@ -2814,7 +2594,7 @@ class MainActivity : Screen() {
     }
 
     /** Resume: straight to the sources for the episode Continue Watching points at; with [pick] (held OK) they're all listed. */
-    private fun play(item: Item, pick: Boolean = false) {
+    internal fun play(item: Item, pick: Boolean = false) {
         val videoId = item.videoId ?: item.id
         val videos = metas[item.id]?.videos.orEmpty()
         val next = videos.getOrNull(videos.indexOfFirst { it.id == videoId } + 1)?.takeIf { videos.any { it.id == videoId } }
@@ -2830,7 +2610,7 @@ class MainActivity : Screen() {
             .putExtra("label", listOfNotNull(item.name, episode).joinToString("  ·  ")))
     }
 
-    private fun openDetails(item: Item) {
+    internal fun openDetails(item: Item) {
         if (item.type == COUNTRY) return switchCountry(item.id.substringAfter(':'))
         startActivity(Intent(this, DetailsActivity::class.java)
             .putExtra("type", item.type).putExtra("id", item.id).putExtra("name", item.name)
@@ -2842,7 +2622,7 @@ class MainActivity : Screen() {
     // ---------- vertical movement ----------
 
     /** Shows the focused row in the row band and briefly reveals its position when changing rows. */
-    private fun snapTo(focused: View) {
+    internal fun snapTo(focused: View) {
         val rowView = rows.firstOrNull { isInside(focused, it.view) }?.view ?: return
         snapY = offsetIn(rowView).coerceAtLeast(0)
         heldRow = rowView
@@ -2861,23 +2641,23 @@ class MainActivity : Screen() {
         }
     }
 
-    private val places = mutableMapOf<Page, Pair<String, String>>() // each page's row (its title) and card (its tag), as the remote left them
-    private var pendingPlace: Pair<String, String>? = null // the open page's, until its row arrives
+    internal val places = mutableMapOf<Page, Pair<String, String>>() // each page's row (its title) and card (its tag), as the remote left them
+    internal var pendingPlace: Pair<String, String>? = null // the open page's, until its row arrives
 
     /**
      * The row the remote was on the last time this page was open has arrived: the band goes to it, and to its card
      * when the remote is already in the rows. With the remote in the rail the row waits in the band, and the rail's
      * OK (or Right) goes into it. Nothing moves once the viewer has pressed a key on this visit.
      */
-    private fun returnTo(r: Row, cardTag: String) {
+    internal fun returnTo(r: Row, cardTag: String) {
         if (touched || mode != Mode.BROWSE || !r.view.isAttachedToWindow) return
         val at = r.cards.indexOfFirst { it.tag == cardTag }.takeIf { it in 0 until PLACE_CARDS } ?: 0 // a card far along is off the screen: the row's start
         r.selected = at
         if (header.hasFocus()) { heldRow = r.view; snapY = -1; holdRow(); heroTop.run() } else r.cards[at].requestFocus()
     }
 
-    private var snapY = -1 // where snapTo last sent the band: a row that is elsewhere after a layout was pushed
-    private var heldRow: View? = null // the row snapTo last put in the band: held there while the remote is in the rail or the chips
+    internal var snapY = -1 // where snapTo last sent the band: a row that is elsewhere after a layout was pushed
+    internal var heldRow: View? = null // the row snapTo last put in the band: held there while the remote is in the rail or the chips
 
     /**
      * After a layout of the page: a row above the remote's row filled in and pushed it down out of the one-row band
@@ -2885,7 +2665,7 @@ class MainActivity : Screen() {
      * snapTo put it, and the rows are measured again for what shows; the band had measured the row that slid in
      * before it had a height, and left it invisible. A smooth scroll still on its way is left alone.
      */
-    private fun holdRow() {
+    internal fun holdRow() {
         if (mode != Mode.BROWSE) return
         val focused = currentFocus?.takeIf { isInside(it, scroller) }
         // The remote's row; with the remote in the rail or the chips, the row it left in the band.
@@ -2896,7 +2676,7 @@ class MainActivity : Screen() {
 
     // ---------- memory: pictures only near the screen ----------
 
-    private fun updateImages() {
+    internal fun updateImages() {
         val top = scroller.scrollY
         val height = scroller.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
         // Requests run newest first, so the bottom rows are asked for first and the top row last: it loads first.
@@ -2920,7 +2700,7 @@ class MainActivity : Screen() {
     }
 
     /** A row scrolled sideways: its cards past the first screenful load too. */
-    private fun loadRest(r: Row) {
+    internal fun loadRest(r: Row) {
         if (!r.loaded) return
         val step = dp(r.cardW + CARD_GAP)
         val first = (r.scroller.scrollX / step - 1).coerceAtLeast(0)
@@ -2928,7 +2708,7 @@ class MainActivity : Screen() {
         for (i in first until last) r.cards[i].load()
     }
 
-    private fun offsetIn(v: View): Int {
+    internal fun offsetIn(v: View): Int {
         var y = 0
         var cur: View? = v
         while (cur != null && cur !== content) {
@@ -2942,7 +2722,7 @@ class MainActivity : Screen() {
      * "What's new" once after an update, on whichever profile opens Home first: never on a fresh install, and once per
      * version. Versions before this one kept no record, so an update is told from an install by the package's dates.
      */
-    private fun whatsNewOnce() {
+    internal fun whatsNewOnce() {
         val prefs = getSharedPreferences("app", MODE_PRIVATE)
         val version = Updates.mine(this)
         val seen = prefs.getString("seenVersion", null)
@@ -2954,7 +2734,7 @@ class MainActivity : Screen() {
     }
 
     // Signed out elsewhere (or the session expired): the profile stays, with its settings, and signs in again.
-    private fun forgetIfSessionGone(error: Throwable) {
+    internal fun forgetIfSessionGone(error: Throwable) {
         if ((error as? Stremio.ApiException)?.code != Stremio.NO_SESSION || isFinishing) return
         Profiles.markSignedOut(this, profile.id)
         startActivity(Intent(this, ProfilesActivity::class.java).putExtra("signIn", profile.id)
@@ -2962,7 +2742,7 @@ class MainActivity : Screen() {
         finish()
     }
 
-    private companion object {
+    internal companion object {
         const val HEADER_H = 76 // dp
         const val WHATS_NEW_WAIT = 1_500L // ms after Home opens: its first row draws before the pop-up covers it
         // 2:3 posters, six and a bit across (56 + 7 × 120 + 6 × 16 = 992 of 960 dp): the seventh runs off the edge to
@@ -3040,15 +2820,17 @@ class MainActivity : Screen() {
     }
 }
 
-private const val EBERT_ROW = "Roger Ebert: new reviews"
-private const val BECAUSE_ROW = "Because you watched" // the row's title opens with it; the seed title's name follows
-private const val META_KEEP = 240 // titles whose full details stay in memory
-private const val SIMPLE_HOME_ROWS = 1 // catalogue rows on Home in the short CAS, under Continue and New episodes
-private const val SIMPLE_PAGE_ROWS = 2 // and on TV and Movies, under the web rows
-private const val BECAUSE_SEEDS = 1 // how many of the viewer's last-watched titles get a "Because you watched" row
-private val RT_METERS = Regex("[CA]\\d+%.*")
-private val TAIL_ROWS = setOf(ImdbList.TOP_MOVIES.title, ImdbList.TOP_TV.title) // web rows that close a page under its catalogs // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
-private const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
-private const val WEB_ROWS_FIRST = 3 // web rows filled as a page opens: the band shows one, the next two wait behind it
-private const val WEB_ROWS_WAVE = 3 // and how many more each wave brings
-private const val WEB_ROWS_PAUSE = 2000L // ms between waves when the page is not scrolled
+internal const val EBERT_ROW = "Roger Ebert: new reviews"
+internal const val BECAUSE_ROW = "Because you watched" // the row's title opens with it; the seed title's name follows
+internal const val SEE_ALL_MIN = 8 // titles a row needs before See all is worth a screen
+internal const val SEE_ALL_MAX = 210 // and the most it shows: thirty rows of seven
+internal const val META_KEEP = 240 // titles whose full details stay in memory
+internal const val SIMPLE_HOME_ROWS = 1 // catalogue rows on Home in the short CAS, under Continue and New episodes
+internal const val SIMPLE_PAGE_ROWS = 2 // and on TV and Movies, under the web rows
+internal const val BECAUSE_SEEDS = 1 // how many of the viewer's last-watched titles get a "Because you watched" row
+internal val RT_METERS = Regex("[CA]\\d+%.*")
+internal val TAIL_ROWS = setOf(ImdbList.TOP_MOVIES.title, ImdbList.TOP_TV.title) // web rows that close a page under its catalogs // a Rotten Tomatoes fact or note, "C92% A86%"; compiled once, matched on every focus move
+internal const val SCORES_WAIT = 350L // ms a card is held before its scores are asked for: a pass along the row asks for none
+internal const val WEB_ROWS_FIRST = 3 // web rows filled as a page opens: the band shows one, the next two wait behind it
+internal const val WEB_ROWS_WAVE = 3 // and how many more each wave brings
+internal const val WEB_ROWS_PAUSE = 2000L // ms between waves when the page is not scrolled

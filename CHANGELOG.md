@@ -13,6 +13,11 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.65.0
+
+- See all: at the end of a row, press Right again. CAS shows all titles of the row on one screen.
+- You can also hold OK on a title and select **See all**.
+
 ## 1.64.0
 
 - CAS has a new logo: the family of four, with the name. It shows on the launcher tile, on the app icon and on each screen.

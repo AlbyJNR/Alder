@@ -222,14 +222,14 @@ internal class CertSpan(private val fill: Int, private val ink: Int, private val
 }
 
 abstract class Screen : Activity() {
-    protected val main = Handler(Looper.getMainLooper())
+    internal val main = Handler(Looper.getMainLooper())
     /** The Stremio account of the profile in use. */
-    protected val authKey: String? get() = Profiles.active(this)?.authKey
+    internal val authKey: String? get() = Profiles.active(this)?.authKey
 
     private var textScaleHere = 1f // the profile's text size as this screen was made with it
     private var lightHere = true // and its mode
     /** A screen that is dark in either mode (the player: its controls are on the film). */
-    protected open val alwaysDark get() = false
+    internal open val alwaysDark get() = false
     private fun wantLight(c: Context) = !alwaysDark && runCatching { Settings.lightMode(c) }.getOrDefault(true)
 
     override fun onRestart() {
@@ -283,7 +283,7 @@ abstract class Screen : Activity() {
      * itself, so the viewer is told first. Without permission to install apps, Android's page for it opens, and the
      * install goes on when the viewer comes back with it allowed; a TV without that page gets the steps instead.
      */
-    protected fun installUpdate(release: Updates.Release) {
+    internal fun installUpdate(release: Updates.Release) {
         if (!Updates.canInstall(this)) {
             pendingInstall = release
             if (!Updates.askToInstall(this)) {
@@ -320,14 +320,14 @@ abstract class Screen : Activity() {
      * add-ons saved to Stremio). On the shared lane a save queued behind six slow add-ons, and was lost if the TV
      * was switched off before its turn.
      */
-    protected fun <T> urgent(work: () -> T, done: (Result<T>) -> Unit) {
+    internal fun <T> urgent(work: () -> T, done: (Result<T>) -> Unit) {
         savePool.execute {
             val result = runCatching(work)
             main.post { if (!isDestroyed && !isFinishing) done(result) }
         }
     }
 
-    protected fun <T> background(work: () -> T, done: (Result<T>) -> Unit) {
+    internal fun <T> background(work: () -> T, done: (Result<T>) -> Unit) {
         pool.execute {
             val result = runCatching(work)
             main.post { if (!isDestroyed && !isFinishing) done(result) } // a dialog on a finishing screen throws
@@ -338,7 +338,7 @@ abstract class Screen : Activity() {
     private val fonts get() = loadedFonts ?: Fonts(applicationContext.assets).also { loadedFonts = it }
 
     /** Shared CAS typography. The legacy serif flag now selects a display weight. */
-    protected fun text(value: String, sp: Float, bold: Boolean = false, color: Int = TEXT, serif: Boolean = false) =
+    internal fun text(value: String, sp: Float, bold: Boolean = false, color: Int = TEXT, serif: Boolean = false) =
         TextView(this).apply {
             text = value
             textSize = sp
@@ -359,7 +359,7 @@ abstract class Screen : Activity() {
      * letters do. As text with a span, so it sits in a line of facts or stands alone. CAS's own drawing: the
      * boards' symbols themselves are their trademarks.
      */
-    protected fun certMark(cert: String): CharSequence = android.text.SpannableString(cert).apply {
+    internal fun certMark(cert: String): CharSequence = android.text.SpannableString(cert).apply {
         setSpan(CertSpan(certColour(cert), Tone.onColour, dp(5).toFloat(), dp(3).toFloat()), 0, length, 0)
     }
 
@@ -367,9 +367,9 @@ abstract class Screen : Activity() {
      * A heading or a label: its own words, in bold (the name is from when these were spaced capitals). Sentence case,
      * as BBC iPlayer sets its headings: capitals in a row have no shape to read by, and are the harder for older eyes.
      */
-    protected fun caps(value: String, color: Int = TEXT_2) = text(value, SMALL, bold = true, color = color)
+    internal fun caps(value: String, color: Int = TEXT_2) = text(value, SMALL, bold = true, color = color)
 
-    protected fun column(gravity: Int, vararg views: View) = LinearLayout(this).apply {
+    internal fun column(gravity: Int, vararg views: View) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         clipChildren = false // focused pills and pictures grow past their own bounds
         this.gravity = gravity
@@ -377,17 +377,17 @@ abstract class Screen : Activity() {
         views.forEach { addView(it, it.layoutParams ?: wrap()) }
     }
 
-    protected fun <V : View> V.marginTop(top: Int) = apply { layoutParams = wrap().apply { topMargin = dp(top) } }
+    internal fun <V : View> V.marginTop(top: Int) = apply { layoutParams = wrap().apply { topMargin = dp(top) } }
 
-    protected fun wrap() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    internal fun wrap() = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
 
-    protected fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    internal fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     /**
      * IMDb's badge and [rating], then Rotten Tomatoes' badge and [meters] ("C92% A86%"), then [tail] (the library's
      * "Added …"): a dot between each pair and, with [lead], before the first, so the line continues the facts it follows.
      */
-    protected fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null): LinearLayout {
+    internal fun scoresLine(rating: String?, meters: String?, lead: Boolean, tail: View? = null): LinearLayout {
         val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         fun dot() { if (lead || line.childCount > 0) line.addView(text("·", SMALL, color = TEXT_2), wrap().apply { marginStart = dp(7); marginEnd = dp(7) }) }
         // The rating behind a warm star, not the letters of where it is from (Alan, 2026-11-10).
@@ -420,7 +420,7 @@ abstract class Screen : Activity() {
     }
 
     /** The width [v] asks for on its own, before any layout: what a line must keep for it. */
-    protected fun widest(v: View): Int {
+    internal fun widest(v: View): Int {
         v.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         return v.measuredWidth
     }
@@ -434,11 +434,11 @@ abstract class Screen : Activity() {
     private var tintAnimator: android.animation.ValueAnimator? = null
 
     /** The colour the screen's near-black takes from the title's art ([filmTint]); [BASE] until art is in. */
-    protected var tint = BASE
+    internal var tint = BASE
         private set
 
     /** The art's colour is known (or changed): screens with shades of their own recolour them here. */
-    protected open fun onTint(color: Int) {}
+    internal open fun onTint(color: Int) {}
 
     private fun shade(orientation: GradientDrawable.Orientation, alphas: IntArray) =
         GradientDrawable(orientation, IntArray(alphas.size) { withAlpha(tint, alphas[it]) }).also { tintedShades += it to alphas }
@@ -464,12 +464,12 @@ abstract class Screen : Activity() {
     }
 
     /** Takes the screen's tint from [art] (a bitmap the screen shows), off the main thread. */
-    protected fun sampleTint(art: Bitmap) {
+    internal fun sampleTint(art: Bitmap) {
         background({ samplePixels(art, 16, 24)?.let(::filmTint) }) { r -> r.getOrNull()?.let(::setTint) }
     }
 
     /** The left shade is for text over bare art; a screen that puts its text on glass can lift it off the art. */
-    protected fun leftShade(on: Boolean) {
+    internal fun leftShade(on: Boolean) {
         windowShade?.animate()?.alpha(if (on) 1f else 0f)?.setDuration(260)?.start()
     }
 
@@ -492,7 +492,7 @@ abstract class Screen : Activity() {
     }
 
     /** Sharp film art fills the screen; shade stays behind text and the bottom row. */
-    protected fun setWindowed(content: View, backdrop: View = View(this).apply { background = mood() }) {
+    internal fun setWindowed(content: View, backdrop: View = View(this).apply { background = mood() }) {
         windowArt = backdrop as? ImageView
         shadeSource = null
         shadeBright = false
@@ -523,7 +523,7 @@ abstract class Screen : Activity() {
     }
 
     /** A quiet tinted row on the pane (episodes, sources): no edge, no glass of its own. */
-    protected fun tile(radiusDp: Int = TILE_RADIUS) = GradientDrawable().apply {
+    internal fun tile(radiusDp: Int = TILE_RADIUS) = GradientDrawable().apply {
         setColor(ink(0x14))
         cornerRadius = dp(radiusDp).toFloat()
     }
@@ -531,10 +531,10 @@ abstract class Screen : Activity() {
     /** Solid fallback until a title's art is available. */
     private fun mood() = rounded(BASE, 0)
 
-    protected fun rounded(color: Int, radiusDp: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radiusDp).toFloat() }
+    internal fun rounded(color: Int, radiusDp: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radiusDp).toFloat() }
 
     /** House Lights' single glass recipe; focus brightens the face (no rim: dots are the only indicator). */
-    protected fun glass(radiusDp: Int, focused: Boolean = false): Drawable {
+    internal fun glass(radiusDp: Int, focused: Boolean = false): Drawable {
         val face = GradientDrawable().apply {
             setColor(if (focused) GLASS_FOCUSED else GLASS)
             cornerRadius = dp(radiusDp).toFloat()
@@ -563,7 +563,7 @@ abstract class Screen : Activity() {
     }
 
     /** The warm-white primary action; focus lifts and grows it. */
-    protected fun pill(label: String, icon: Int = 0): TextView = text(label, SMALL, bold = true).apply {
+    internal fun pill(label: String, icon: Int = 0): TextView = text(label, SMALL, bold = true).apply {
         isFocusable = true
         gravity = Gravity.CENTER_VERTICAL
         minHeight = dp(BUTTON_H)
@@ -593,7 +593,7 @@ abstract class Screen : Activity() {
      * one alone: a scroller's clip is what hides rows and cards that have scrolled out, and unclipping it let Home's
      * rows slide over the title. Rows give their cards room to grow with their own padding.
      */
-    protected fun View.grow(on: Boolean, by: Float = CARD_GROW): android.view.ViewPropertyAnimator {
+    internal fun View.grow(on: Boolean, by: Float = CARD_GROW): android.view.ViewPropertyAnimator {
         if (on) generateSequence(parent as? android.view.ViewGroup) { it.parent as? android.view.ViewGroup }
             .takeWhile { it !is android.widget.ScrollView && it !is android.widget.HorizontalScrollView && it !is android.widget.AbsListView }
             .forEach { it.clipChildren = false; it.clipToPadding = false }
@@ -609,7 +609,7 @@ abstract class Screen : Activity() {
     private val focusScale = java.util.WeakHashMap<View, Float>()
 
     /** A control handed focus back after its line was rebuilt: at its focused size now, not growing into it again. */
-    protected fun View.settleFocus() {
+    internal fun View.settleFocus() {
         val s = focusScale[this] ?: return
         animate().scaleX(s).scaleY(s).setDuration(0).start()
     }
@@ -622,7 +622,7 @@ abstract class Screen : Activity() {
     private val trailerProbe = Runnable { probeTrailer() }
 
     /** Called once the trailer box has gone, so the screen can put the remote back where it was. */
-    protected open fun onTrailerClosed() {}
+    internal open fun onTrailerClosed() {}
 
     /**
      * A YouTube trailer in a box over the screen, not a page of its own. The TV's own WebView loads YouTube's embed
@@ -630,7 +630,7 @@ abstract class Screen : Activity() {
      * pauses, Left and Right skip ten seconds, Back closes. The box closes itself when the trailer ends or CAS goes to
      * the background. A trailer YouTube won't embed opens in the YouTube app instead.
      */
-    protected fun showTrailer(ytId: String, title: String) {
+    internal fun showTrailer(ytId: String, title: String) {
         if (!ytId.matches(YT_ID)) return // an add-on's data goes into a URL: only a real YouTube id does
         hideTrailer()
         when (Settings.trailerPlayer(this)) {
@@ -735,14 +735,14 @@ abstract class Screen : Activity() {
      * closes itself when the minute is up. OK pauses, Left and Right skip ten seconds, Back closes. Progress isn't
      * kept: a preview is a look, not a watch. A source that fails gives way to the next; none left closes with a word.
      */
-    protected fun showPreview(title: String, find: () -> List<Stream>) =
+    internal fun showPreview(title: String, find: () -> List<Stream>) =
         showClip("Preview", title, PREVIEW_FROM, PREVIEW_MS, find) {}
 
     /**
      * A trailer as a file, in the box through CAS's own player (IMDb's video service or an add-on's own file), whole
      * and from the start. [orElse] runs when no file turns up: the YouTube routes, which need the YouTube id.
      */
-    protected fun showTrailerClip(title: String, find: () -> List<Stream>, orElse: () -> Unit) =
+    internal fun showTrailerClip(title: String, find: () -> List<Stream>, orElse: () -> Unit) =
         showClip("Trailer", title, 0.0, 0L, find, orElse)
 
     private fun showClip(kind: String, title: String, from: Double, limitMs: Long, find: () -> List<Stream>, orElse: () -> Unit) {
@@ -828,7 +828,7 @@ abstract class Screen : Activity() {
         return true
     }
 
-    protected fun hideTrailer() {
+    internal fun hideTrailer() {
         main.removeCallbacks(trailerProbe)
         main.removeCallbacks(previewEnd)
         previewToken++
@@ -887,7 +887,7 @@ abstract class Screen : Activity() {
     }
 
     /** Hands [uri] to whatever app takes it (the YouTube app, a browser). False when nothing on this TV does. */
-    protected fun openOutside(uri: Uri): Boolean = try {
+    internal fun openOutside(uri: Uri): Boolean = try {
         // startActivity, not resolveActivity: on Android 11+ the latter can't see other apps and says "none".
         startActivity(Intent(Intent.ACTION_VIEW, uri)); true
     } catch (e: android.content.ActivityNotFoundException) { false }
@@ -969,7 +969,7 @@ abstract class Screen : Activity() {
     }
 
     /** A persistent choice: its dot remains after remote focus moves. */
-    protected fun chip(label: String, selected: Boolean = false) = text(label, SMALL).apply {
+    internal fun chip(label: String, selected: Boolean = false) = text(label, SMALL).apply {
         select(label, selected)
         isFocusable = true
         gravity = Gravity.CENTER
@@ -980,13 +980,13 @@ abstract class Screen : Activity() {
     }
 
     /** A chip under the remote turns white with dark words; at rest it's glass, its words full or dimmed by [select]. */
-    protected fun TextView.chipFocus(has: Boolean) {
+    internal fun TextView.chipFocus(has: Boolean) {
         background = if (has) rounded(TEXT, CHIP_H / 2) else glass(CHIP_H / 2)
         setTextColor(if (has) BASE else if (text.startsWith("•")) TEXT else TEXT_2)
     }
 
     /** A [chip]'s open state: the tungsten dot and full-strength words. */
-    protected fun TextView.select(label: String, selected: Boolean) {
+    internal fun TextView.select(label: String, selected: Boolean) {
         setTextColor(if (selected) TEXT else TEXT_2)
         text = if (!selected) label else android.text.SpannableString("•  $label").apply {
             setSpan(android.text.style.ForegroundColorSpan(TUNGSTEN), 0, 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -997,7 +997,7 @@ abstract class Screen : Activity() {
      * An information block, as the Apple TV app's product page sets its panels: frosted glass with a quiet label, then
      * its content, each piece on its own line. Views that bring their own layout params keep them (a name's hug).
      */
-    protected fun block(label: String, vararg content: View) = column(Gravity.START).apply {
+    internal fun block(label: String, vararg content: View) = column(Gravity.START).apply {
         background = glass(BLOCK_RADIUS)
         setPadding(dp(BLOCK_PAD), dp(BLOCK_PAD - 2), dp(BLOCK_PAD), dp(BLOCK_PAD))
         clipChildren = false
@@ -1008,13 +1008,13 @@ abstract class Screen : Activity() {
         }
     }
 
-    protected fun caption(value: String) = text(value, SMALL).apply {
+    internal fun caption(value: String) = text(value, SMALL).apply {
         setPadding(dp(12), dp(6), dp(12), dp(6))
         background = glassOver(this, 16)
     }
 
     /** "[OK] Play / pause": the key in a small box, then what it does. */
-    protected fun keyHint(key: String, does: String) = LinearLayout(this).apply {
+    internal fun keyHint(key: String, does: String) = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
         addView(text(key, BADGE, bold = true, color = BASE).apply {
             background = rounded(TEXT_2, 3)
@@ -1025,7 +1025,7 @@ abstract class Screen : Activity() {
     }
 
     /** A quiet outlined tag beside a row's name ("Built-in", "ElfHosted", "THIS PROFILE"). */
-    protected fun tag(label: String, color: Int = TEXT_3) = text(label, SMALL, color = color).apply {
+    internal fun tag(label: String, color: Int = TEXT_3) = text(label, SMALL, color = color).apply {
         includeFontPadding = false
         maxLines = 1
         ellipsize = android.text.TextUtils.TruncateAt.END
@@ -1034,10 +1034,10 @@ abstract class Screen : Activity() {
     }
 
     /** A hairline under a list row. */
-    protected fun divider() = View(this).apply { setBackgroundColor(GLASS_EDGE) }
+    internal fun divider() = View(this).apply { setBackgroundColor(GLASS_EDGE) }
 
     /** CAS wordmark: a single, quiet signature on every entry screen. */
-    protected fun brand(size: Float = WORDMARK) = LinearLayout(this).apply {
+    internal fun brand(size: Float = WORDMARK) = LinearLayout(this).apply {
         gravity = Gravity.CENTER_VERTICAL
         // The family of four (CAS is the family's name), a little taller than the capitals beside it; its box is 46 by 24.
         val markPx = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, size * 1.05f, resources.displayMetrics).toInt()
@@ -1053,13 +1053,13 @@ abstract class Screen : Activity() {
     }
 
     /** The IMDb tag beside a rating, as tall as the letters. */
-    protected fun imdbTag() = text("★", SMALL, color = TEXT_2).apply { // the star the scores line has, where Search set the letters IMDb
+    internal fun imdbTag() = text("★", SMALL, color = TEXT_2).apply { // the star the scores line has, where Search set the letters IMDb
         includeFontPadding = false
         contentDescription = "IMDb rating"
     }
 
     /** Null animates loading; for countdowns set progress to fraction × max as time changes. */
-    protected fun ring(fraction: Float? = null): ProgressBar = object : ProgressBar(this, null,
+    internal fun ring(fraction: Float? = null): ProgressBar = object : ProgressBar(this, null,
         // A countdown needs a style that keeps its progress; the default one is indeterminate-only and reads 0.
         if (fraction == null) android.R.attr.progressBarStyle else android.R.attr.progressBarStyleHorizontal) {
         private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1089,7 +1089,7 @@ abstract class Screen : Activity() {
      * A glass control's focus, as Apple TV does it: the face turns white and the word or glyph dark, with a little
      * growth. A brighter glass alone was too easy to miss from the sofa.
      */
-    protected fun TextView.lightFocus(radiusDp: Int, grow: Float = CHIP_GROW) {
+    internal fun TextView.lightFocus(radiusDp: Int, grow: Float = CHIP_GROW) {
         isFocusable = true
         // Both faces made once and swapped: a new glass face on every move of the remote was a new shape to cut and
         // send to the GPU, twice per move (the control left, the control arrived), while both were also in motion.
@@ -1104,7 +1104,7 @@ abstract class Screen : Activity() {
     }
 
     /** One list-row focus treatment across settings, episodes, sources and menus. */
-    protected fun View.rowFocus(radiusDp: Int = 8, rest: () -> android.graphics.drawable.Drawable? = { null }, also: (Boolean) -> Unit = {}) {
+    internal fun View.rowFocus(radiusDp: Int = 8, rest: () -> android.graphics.drawable.Drawable? = { null }, also: (Boolean) -> Unit = {}) {
         isFocusable = true
         background = rest()
         setOnFocusChangeListener { v, has ->
@@ -1117,7 +1117,7 @@ abstract class Screen : Activity() {
     }
 
     /** One poster/portrait focus treatment; the poster itself supplies its glow colour. */
-    protected fun View.cardFocus(radiusDp: Int = 6, also: (Boolean) -> Unit = {}) {
+    internal fun View.cardFocus(radiusDp: Int = 6, also: (Boolean) -> Unit = {}) {
         isFocusable = true
         setOnFocusChangeListener { v, has ->
             v.lift(has, radiusDp)
@@ -1126,7 +1126,7 @@ abstract class Screen : Activity() {
     }
 
     /** An icon of [sizeDp] in the middle of whatever it's drawn over (a round button's face). */
-    protected fun centred(res: Int, sizeDp: Int, tint: Int) = getDrawable(res)?.mutate()?.let { d ->
+    internal fun centred(res: Int, sizeDp: Int, tint: Int) = getDrawable(res)?.mutate()?.let { d ->
         d.setTint(tint)
         LayerDrawable(arrayOf(d)).apply { setLayerSize(0, dp(sizeDp), dp(sizeDp)); setLayerGravity(0, Gravity.CENTER) }
     }
@@ -1135,7 +1135,7 @@ abstract class Screen : Activity() {
      * The main action as a white disc with a dark glyph, the way Apple's artist page leads with Play: at rest it is
      * already the brightest thing in its line; focus grows it and lifts it on its own glow.
      */
-    protected fun disc(sizeDp: Int, icon: Int, description: String): TextView = text("", BODY).apply {
+    internal fun disc(sizeDp: Int, icon: Int, description: String): TextView = text("", BODY).apply {
         isFocusable = true
         gravity = Gravity.CENTER
         contentDescription = description
@@ -1162,7 +1162,7 @@ abstract class Screen : Activity() {
      * every focusable row but the focused one dims; once it leaves, all rows come back. Brightness rather than a
      * border is what reads from the sofa.
      */
-    protected fun ViewGroup.focusByLight(dim: Float = LIGHT_DIM) {
+    internal fun ViewGroup.focusByLight(dim: Float = LIGHT_DIM) {
         val column = this
         val listener = android.view.ViewTreeObserver.OnGlobalFocusChangeListener { _, now ->
             val inside = now != null && isInside(now, column)
@@ -1204,7 +1204,7 @@ abstract class Screen : Activity() {
         else -> null
     }
 
-    protected fun View.lift(on: Boolean, radiusDp: Int = 6) {
+    internal fun View.lift(on: Boolean, radiusDp: Int = 6) {
         foreground = if (on) GradientDrawable().apply {
             setColor(Color.TRANSPARENT)
             cornerRadius = dp(radiusDp).toFloat()
@@ -1226,7 +1226,7 @@ abstract class Screen : Activity() {
     }
 
     /** The screen's art, behind its glass: what [glassOver] frosts. Screens with art behind them name it. */
-    protected open val backdrop: ImageView? get() = null
+    internal open val backdrop: ImageView? get() = null
 
     private var frostSource: Bitmap? = null
     private var frostBitmap: Bitmap? = null
@@ -1239,7 +1239,7 @@ abstract class Screen : Activity() {
      */
     /** [shade]: how much of the screen's own shade lies over the art there (0..1), so glass over a shaded part of the art
      *  is as dark as the art around it instead of a milky patch of the unshaded picture. */
-    protected fun glassOver(host: View, radiusDp: Int, shade: Float = 0f): Drawable {
+    internal fun glassOver(host: View, radiusDp: Int, shade: Float = 0f): Drawable {
         // No art to frost (Settings): the glass sits on the base colour, so a dialog doesn't show the rows under it.
         val behind = backdrop ?: return LayerDrawable(arrayOf(rounded(BASE, radiusDp), glass(radiusDp)))
         frostHosts += host
@@ -1247,7 +1247,7 @@ abstract class Screen : Activity() {
     }
 
     /** The art behind changed: glass redraws with the new picture once it's blurred. */
-    protected fun refrost() {
+    internal fun refrost() {
         frostHosts.forEach { it.invalidate() }
         updateWindowShade()
     }
@@ -1303,20 +1303,20 @@ abstract class Screen : Activity() {
     }
 
     /** A thin watched-so-far bar over a dark track. */
-    protected fun progressBar(progress: Float, color: Int = TUNGSTEN) = LinearLayout(this).apply {
+    internal fun progressBar(progress: Float, color: Int = TUNGSTEN) = LinearLayout(this).apply {
         val p = progress.coerceIn(0f, 1f)
         setBackgroundColor(PROGRESS_TRACK)
         addView(View(context).apply { setBackgroundColor(color) }, LinearLayout.LayoutParams(0, -1, p))
         addView(View(context), LinearLayout.LayoutParams(0, -1, 1f - p))
     }
 
-    protected fun isInside(v: View, parent: View): Boolean = generateSequence(v) { it.parent as? View }.any { it === parent }
+    internal fun isInside(v: View, parent: View): Boolean = generateSequence(v) { it.parent as? View }.any { it === parent }
 
     /**
      * A short list to pick from (a menu, a genre, a yes or no), on glass with tungsten focus, in
      * place of Android's grey dialog. [checked] gets a tick (the choice in use); the remote starts on [focus].
      */
-    protected fun choose(title: String, items: List<String>, message: String? = null, checked: Int = -1,
+    internal fun choose(title: String, items: List<String>, message: String? = null, checked: Int = -1,
                          focus: Int = maxOf(checked, 0), pick: (Int) -> Unit) {
         if (isFinishing || isDestroyed) return // Back pressed while the answer was on its way: nothing to show it on
         val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
@@ -1350,7 +1350,7 @@ abstract class Screen : Activity() {
     }
 
     /** A short name typed with the TV's keyboard: a list's name. [done] gets the trimmed words, never blank. */
-    protected fun askName(title: String, initial: String = "", hint: String = "Name", done: (String) -> Unit) {
+    internal fun askName(title: String, initial: String = "", hint: String = "Name", done: (String) -> Unit) {
         if (isFinishing || isDestroyed) return
         val dialog = android.app.Dialog(this).apply { requestWindowFeature(android.view.Window.FEATURE_NO_TITLE) }
         val field = android.widget.EditText(this).apply {
@@ -1393,7 +1393,7 @@ abstract class Screen : Activity() {
      * Hold OK on a title: its place in the viewer's own lists (Lists). One row per list, "Add to" or "Remove from";
      * with no list yet, an offer to make one. [before] are the title's other hold options; [changed] runs after an edit.
      */
-    protected fun listsMenu(entry: Lists.Entry, before: List<Pair<String, () -> Unit>> = emptyList(), skip: String? = null, changed: () -> Unit = {}) {
+    internal fun listsMenu(entry: Lists.Entry, before: List<Pair<String, () -> Unit>> = emptyList(), skip: String? = null, changed: () -> Unit = {}) {
         val lists = Lists.all(this).filterNot { it.id == skip } // the row held in offers its own entries in [before]
         val options = before.map { it.first } +
             lists.map { l -> if (l.items.any { it.id == entry.id }) "Remove from ${l.name}" else "Add to ${l.name}" } +
@@ -1412,7 +1412,7 @@ abstract class Screen : Activity() {
      * with Got it, and See all changes to open the rest in a taller panel that the remote steps through line by line.
      * [quiet]: nothing at all when there are no notes (the pop-up after an update), else a short message (Settings).
      */
-    protected fun whatsNew(version: String = Updates.mine(this), quiet: Boolean = false) {
+    internal fun whatsNew(version: String = Updates.mine(this), quiet: Boolean = false) {
         if (isFinishing || isDestroyed) return
         val changes = runCatching { assets.open("CHANGELOG.md").bufferedReader().use { it.readText() } }.getOrNull()
             ?.let { changesFor(it, version) }.orEmpty()
@@ -1460,7 +1460,7 @@ abstract class Screen : Activity() {
     }
 
     /** One glass error card with a plain message and a next action. */
-    protected fun failed(message: String, retry: () -> Unit) = column(Gravity.START,
+    internal fun failed(message: String, retry: () -> Unit) = column(Gravity.START,
         text("!", SERIF_NAME, color = TUNGSTEN, serif = true),
         text(message, BODY, color = TEXT).marginTop(10),
         pill("Try again").apply { setOnClickListener { retry() } }.marginTop(16),
