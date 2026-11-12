@@ -28,5 +28,11 @@ key KEYCODE_BACK 3; shot 12-tab-closed
 key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_CENTER 6; shot 13-tab-details
 key KEYCODE_BACK 3; key KEYCODE_DPAD_UP 2; shot 14-back-on-play
 key KEYCODE_BACK 3; key KEYCODE_BACK 3; shot 10-back
+# The same account in the dark mode: Home, a row down, and a title page.
+adb shell am start -S -n uk.albyjnr.cas/dev.alder.ProfilesActivity --ez casDark true > /dev/null
+sleep 30; shot 20-dark-home
+key KEYCODE_DPAD_LEFT 2; shot 21-dark-rail
+key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_CENTER 12; shot 22-dark-title
+key KEYCODE_DPAD_DOWN 3; key KEYCODE_DPAD_RIGHT 2; key KEYCODE_DPAD_CENTER 6; shot 23-dark-details
 adb logcat -d | grep -vF "$KEY" > screens/logcat.txt || true
 if grep -q "FATAL EXCEPTION" screens/logcat.txt; then echo "::error::CAS crashed on the signed-in walk"; grep -A 20 "FATAL EXCEPTION" screens/logcat.txt | head -40; exit 1; fi

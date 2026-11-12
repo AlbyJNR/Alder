@@ -477,7 +477,7 @@ class StreamsActivity : Screen() {
             detail.addView(text(tag.uppercase(), BADGE, bold = true, color = TUNGSTEN).apply {
                 letterSpacing = 0.03f
                 background = GradientDrawable().apply {
-                    setColor(Color.TRANSPARENT); cornerRadius = dp(3).toFloat(); setStroke(dp(1), 0x80FFFFFF.toInt())
+                    setColor(Color.TRANSPARENT); cornerRadius = dp(3).toFloat(); setStroke(dp(1), ink(0x80))
                 }
                 setPadding(dp(4), dp(1), dp(4), dp(1))
             }, wrap().apply { marginEnd = dp(5) })

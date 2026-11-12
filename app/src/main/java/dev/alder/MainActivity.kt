@@ -176,7 +176,7 @@ class MainActivity : Screen() {
      * and the long one down to the cards. As views over the art they were two more layers the GPU blended every frame,
      * a third of this TV's frame time.
      */
-    private val shaded = Images.Look("shaded-wide") { src ->
+    private val shaded = Images.Look(if (Tone.light) "shaded-wide-light" else "shaded-wide") { src ->
         val w = artW
         val h = resources.displayMetrics.heightPixels
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -188,7 +188,7 @@ class MainActivity : Screen() {
         val pixels = samplePixels(src, 16, 24)
         val bright = pixels?.let { brightLeft(it, 16) } ?: false
         // The shades in the title's own colour ([filmTint]): each picture brings its room with it.
-        val wall = pixels?.let(::filmTint) ?: BASE
+        val wall = if (Tone.light) BASE else pixels?.let(::filmTint) ?: BASE
         // Dense behind the title's words (the left half), then letting go, so the art stays sharp on the right.
         val shade = Paint().apply {
             shader = LinearGradient(0f, 0f, w * 0.74f, 0f,
@@ -202,7 +202,7 @@ class MainActivity : Screen() {
         canvas.drawRect(0f, 0f, w.toFloat(), h * 0.14f, shade)
         for (edge in listOf(GradientDrawable.Orientation.LEFT_RIGHT, GradientDrawable.Orientation.RIGHT_LEFT,
             GradientDrawable.Orientation.TOP_BOTTOM, GradientDrawable.Orientation.BOTTOM_TOP)) {
-            GradientDrawable(edge, intArrayOf(0x73000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000))
+            GradientDrawable(edge, intArrayOf(veil(0x73), veil(0x00), veil(0x00), veil(0x00), veil(0x00)))
                 .apply { setBounds(0, 0, w, h); draw(canvas) }
         }
         src.recycle()
@@ -327,7 +327,7 @@ class MainActivity : Screen() {
 
         art = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; alpha = 0f }
         artBack = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
-        topShade = View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xCC000000.toInt(), 0x66000000, 0x1A000000, 0)); alpha = 0f }
+        topShade = View(this).apply { background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(veil(0xCC), veil(0x66), veil(0x1A), 0)); alpha = 0f }
 
         // Black from the window alone: a black layout too would be one more full screen painted under the art.
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(BASE))
@@ -337,7 +337,7 @@ class MainActivity : Screen() {
             addView(topShade, FrameLayout.LayoutParams(-1, dp(HEADER_H + 180)))
             addView(scroller, FrameLayout.LayoutParams(-1, rowH).apply { topMargin = rowTop })
             track = FrameLayout(context).apply { alpha = 0f }
-            thumb = View(context).apply { background = rounded(0xB3FFFFFF.toInt(), 2) }
+            thumb = View(context).apply { background = rounded(ink(0xB3), 2) }
             track.addView(thumb, FrameLayout.LayoutParams(-1, dp(12)))
             addView(track, FrameLayout.LayoutParams(dp(2), dp(CARD_H)).apply { leftMargin = dp(EDGE) - dp(14); topMargin = rowTop + headingH + dp(ROW_TOP_ROOM) })
             moreHint = ImageView(context).apply { setImageResource(R.drawable.ic_back); scaleX = -1f; alpha = 0f }
@@ -702,7 +702,7 @@ class MainActivity : Screen() {
         nav = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(6), dp(6), dp(6), dp(6))
-            background = rounded(0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
+            background = rounded(((Tone.panel and 0x00FFFFFF) or (0xCC shl 24)), RAIL_ICON / 2 + 6)
         }
         fun <V : View> V.inNav() = apply { nav.addView(this, LinearLayout.LayoutParams(-1, dp(RAIL_ICON)).apply { if (nav.childCount > 0) topMargin = dp(NAV_GAP) }) }
 
@@ -713,7 +713,7 @@ class MainActivity : Screen() {
             // The same disc as the avatars on Settings and Search: 30 dp, the initial in BODY bold.
             profileAvatar = text(profile.name.take(1).uppercase(), BODY, bold = true, color = TUNGSTEN).apply {
                 gravity = Gravity.CENTER
-                background = rounded(0x33FFFFFF, 15)
+                background = rounded(ink(0x33), 15)
             }
             addView(profileAvatar, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp((RAIL_ICON - 30) / 2) })
             // Named for what OK opens, not for who is watching: the initial in the disc already says who (Alan, 2026-11-10).
@@ -781,13 +781,13 @@ class MainActivity : Screen() {
             val current = p != null && p == page
             item.background = when {
                 focused -> rounded(TEXT, RAIL_ICON / 2)
-                current -> rounded(0x33FFFFFF, RAIL_ICON / 2)
+                current -> rounded(ink(0x33), RAIL_ICON / 2)
                 else -> null
             }
             val colour = if (focused) BASE else if (current) TEXT else TEXT_2
             railIcons[item]?.setColorFilter(colour)
             railNames[item]?.setTextColor(colour)
-            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) 0x1F000000 else 0x33FFFFFF, 15) }
+            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) veil(0x1F) else ink(0x33), 15) }
         }
         // After the focus has finished moving: while an entry is losing it, the rail still counts as focused.
         main.removeCallbacks(nameRail)
@@ -801,12 +801,12 @@ class MainActivity : Screen() {
         if (railNames.values.all { (it.visibility == View.VISIBLE) == open }) return@Runnable
         android.transition.TransitionManager.beginDelayedTransition(nav, android.transition.AutoTransition().setDuration(RAIL_OPEN_MS))
         railNames.values.forEach { it.visibility = if (open) View.VISIBLE else View.GONE }
-        nav.background = rounded(if (open) 0xF218191D.toInt() else 0xCC18191D.toInt(), RAIL_ICON / 2 + 6)
+        nav.background = rounded(if (open) ((Tone.panel and 0x00FFFFFF) or (0xF2 shl 24)) else ((Tone.panel and 0x00FFFFFF) or (0xCC shl 24)), RAIL_ICON / 2 + 6)
         // Open, the rail reaches over the left of the title block: a shade from the screen's edge puts the page
         // behind the names, so they are read against dark, not against the title.
         header.minimumWidth = if (open) dp(RAIL_SHADE_W) else 0
         header.background = if (open) android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
-            intArrayOf(0xF008090B.toInt(), 0xD908090B.toInt(), 0x0008090B)) else null
+            intArrayOf(veil(0xF0), veil(0xD9), veil(0x00))) else null
     }
 
     // ---------- the art, and what shows over it ----------
@@ -1111,7 +1111,8 @@ class MainActivity : Screen() {
         heroName.visibility = View.VISIBLE
         heroLogo.visibility = View.GONE
         heroLogo.setImageDrawable(null)
-        Images.load(item.logo, heroLogo, dp(LOGO_W), look = Images.trimmed, failed = { if (heroItem === item) heroName.visibility = View.VISIBLE }) {
+        // A title's logo is artwork drawn for a dark ground (most are white): on the light ground the name is set in words.
+        Images.load(item.logo.takeIf { !Tone.light }, heroLogo, dp(LOGO_W), look = Images.trimmed, failed = { if (heroItem === item) heroName.visibility = View.VISIBLE }) {
             if (heroItem === item) { heroLogo.visibility = View.VISIBLE; heroName.visibility = View.INVISIBLE }
         }
         val meta = metas[item.id]
@@ -1742,7 +1743,7 @@ class MainActivity : Screen() {
         var previewTask: Runnable? = null
         fun poster(url: String?): View = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(0x1FFFFFFF)
+            setBackgroundColor(ink(0x1F))
             clipToOutline = true
             outlineProvider = object : android.view.ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: android.graphics.Outline) = outline.setRoundRect(0, 0, view.width, view.height, dp(6).toFloat())
@@ -2347,7 +2348,7 @@ class MainActivity : Screen() {
             private val face = object : FrameLayout(context) { override fun hasOverlappingRendering() = false }.apply { alpha = 0f }
             // Darkens the cards beside the focused one. A shade, not transparency: a see-through card would let the
             // art behind it show through and look like it was floating on the poster.
-            private val shade = View(context).apply { setBackgroundColor(Color.BLACK); alpha = 0f }
+            private val shade = View(context).apply { setBackgroundColor(BASE); alpha = 0f }
             // On every card in progress, as Netflix does: comparing how far along titles are is the point of the row.
             private val progress = item.progress.takeIf { it > 0 }?.let { progressBar(it) }
             // The new-episode mark: a small white badge in the corner, the one bright badge in the row, so it reads as
@@ -2389,7 +2390,7 @@ class MainActivity : Screen() {
                 }
                 // A dark foot under the words or the progress bar; a plain poster needs none.
                 if (wide || item.progress > 0) face.addView(View(context).apply {
-                    background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xE6000000.toInt(), 0x66000000, 0x00000000))
+                    background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(veil(0xE6), veil(0x66), veil(0x00)))
                 }, LayoutParams(-1, dp(cardH * (if (wide) 6 else 4) / 10), Gravity.BOTTOM))
                 if (wide) name.visibility = View.VISIBLE
                 // A ranked row (a top ten, a highest-rated list) wears its number large in the poster's corner, the way
@@ -2397,7 +2398,7 @@ class MainActivity : Screen() {
                 val rank = item.rank
                 if (rank != null && !wide && !grid) {
                     face.addView(View(context).apply {
-                        background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(0xD9000000.toInt(), 0x4D000000, 0x00000000))
+                        background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP, intArrayOf(veil(0xD9), veil(0x4D), veil(0x00)))
                     }, LayoutParams(-1, dp(cardH * 3 / 10), Gravity.BOTTOM))
                     face.addView(text("$rank", RANK_SIZE, bold = true, serif = true).onArt().apply {
                         includeFontPadding = false
@@ -2407,7 +2408,7 @@ class MainActivity : Screen() {
                 // Time left as a quiet label in the corner, where the eye checks before choosing what to resume.
                 val timeLeft = item.corner ?: item.left?.split(DOT)?.lastOrNull { it.endsWith("left") }
                 if (wide && timeLeft != null) face.addView(text(timeLeft, SMALL, bold = true).apply {
-                    background = rounded(0x99000000.toInt(), 8)
+                    background = rounded(veil(0x99), 8)
                     setPadding(dp(8), dp(3), dp(8), dp(4))
                 }, LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(0, dp(10), dp(10), 0) })
                 showNew()
@@ -2447,7 +2448,8 @@ class MainActivity : Screen() {
             }
 
             // One brightness for everything that is not under the remote (LIGHT_DIM); the shade is the rest.
-            fun dim(on: Boolean) = shade.animate().alpha(if (on) 1f - LIGHT_DIM else 0f).setDuration(200).start()
+            // On the light ground the shade is a pale wash, and a poster under much of it looks faded, not set back: a touch only.
+            fun dim(on: Boolean) = shade.animate().alpha(if (!on) 0f else if (Tone.light) LIGHT_WASH else 1f - LIGHT_DIM).setDuration(200).start()
 
             /** On screen (or nearly): the poster (the wide art cropped for a title without one, else its name). */
             fun load() {
@@ -2982,7 +2984,7 @@ class MainActivity : Screen() {
         const val RAIL_ICON = 40 // dp, an entry's glyph cell (and the pill's height)
         const val RAIL_OPEN_MS = 160L // the rail opening to its names, and closing: the time a control takes to gain focus
         const val GHOSTS = 9 // blank cards in a row that is on its way: the screen's width and one more
-        const val GHOST = 0x14FFFFFF // their face
+        val GHOST get() = ink(0x14) // their face
         const val GHOST_MS = 10_000L // how long they wait for a row that does not come
         const val PLACE_CARDS = 7 // cards from a row's start that are on the screen: a remembered card further along gives way to the first
         const val RAIL_SHADE_W = 300 // dp, the shade behind the open rail

@@ -42,6 +42,9 @@ object Settings {
      * Home, TV, Movies and Search, short pages, a handful of settings. On: every page, every row, every setting.
      */
     fun everything(c: Context) = prefs(c).getBoolean(profileKey(c, "everything"), false)
+    /** Light (the default) or dark, each profile's own. */
+    fun lightMode(c: Context) = prefs(c).getBoolean(profileKey(c, "light"), true)
+    fun setLightMode(c: Context, light: Boolean) = prefs(c).edit().putBoolean(profileKey(c, "light"), light).apply()
     /** The profile's text size, a multiple of the TV's own: 1 standard, [LARGE_TEXT] large. */
     fun textScale(c: Context) = prefs(c).getFloat(profileKey(c, "textScale"), 1f)
     fun setTextScale(c: Context, scale: Float) = prefs(c).edit().putFloat(profileKey(c, "textScale"), scale).apply()
@@ -526,6 +529,12 @@ class SettingsActivity : Screen() {
                     actionRow("Show everything", if (on) "On" else "Off",
                         "Off: Home, TV, Movies and Search, with short pages and few settings. On: every page, every row and every setting.") {
                         Settings.setEverything(this, !on)
+                        recreate()
+                    }
+                }
+                Settings.lightMode(this).let { light ->
+                    actionRow("Appearance", if (light) "Light" else "Dark", "Light: dark words on a soft off-white. Dark: light words on charcoal. The player is dark in both.") {
+                        Settings.setLightMode(this, !light)
                         recreate()
                     }
                 }

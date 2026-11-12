@@ -93,15 +93,15 @@ class SearchActivity : Screen() {
         root.addView(art, FrameLayout.LayoutParams(-1, -1))
         root.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xF208090B.toInt(), 0xD908090B.toInt(), 0xA008090B.toInt(), 0x1A08090B))
+                intArrayOf(veil(0xF2), veil(0xD9), veil(0xA0), veil(0x1A)))
         }, FrameLayout.LayoutParams(-1, -1))
         root.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                intArrayOf(0xF708090B.toInt(), 0xBF08090B.toInt(), 0x0008090B))
+                intArrayOf(veil(0xF7), veil(0xBF), veil(0x00)))
         }, FrameLayout.LayoutParams(-1, dp(260), Gravity.BOTTOM))
         root.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x8C08090B.toInt(), 0x0008090B))
+                intArrayOf(veil(0x8C), veil(0x00)))
         }, FrameLayout.LayoutParams(-1, dp(80), Gravity.TOP))
         root.addView(header(), FrameLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(24) })
 
@@ -676,7 +676,7 @@ class SearchActivity : Screen() {
 
     private fun card(meta: Meta, caption: TextView, scroller: HorizontalScrollView, firstInRow: Boolean): View {
         val image = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(BASE) }
-        val shade = View(this).apply { setBackgroundColor(Color.BLACK); alpha = 0.5f }
+        val shade = View(this).apply { setBackgroundColor(BASE); alpha = 0.5f }
         val card = FrameLayout(this).apply {
             tag = "${meta.type}:${meta.id}"
             outlineProvider = object : ViewOutlineProvider() {

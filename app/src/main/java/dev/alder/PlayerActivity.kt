@@ -62,6 +62,7 @@ internal fun plausibleEpisode(durationMs: Long) = durationMs >= 2 * 60_000L
 // at the same second, and when the list runs out the player says so and offers Try again or Choose a source. Network blips are retried first, twice
 // after 1.5 s (NuvioTV's rule), so a dropped connection doesn't cost the source.
 class PlayerActivity : Screen() {
+    override val alwaysDark get() = true
     private lateinit var player: ExoPlayer
     private lateinit var view: PlayerView
     private val type by lazy { intent.getStringExtra("type") ?: "movie" }
@@ -204,7 +205,7 @@ class PlayerActivity : Screen() {
             subtitleView?.setStyle(CaptionStyleCompat(Color.WHITE,
                 if (boxed) 0xB3000000.toInt() else Color.TRANSPARENT, Color.TRANSPARENT,
                 if (boxed) CaptionStyleCompat.EDGE_TYPE_NONE else CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                if (boxed) Color.TRANSPARENT else 0xCC000000.toInt(), text("", SMALL).typeface))
+                if (boxed) Color.TRANSPARENT else veil(0xCC), text("", SMALL).typeface))
             setBackgroundColor(Color.BLACK)
         }
         status = text("", BODY).onArt().apply {
@@ -213,7 +214,7 @@ class PlayerActivity : Screen() {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        pausedShade = View(this).apply { setBackgroundColor(0x4D000000); visibility = View.GONE }
+        pausedShade = View(this).apply { setBackgroundColor(veil(0x4D)); visibility = View.GONE }
         upNextPanel = FrameLayout(this).apply { visibility = View.GONE }
         controls = buildControls()
         loading = buildLoading()

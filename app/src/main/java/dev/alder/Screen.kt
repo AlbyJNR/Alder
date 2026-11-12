@@ -82,7 +82,7 @@ class FadedArt(context: Context, private val bottomFrom: Float = 0.45f, private 
 }
 
 /** Keeps text readable straight on art: a soft dark shadow instead of a panel over the picture. */
-fun TextView.onArt() = apply { setShadowLayer(resources.displayMetrics.density * 8, 0f, resources.displayMetrics.density, 0xCC000000.toInt()) }
+fun TextView.onArt() = apply { setShadowLayer(resources.displayMetrics.density * 8, 0f, resources.displayMetrics.density, veil(0xCC)) }
 
 internal fun filmGlow(pixels: IntArray): Int {
     require(pixels.isNotEmpty())
@@ -170,6 +170,24 @@ internal fun withAlpha(color: Int, alpha: Int) = (alpha shl 24) or (color and 0x
 internal const val TINT_LIGHTNESS = 0.15
 
 /** What every screen shares: the signed-in account, background work, and the few view helpers the plain UI uses. */
+/**
+ * The mode CAS is drawn in: light (the default) or dark, each profile's choice (Settings › Profile › Appearance).
+ * The player is always dark: its controls sit on the film. Set as each screen starts, before it draws.
+ */
+object Tone {
+    @Volatile var light = true
+    val base get() = if (light) 0xFFF3F1EC.toInt() else 0xFF121316.toInt() // a soft off-white; a dark charcoal. Never pure white or black.
+    val text get() = if (light) 0xFF24262B.toInt() else 0xFFECECEF.toInt() // a dark charcoal; an off-white
+    val panel get() = if (light) 0xFFFAF9F6.toInt() else 0xFF18191D.toInt() // the rail's capsule
+    val onColour = 0xFF17181B.toInt() // words on a coloured mark, the same in both modes
+}
+
+/** The ground colour at [alpha] (0..255): what lies over art to carry words, and what a picture fades into. */
+fun veil(alpha: Int): Int = (Tone.base and 0x00FFFFFF) or (alpha shl 24)
+
+/** The words' colour at [alpha]: hairlines, quiet fills and rims that were a white at some strength on the dark ground. */
+fun ink(alpha: Int): Int = (Tone.text and 0x00FFFFFF) or (alpha shl 24)
+
 /** The band colour of an age rating, British or American, film or TV; grey for one CAS does not know. */
 internal fun certColour(cert: String): Int = when (cert.trim().uppercase()) {
     "U", "UC", "G", "TV-Y", "TV-G", "E", "0", "ALL" -> 0xFF57B36A.toInt()
@@ -209,10 +227,21 @@ abstract class Screen : Activity() {
     protected val authKey: String? get() = Profiles.active(this)?.authKey
 
     private var textScaleHere = 1f // the profile's text size as this screen was made with it
+    private var lightHere = true // and its mode
+    /** A screen that is dark in either mode (the player: its controls are on the film). */
+    protected open val alwaysDark get() = false
+    private fun wantLight(c: Context) = !alwaysDark && runCatching { Settings.lightMode(c) }.getOrDefault(true)
+
+    override fun onRestart() {
+        Tone.light = lightHere // another screen (the player) may have set its own while this one was behind it
+        super.onRestart()
+    }
 
     /** The profile's text size (Settings › Profile › Text size) on top of the TV's own, for every word on the screen. */
     override fun attachBaseContext(base: Context) {
         textScaleHere = runCatching { Settings.textScale(base) }.getOrDefault(1f)
+        lightHere = wantLight(base)
+        Tone.light = lightHere
         super.attachBaseContext(if (textScaleHere == 1f) base else base.createConfigurationContext(
             android.content.res.Configuration(base.resources.configuration).apply { fontScale *= textScaleHere }))
     }
@@ -224,6 +253,7 @@ abstract class Screen : Activity() {
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(BASE)) // the mode's own ground behind every screen
         Crash.install(this)
         if (Http.saved != null) return
         // The first screen after a crash says so, once; the trace waits in Settings › About.
@@ -277,7 +307,8 @@ abstract class Screen : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (Settings.textScale(this) != textScaleHere) return recreate() // changed in Settings: this screen is made again in the new size
+        if (Settings.textScale(this) != textScaleHere || wantLight(this) != lightHere) return recreate() // changed in Settings: this screen is made again
+        Tone.light = lightHere
         val release = pendingInstall ?: return
         pendingInstall = null
         if (Updates.canInstall(this)) installUpdate(release)
@@ -329,7 +360,7 @@ abstract class Screen : Activity() {
      * boards' symbols themselves are their trademarks.
      */
     protected fun certMark(cert: String): CharSequence = android.text.SpannableString(cert).apply {
-        setSpan(CertSpan(certColour(cert), BASE, dp(5).toFloat(), dp(3).toFloat()), 0, length, 0)
+        setSpan(CertSpan(certColour(cert), Tone.onColour, dp(5).toFloat(), dp(3).toFloat()), 0, length, 0)
     }
 
     protected fun caps(value: String, color: Int = TEXT_2) = text(value.uppercase(), CAPS, bold = true, color = color).apply {
@@ -481,7 +512,7 @@ abstract class Screen : Activity() {
                 GradientDrawable.Orientation.TOP_BOTTOM, GradientDrawable.Orientation.BOTTOM_TOP)) {
                 addView(View(context).apply {
                     background = GradientDrawable(edge,
-                        intArrayOf(0x73000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000))
+                        intArrayOf(veil(0x73), veil(0x00), veil(0x00), veil(0x00), veil(0x00)))
                 }, FrameLayout.LayoutParams(-1, -1))
             }
             addView(content, FrameLayout.LayoutParams(-1, -1))
@@ -491,7 +522,7 @@ abstract class Screen : Activity() {
 
     /** A quiet tinted row on the pane (episodes, sources): no edge, no glass of its own. */
     protected fun tile(radiusDp: Int = TILE_RADIUS) = GradientDrawable().apply {
-        setColor(0x14FFFFFF)
+        setColor(ink(0x14))
         cornerRadius = dp(radiusDp).toFloat()
     }
 
@@ -1480,8 +1511,8 @@ abstract class Screen : Activity() {
         const val PRESS_DIP = 0.96f // OK held: the control's scale, relative to where focus left it
         // The trailer box.
         const val TRAILER_W = 0.68f // share of the screen the box takes: a box, not a page, but big enough to watch
-        const val TRAILER_SCRIM = 0xCC08090B.toInt() // the art stays, dimmed, behind the box
-        const val TRAILER_BLACK = 0xFA08090B.toInt() // Settings › Title page › Art behind the trailer: Off
+        val TRAILER_SCRIM get() = veil(0xCC) // the art stays, dimmed, behind the box
+        val TRAILER_BLACK get() = veil(0xFA) // Settings › Title page › Art behind the trailer: Off
         const val TRAILER_PROBE_MS = 7_000L
         const val PREVIEW_MS = 60_000L // how long a preview plays
         const val PREVIEW_FROM = 0.12 // where it starts, as a share of the title: past the logos, before the story
@@ -1501,6 +1532,7 @@ abstract class Screen : Activity() {
         const val CARD_GROW = 1.06f
         const val DISC_GROW = 1.1f // the white disc: bigger growth than a card, it is the one thing on its line
         const val DISC = 52 // dp, the title page's Play
+        const val LIGHT_WASH = 0.16f // how far a poster not under the remote is washed towards the light ground
         const val LIGHT_DIM = 0.55f // brightness of the rows around the focused one (focus by light)
         const val CHIP_GROW = 1.04f // a wide chip grown as much as a card filled the gap to its neighbour
         const val CARD_LIFT = 8
@@ -1528,20 +1560,22 @@ abstract class Screen : Activity() {
         const val CODE = 36f
         val LEADING = mapOf(SERIF_HERO to 40f, SERIF_TITLE to 30f, SERIF_NAME to 21f, BODY to 20f, SMALL to 19f, CAPS to 17f, CODE to 40f)
 
-        const val BASE = 0xFF08090B.toInt()
-        const val TEXT = 0xFFF5F5F7.toInt()
-        const val TEXT_2 = 0xB8F5F5F7.toInt()
-        const val TEXT_3 = 0x73F5F5F7
-        const val TUNGSTEN = 0xFFF3E7D3.toInt() // the accent: a warm, lit white, apart from the cool white of the words
-        const val ALERT = 0xFFF0A08C.toInt() // an error's words: a soft coral, the one colour that is not white
-        const val TUNGSTEN_RIM = 0x99FFFFFF.toInt()
-        const val TUNGSTEN_GLOW = 0x59FFFFFF
-        const val GLASS = 0x99202226.toInt()
-        const val GLASS_FOCUSED = 0x3DF5F5F7 // a lit face: with no rim, the fill alone carries focus
-        const val GLASS_EDGE = 0x1FFFFFFF
-        const val GLASS_HIGHLIGHT = 0x4DFFFFFF
-        const val ROW_FOCUSED = 0x38F5F5F7 // a list row under the remote: brighter than it was, still a row not a button
-        const val PROGRESS_TRACK = 0x4DFFFFFF // light enough that a short fill still reads as a bar, not a dash
+        // The colours follow the mode (Tone): light, the default, or dark. Neither end is pure: the light ground is a
+        // soft off-white and its words a dark charcoal; the dark ground is charcoal and its words an off-white.
+        val BASE get() = Tone.base
+        val TEXT get() = Tone.text
+        val TEXT_2 get() = (TEXT and 0x00FFFFFF) or (0xB8 shl 24)
+        val TEXT_3 get() = (TEXT and 0x00FFFFFF) or (0x73 shl 24)
+        val TUNGSTEN get() = if (Tone.light) 0xFF8A5A22.toInt() else 0xFFF3E7D3.toInt() // the accent: a warm bronze on the light ground, a warm lit white on the dark
+        val ALERT get() = if (Tone.light) 0xFFB5472F.toInt() else 0xFFF0A08C.toInt() // an error's words: the one colour that is not ink
+        val TUNGSTEN_RIM get() = ink(0x99)
+        val TUNGSTEN_GLOW get() = if (Tone.light) 0x40000000 else 0x59FFFFFF
+        val GLASS get() = if (Tone.light) 0xB8FBFAF7.toInt() else 0x99202226.toInt()
+        val GLASS_FOCUSED get() = ink(0x3D) // a lit face: with no rim, the fill alone carries focus
+        val GLASS_EDGE get() = ink(0x1F)
+        val GLASS_HIGHLIGHT get() = if (Tone.light) 0x99FFFFFF.toInt() else 0x4DFFFFFF
+        val ROW_FOCUSED get() = ink(if (Tone.light) 0x24 else 0x38) // a list row under the remote: stands out, still a row not a button
+        val PROGRESS_TRACK get() = ink(0x4D) // enough that a short fill still reads as a bar, not a dash
         // Fetching and parsing sit behind the main thread and the RenderThread: on a four-core stick, a page's answers
         // parsed at the main thread's priority took frames from the row sliding in.
         private val savePool = Executors.newFixedThreadPool(2)

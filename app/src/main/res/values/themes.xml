@@ -5,7 +5,7 @@
         <item name="android:spotShadowAlpha">0.9</item>
         <item name="android:ambientShadowAlpha">0</item>
         <!-- The frame Android shows before CAS draws anything is CAS's own near-black, so starting never flashes. -->
-        <item name="android:windowBackground">#FF08090B</item>
+        <item name="android:windowBackground">#FFF3F1EC</item>
         <!-- One screen to the next (a title to its sources, to the player, and back) is a quick fade of CAS's own,
              not the TV's slide: that took a third of a second each way and made Play and Back feel slow. -->
         <item name="android:windowAnimationStyle">@style/CAS.Window</item>

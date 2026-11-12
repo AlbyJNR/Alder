@@ -127,11 +127,11 @@ class DetailsActivity : Screen() {
             // keeps the last lines and the "▾ More like this" hint clear.
             addView(View(this@DetailsActivity).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                    intArrayOf(0xEB08090B.toInt(), 0xD908090B.toInt(), 0xB308090B.toInt(), 0x6608090B, 0x0008090B))
+                    intArrayOf(veil(0xEB), veil(0xD9), veil(0xB3), veil(0x66), veil(0x00)))
             }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 90 / 100, -1))
             addView(View(this@DetailsActivity).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                    intArrayOf(0xD908090B.toInt(), 0x6608090B, 0x0008090B))
+                    intArrayOf(veil(0xD9), veil(0x66), veil(0x00)))
             }, FrameLayout.LayoutParams(-1, resources.displayMetrics.heightPixels / 2, Gravity.BOTTOM))
             addView(hero, FrameLayout.LayoutParams(-1, -1))
             addView(TextClock(this@DetailsActivity).apply {
@@ -240,7 +240,7 @@ class DetailsActivity : Screen() {
                     visibility = View.GONE
                 }
                 addView(logo, FrameLayout.LayoutParams(dp(LOGO_W), -1))
-                Images.load(m.logo ?: Images.logoFor(m.id), logo, dp(LOGO_W), urgent = true, look = Images.trimmed, failed = {
+                Images.load((m.logo ?: Images.logoFor(m.id)).takeIf { !Tone.light }, logo, dp(LOGO_W), urgent = true, look = Images.trimmed, failed = {
                     title.visibility = View.VISIBLE; logo.visibility = View.GONE
                 }) {
                     title.visibility = View.GONE; logo.visibility = View.VISIBLE
@@ -924,7 +924,7 @@ class DetailsActivity : Screen() {
         infoOverlay = FrameLayout(this)
         infoOverlay.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xC9000808.toInt(), 0x99000808.toInt(), 0x00000000))
+                intArrayOf(veil(0xC9), veil(0x99), veil(0x00)))
         }, FrameLayout.LayoutParams(resources.displayMetrics.widthPixels * 3 / 5, -1))
         val facts = listOfNotNull(certificate?.takeIf { Settings.titlePage(this, SettingsActivity.TITLE_RATING) }, m.year, m.runtime,
             m.genres.take(2).joinToString(" / ").ifEmpty { null }, m.rating?.let { "★ $it" },
@@ -1013,7 +1013,7 @@ class DetailsActivity : Screen() {
         similarOverlay = FrameLayout(this).apply { visibility = View.GONE }
         similarOverlay.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                intArrayOf(0xF708090B.toInt(), 0xA608090B.toInt(), 0x0008090B))
+                intArrayOf(veil(0xF7), veil(0xA6), veil(0x00)))
         }, FrameLayout.LayoutParams(-1, dp(280), Gravity.BOTTOM))
         val content = column(Gravity.START)
         content.addView(caps(heading).onArt(), LinearLayout.LayoutParams(-1, -2).apply {

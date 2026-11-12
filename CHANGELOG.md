@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.63.0
+
+- CAS has a light mode and a dark mode. The light mode is the default. To change it, go to Settings › Profile › **Appearance**.
+- The light mode shows dark grey text on a soft white. The dark mode shows soft white text on dark grey. CAS does not use pure black or pure white.
+- The player is dark in the two modes.
+
 ## 1.62.0
 
 - Title page: Play has the line to itself, with Start over and My List. The other parts of the page are tabs along the foot: **Episodes** or **More like this**, **Trailer**, **Details**.

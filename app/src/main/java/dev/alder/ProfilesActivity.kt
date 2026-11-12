@@ -68,6 +68,9 @@ class ProfilesActivity : Screen() {
                 }.marginTop(24),
             ).apply { setPadding(dp(84), dp(64), dp(48), 0); setBackgroundColor(0xFF2A3A44.toInt()) })
         }
+        // Debug builds only: `--ez casDark true` (or false) sets the profile's mode, so CI can photograph both.
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && intent.hasExtra("casDark") && Profiles.active(this) != null)
+            Settings.setLightMode(this, !intent.getBooleanExtra("casDark", false))
         // Debug builds only, and only on a TV with no profile yet: `--es testKey <Stremio auth key>` signs a test
         // profile in with no phone, so CI can photograph the signed-in screens (cas-build.yml, screens).
         if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && Profiles.all(this).isEmpty())
