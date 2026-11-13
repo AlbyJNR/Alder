@@ -9,7 +9,21 @@ import org.json.JSONObject
  * A [kids] profile is a child's: Home keeps to Continue and that profile's own lists, with no Search, TV, Movies or
  * Settings, and its [pin] is the one that *leaves* it (a parent's), not one asked on the way in.
  */
-class Profile(val id: String, val name: String, val color: Int, val authKey: String, val pin: String? = null, val kids: Boolean = false)
+class Profile(val id: String, val name: String, val color: Int, val authKey: String, val pin: String? = null, val kids: Boolean = false,
+    val picture: String? = null) // an animal's name (Animals), or null for the initial
+
+/**
+ * The profile pictures (Alan, 2026-11-13): twelve animal faces, so a parent or a child knows their own profile at a
+ * glance. CAS's own drawings (tools/cas_animals.py), shown on the profile's coloured disc.
+ */
+object Animals {
+    val all = listOf("cat" to R.drawable.ic_animal_cat, "dog" to R.drawable.ic_animal_dog, "fox" to R.drawable.ic_animal_fox,
+        "bear" to R.drawable.ic_animal_bear, "rabbit" to R.drawable.ic_animal_rabbit, "owl" to R.drawable.ic_animal_owl,
+        "panda" to R.drawable.ic_animal_panda, "lion" to R.drawable.ic_animal_lion, "penguin" to R.drawable.ic_animal_penguin,
+        "frog" to R.drawable.ic_animal_frog, "pig" to R.drawable.ic_animal_pig, "koala" to R.drawable.ic_animal_koala)
+    fun res(name: String?): Int? = all.firstOrNull { it.first == name }?.second
+    fun label(name: String) = name.replaceFirstChar { it.uppercase() }
+}
 
 /**
  * The profiles on this TV, kept in app storage. Each one is its own Stremio account, so history, Continue Watching,
@@ -31,7 +45,7 @@ object Profiles {
         parsed?.takeIf { it.first == raw }?.let { return it.second }
         return JSONArray(raw).objects()
             .map { Profile(it.getString("id"), it.getString("name"), it.getInt("color").takeIf { c -> c in COLORS } ?: COLORS[0],
-                it.getString("authKey"), it.optString("pin").ifEmpty { null }, it.optBoolean("kids")) }
+                it.getString("authKey"), it.optString("pin").ifEmpty { null }, it.optBoolean("kids"), it.optString("picture").ifEmpty { null }) }
             .also { parsed = raw to it }
     }
 
@@ -43,10 +57,10 @@ object Profiles {
 
     fun setActive(context: Context, id: String) = prefs(context).edit().putString("active", id).apply()
 
-    fun add(context: Context, name: String, authKey: String, color: Int = COLORS[0]): Profile {
+    fun add(context: Context, name: String, authKey: String, color: Int = COLORS[0], picture: String? = null): Profile {
         val list = all(context)
         val number = (1..MAX).first { n -> list.none { it.id == "$n" } }
-        val profile = Profile("$number", name, color, authKey)
+        val profile = Profile("$number", name, color, authKey, picture = picture)
         save(prefs(context), list + profile)
         setActive(context, profile.id)
         return profile
@@ -87,16 +101,19 @@ object Profiles {
     }
 
     /** Rename, set the PIN (clearPin removes it), recolour or flag a profile as a child's, keeping its place in the list. */
-    fun update(context: Context, id: String, name: String? = null, pin: String? = null, clearPin: Boolean = false, color: Int? = null, kids: Boolean? = null) {
+    /** [picture]: an animal's name to set it, "" to go back to the initial, null to leave it. */
+    fun update(context: Context, id: String, name: String? = null, pin: String? = null, clearPin: Boolean = false, color: Int? = null, kids: Boolean? = null,
+               picture: String? = null) {
         save(prefs(context), all(context).map {
             if (it.id != id) it
-            else Profile(it.id, name ?: it.name, color ?: it.color, it.authKey, if (clearPin) null else pin ?: it.pin, kids ?: it.kids)
+            else Profile(it.id, name ?: it.name, color ?: it.color, it.authKey, if (clearPin) null else pin ?: it.pin, kids ?: it.kids,
+                if (picture == null) it.picture else picture.ifEmpty { null })
         })
     }
 
     private fun save(prefs: SharedPreferences, list: List<Profile>) {
         val json = JSONArray(list.map {
-            JSONObject().put("id", it.id).put("name", it.name).put("color", it.color).put("authKey", it.authKey).put("pin", it.pin ?: "").put("kids", it.kids)
+            JSONObject().put("id", it.id).put("name", it.name).put("color", it.color).put("authKey", it.authKey).put("pin", it.pin ?: "").put("kids", it.kids).put("picture", it.picture ?: "")
         })
         prefs.edit().putString("profiles", json.toString()).apply()
     }

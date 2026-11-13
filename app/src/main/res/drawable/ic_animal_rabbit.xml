@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the rabbit. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FFDAD5CC" android:pathData="M27,22a8,21 0 1,0 16,0a8,21 0 1,0 -16,0z" />
+    <path android:fillColor="#FFDAD5CC" android:pathData="M53,22a8,21 0 1,0 16,0a8,21 0 1,0 -16,0z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M31.4,23a3.6,15 0 1,0 7.2,0a3.6,15 0 1,0 -7.2,0z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M57.4,23a3.6,15 0 1,0 7.2,0a3.6,15 0 1,0 -7.2,0z" />
+    <path android:fillColor="#FFDAD5CC" android:pathData="M21,59a27,27 0 1,0 54,0a27,27 0 1,0 -54,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M32.6,54a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M56.6,54a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M44.4,63a3.6,2.8 0 1,0 7.2,0a3.6,2.8 0 1,0 -7.2,0z" />
+</vector>

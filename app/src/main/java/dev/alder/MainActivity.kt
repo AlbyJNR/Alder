@@ -714,9 +714,9 @@ class MainActivity : Screen() {
             isFocusable = true
             contentDescription = if (profile.kids) "Profile: ${profile.name}" else "Settings"
             // The same disc as the avatars on Settings and Search: 30 dp, the initial in BODY bold.
-            profileAvatar = text(profile.name.take(1).uppercase(), BODY, bold = true, color = TUNGSTEN).apply {
+            profileAvatar = text(if (profile.picture == null) profile.name.take(1).uppercase() else "", BODY, bold = true, color = TUNGSTEN).apply {
                 gravity = Gravity.CENTER
-                background = rounded(ink(0x33), 15)
+                background = if (profile.picture == null) rounded(ink(0x33), 15) else portraitFace(profile.color, profile.picture)
             }
             addView(profileAvatar, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp((RAIL_ICON - 30) / 2) })
             // Named for what OK opens, not for who is watching: the initial in the disc already says who (Alan, 2026-11-10).
@@ -790,7 +790,7 @@ class MainActivity : Screen() {
             val colour = if (focused) BASE else if (current) TEXT else TEXT_2
             railIcons[item]?.setColorFilter(colour)
             railNames[item]?.setTextColor(colour)
-            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); profileAvatar.background = rounded(if (focused) veil(0x1F) else ink(0x33), 15) }
+            if (item === profileEntry) { profileAvatar.setTextColor(if (focused) BASE else TUNGSTEN); if (profile.picture == null) profileAvatar.background = rounded(if (focused) veil(0x1F) else ink(0x33), 15) }
         }
         // After the focus has finished moving: while an entry is losing it, the rail still counts as focused.
         main.removeCallbacks(nameRail)

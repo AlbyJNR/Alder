@@ -367,6 +367,13 @@ abstract class Screen : Activity() {
      * A heading or a label: its own words, in bold (the name is from when these were spaced capitals). Sentence case,
      * as BBC iPlayer sets its headings: capitals in a row have no shape to read by, and are the harder for older eyes.
      */
+    /** A profile's disc: its colour with its animal on it, or the colour alone for the initial to be set on. */
+    internal fun portraitFace(color: Int, picture: String?): android.graphics.drawable.Drawable {
+        val disc = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
+        val animal = Animals.res(picture)?.let { getDrawable(it) } ?: return disc
+        return LayerDrawable(arrayOf(disc, animal)).apply { val edge = 0; setLayerInset(1, edge, edge, edge, edge) }
+    }
+
     internal fun caps(value: String, color: Int = TEXT_2) = text(value, SMALL, bold = true, color = color)
 
     internal fun column(gravity: Int, vararg views: View) = LinearLayout(this).apply {

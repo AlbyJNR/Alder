@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the lion. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FFC7772C" android:pathData="M10,52a38,38 0 1,0 76,0a38,38 0 1,0 -76,0z" />
+    <path android:fillColor="#FFF0B55A" android:pathData="M23,54a25,25 0 1,0 50,0a25,25 0 1,0 -50,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M34.6,49a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M54.6,49a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF8B4A1C" android:pathData="M44,58L52,58L48,63.5z" />
+</vector>

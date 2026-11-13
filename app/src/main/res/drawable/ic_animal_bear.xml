@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the bear. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FF8B5E3C" android:pathData="M12,28a11,11 0 1,0 22,0a11,11 0 1,0 -22,0z" />
+    <path android:fillColor="#FF8B5E3C" android:pathData="M62,28a11,11 0 1,0 22,0a11,11 0 1,0 -22,0z" />
+    <path android:fillColor="#FFC99A6B" android:pathData="M17.5,28a5.5,5.5 0 1,0 11.0,0a5.5,5.5 0 1,0 -11.0,0z" />
+    <path android:fillColor="#FFC99A6B" android:pathData="M67.5,28a5.5,5.5 0 1,0 11.0,0a5.5,5.5 0 1,0 -11.0,0z" />
+    <path android:fillColor="#FF8B5E3C" android:pathData="M18,54a30,30 0 1,0 60,0a30,30 0 1,0 -60,0z" />
+    <path android:fillColor="#FFE9D2B0" android:pathData="M35,63a13,10 0 1,0 26,0a13,10 0 1,0 -26,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M43,58.5a5,3.6 0 1,0 10,0a5,3.6 0 1,0 -10,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M32.6,46a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M56.6,46a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+</vector>

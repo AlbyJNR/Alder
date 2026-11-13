@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the cat. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FF8E9AA8" android:pathData="M20,40L24,10L44,26z" />
+    <path android:fillColor="#FF8E9AA8" android:pathData="M76,40L72,10L52,26z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M25,34L27,19L37,28z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M71,34L69,19L59,28z" />
+    <path android:fillColor="#FF8E9AA8" android:pathData="M18,54a30,30 0 1,0 60,0a30,30 0 1,0 -60,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M32.6,47a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M56.6,47a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M44.5,57L51.5,57L48,62z" />
+</vector>

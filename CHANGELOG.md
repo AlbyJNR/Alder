@@ -13,6 +13,12 @@ Write every entry in ASD-STE100 Simplified Technical English (STE):
 
 Put changes that are not released under `## Unreleased`. Each release gets its own `## <version>` heading on a line of its own: What's new in the app reads the heading.
 
+## 1.68.0
+
+- Profile pictures: a profile can have an animal as its picture. There are 12 animals.
+- New profile: select a picture below the portrait.
+- To change the picture of a profile, hold OK on the profile and select **Picture**.
+
 ## 1.67.0
 
 - Metacritic: the Metascore of a title shows with the other ratings, as a number on green, yellow or red.

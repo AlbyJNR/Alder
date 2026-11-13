@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the owl. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FF7A5C46" android:pathData="M20,30L24,12L40,26z" />
+    <path android:fillColor="#FF7A5C46" android:pathData="M76,30L72,12L56,26z" />
+    <path android:fillColor="#FF7A5C46" android:pathData="M18,54a30,30 0 1,0 60,0a30,30 0 1,0 -60,0z" />
+    <path android:fillColor="#FFF7F5F0" android:pathData="M23.5,49a11.5,11.5 0 1,0 23.0,0a11.5,11.5 0 1,0 -23.0,0z" />
+    <path android:fillColor="#FFF7F5F0" android:pathData="M49.5,49a11.5,11.5 0 1,0 23.0,0a11.5,11.5 0 1,0 -23.0,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M30.2,49a4.8,4.8 0 1,0 9.6,0a4.8,4.8 0 1,0 -9.6,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M56.2,49a4.8,4.8 0 1,0 9.6,0a4.8,4.8 0 1,0 -9.6,0z" />
+    <path android:fillColor="#FFF0A63A" android:pathData="M43.5,57L52.5,57L48,66z" />
+</vector>

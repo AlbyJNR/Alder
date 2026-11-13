@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the penguin. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FF2E3440" android:pathData="M18,52a30,30 0 1,0 60,0a30,30 0 1,0 -60,0z" />
+    <path android:fillColor="#FFF7F5F0" android:pathData="M28,59a20,21 0 1,0 40,0a20,21 0 1,0 -40,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M35.6,50a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M53.6,50a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FFF0A63A" android:pathData="M43,58L53,58L48,66z" />
+</vector>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the pig. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FFE58FA1" android:pathData="M18,40L22,14L42,28z" />
+    <path android:fillColor="#FFE58FA1" android:pathData="M78,40L74,14L54,28z" />
+    <path android:fillColor="#FFF2A7B5" android:pathData="M19,54a29,29 0 1,0 58,0a29,29 0 1,0 -58,0z" />
+    <path android:fillColor="#FFE58FA1" android:pathData="M35,61a13,9.5 0 1,0 26,0a13,9.5 0 1,0 -26,0z" />
+    <path android:fillColor="#FFB4566C" android:pathData="M41.3,61a2.2,3.2 0 1,0 4.4,0a2.2,3.2 0 1,0 -4.4,0z" />
+    <path android:fillColor="#FFB4566C" android:pathData="M50.3,61a2.2,3.2 0 1,0 4.4,0a2.2,3.2 0 1,0 -4.4,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M32.6,46a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M56.6,46a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+</vector>

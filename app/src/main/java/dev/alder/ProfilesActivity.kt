@@ -29,6 +29,7 @@ class ProfilesActivity : Screen() {
     private var signingIn = false
     private var draftName = ""
     private var draftColor = Profiles.COLORS[0]
+    private var draftPicture: String? = null // the animal chosen for the profile being made, or null for its initial
     private var pickerGeneration = 0
     private var signInGeneration = 0
     private var nameInput: EditText? = null
@@ -262,6 +263,12 @@ class ProfilesActivity : Screen() {
         val items = listOfNotNull(
             "Rename" to { withPin(p) { rename(p) } },
             (if (p.pin == null) "Set a PIN" else "Change PIN") to { withPin(p) { setPin(p) } },
+            "Picture" to { withPin(p) {
+                val names = listOf("Initial") + Animals.all.map { Animals.label(it.first) }
+                choose("${p.name}'s picture", names, checked = Animals.all.indexOfFirst { it.first == p.picture } + 1) { i ->
+                    Profiles.update(this, p.id, picture = if (i == 0) "" else Animals.all[i - 1].first); showPicker()
+                }
+            } },
             "Colour" to { withPin(p) {
                 choose("${p.name}'s portrait", listOf("Tungsten", "Clay", "Sage", "Lavender", "Honey"),
                     checked = Profiles.COLORS.indexOf(p.color)) { i ->
@@ -316,11 +323,11 @@ class ProfilesActivity : Screen() {
         ++pickerGeneration
         backTo = ::showPicker
         val previewName = text(p.name, BODY, bold = true).apply { gravity = Gravity.CENTER }
-        val avatar = onboardingAvatar(p.name.firstOrNull()?.uppercase().orEmpty(), 100, p.color)
+        val avatar = onboardingAvatar(p.name.firstOrNull()?.uppercase().orEmpty(), 100, p.color, p.picture)
         val error = text("", SMALL, color = ALERT)
         val (name, keyboard, firstKey) = nameEntry(p.name) { typed ->
             previewName.text = typed
-            avatar.text = typed.firstOrNull()?.uppercase().orEmpty()
+            avatar.text = if (p.picture == null) typed.firstOrNull()?.uppercase().orEmpty() else ""
             error.text = ""
         }
         val save = onboardingButton("Save")
@@ -430,11 +437,11 @@ class ProfilesActivity : Screen() {
         waitingCode = null
         val first = Profiles.all(this).isEmpty()
         val previewName = text(draftName, BODY, bold = true).apply { gravity = Gravity.CENTER }
-        val avatar = onboardingAvatar(draftName.firstOrNull()?.uppercase().orEmpty(), 100, draftColor)
+        val avatar = onboardingAvatar(draftName.firstOrNull()?.uppercase().orEmpty(), 100, draftColor, draftPicture)
         val error = text("", SMALL, color = ALERT)
         val (name, keyboard, firstKey) = nameEntry(draftName) { typed ->
             previewName.text = typed
-            avatar.text = typed.firstOrNull()?.uppercase().orEmpty()
+            avatar.text = if (draftPicture == null) typed.firstOrNull()?.uppercase().orEmpty() else ""
             error.text = ""
         }
         val next = onboardingButton("Continue    →")
@@ -445,6 +452,7 @@ class ProfilesActivity : Screen() {
         }
         name.setOnEditorActionListener { _, _, _ -> go(); true }
         next.setOnClickListener { go() }
+        var redrawPictures: () -> Unit = {} // set below, once the pictures are built: a new colour redraws their discs
         val swatches = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val marks = mutableListOf<TextView>()
         Profiles.COLORS.forEachIndexed { index, color ->
@@ -459,6 +467,8 @@ class ProfilesActivity : Screen() {
                 setOnFocusChangeListener { view, focused -> view.background = face(focused) }
                 setOnClickListener {
                     draftColor = color
+                    avatar.background = portraitFace(color, draftPicture)
+                    redrawPictures()
                     avatar.background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
                     marks.forEachIndexed { i, view -> view.text = if (i == index) "✓" else "" }
                 }
@@ -480,11 +490,45 @@ class ProfilesActivity : Screen() {
         // Continue stands on its own under the portrait, in plain sight and one press to the right of the keyboard
         // (Alan, 2026-11-12: at the foot of the left column it was past the bottom of the screen, and the way on
         // was not clear).
+        // The picture: the initial, or one of twelve animals, in two rows under the portrait. OK sets it at once.
+        val pictures = column(Gravity.CENTER)
+        val choices = listOf<String?>(null) + Animals.all.map { it.first }
+        fun drawPictures() {
+            pictures.removeAllViews()
+            choices.chunked(7).forEach { line ->
+                pictures.addView(LinearLayout(this).apply {
+                    clipChildren = false
+                    line.forEach { pic ->
+                        val chosen = pic == draftPicture
+                        addView(text(if (pic == null) name.text.toString().trim().firstOrNull()?.uppercase() ?: "A" else "", SMALL, bold = true, color = Tone.onColour).apply {
+                            gravity = Gravity.CENTER
+                            isFocusable = true
+                            contentDescription = pic?.let(Animals::label) ?: "Initial"
+                            background = portraitFace(draftColor, pic)
+                            fun rim(lit: Boolean) { foreground = if (lit || chosen) GradientDrawable().apply { shape = GradientDrawable.OVAL; setStroke(dp(if (lit) 3 else 2), if (lit) TEXT else TEXT_3) } else null }
+                            rim(false)
+                            setOnFocusChangeListener { v, has -> rim(has); v.grow(has, CHIP_GROW).start() }
+                            setOnClickListener {
+                                draftPicture = pic
+                                avatar.background = portraitFace(draftColor, pic)
+                                avatar.text = if (pic == null) name.text.toString().trim().firstOrNull()?.uppercase().orEmpty() else ""
+                                drawPictures()
+                                pictures.post { (pictures.getChildAt(choices.indexOf(pic) / 7) as? LinearLayout)?.getChildAt(choices.indexOf(pic) % 7)?.requestFocus() }
+                            }
+                        }, LinearLayout.LayoutParams(dp(PICTURE), dp(PICTURE)).apply { marginStart = dp(4); marginEnd = dp(4) })
+                    }
+                }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
+            }
+        }
+        drawPictures()
+        redrawPictures = { drawPictures() }
         val preview = column(Gravity.CENTER,
             avatar,
-            previewName.marginTop(16),
-            next.marginTop(28),
-        ).apply { gravity = Gravity.CENTER }
+            previewName.marginTop(12),
+            caps("Picture").marginTop(14),
+            pictures,
+            next.marginTop(20),
+        ).apply { gravity = Gravity.CENTER; clipChildren = false }
         val content = onboardingFrame(if (first) "step 1 of 2" else "step 1 of 3", copy, preview, dp(65), 1.05f, 0.95f)
         setWindowed(content, onboardingBackdrop())
         window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
@@ -706,13 +750,10 @@ class ProfilesActivity : Screen() {
     private fun onboardingButton(label: String) = pill(label)
 
     // 48 and 19 are glyph sizes for the two fixed discs (100 and 26 dp), not text sizes: they go with the disc.
-    private fun onboardingAvatar(initial: String, size: Int, color: Int = draftColor) = text(initial, if (size > 50) 48f else 19f,
+    private fun onboardingAvatar(initial: String, size: Int, color: Int = draftColor, picture: String? = null) = text(if (picture == null) initial else "", if (size > 50) 48f else 19f,
         serif = true, color = Tone.onColour).apply { // the initial on its portrait colour: dark in both modes
         gravity = Gravity.CENTER
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(color)
-        }
+        background = portraitFace(color, picture) // the animal, when the profile has one, in place of the initial
         layoutParams = LinearLayout.LayoutParams(dp(size), dp(size))
     }
 
@@ -763,7 +804,8 @@ class ProfilesActivity : Screen() {
             return openHome(Profiles.all(this).first { it.id == again.id })
         }
         val others = Profiles.all(this)
-        val profile = Profiles.add(this, name, key, draftColor)
+        val profile = Profiles.add(this, name, key, draftColor, draftPicture)
+        draftPicture = null
         draftName = ""
         draftColor = Profiles.COLORS[0]
         // Each profile brings its own add-ons (stream add-ons are shared in Settings, never copied);
@@ -804,7 +846,7 @@ class ProfilesActivity : Screen() {
         backTo = { openHome(profile) }
         val done = onboardingButton("Continue to CAS").apply { setOnClickListener { openHome(profile) } }
         setWindowed(onboardingFrame("step 3 of 3", column(Gravity.CENTER,
-            onboardingAvatar(profile.name.take(1).uppercase(), 100, profile.color),
+            onboardingAvatar(profile.name.take(1).uppercase(), 100, profile.color, profile.picture),
             text(profile.name, SERIF_TITLE, serif = true).marginTop(12)
         ).apply { gravity = Gravity.CENTER }, column(Gravity.START,
             text("You're all set", SERIF_HERO, serif = true),
@@ -830,6 +872,7 @@ class ProfilesActivity : Screen() {
     }
 
     private companion object {
+        const val PICTURE = 34 // dp, a picture to choose on the name screen
         const val LIFT_ROOM = 8 // dp above the portraits for the focused one's 10% lift and ring
         const val KEY_H = 30 // dp a key row on the name step: Search's keyboard, so the two feel like one
         const val KEY_GAP = 4 // dp between keys and rows, as on Search

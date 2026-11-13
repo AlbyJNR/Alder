@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A profile picture: the koala. Drawn by tools/cas_animals.py; do not tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#FFA7ADB5" android:pathData="M5,38a15,15 0 1,0 30,0a15,15 0 1,0 -30,0z" />
+    <path android:fillColor="#FFA7ADB5" android:pathData="M61,38a15,15 0 1,0 30,0a15,15 0 1,0 -30,0z" />
+    <path android:fillColor="#FFDDE0E4" android:pathData="M12,38a8,8 0 1,0 16,0a8,8 0 1,0 -16,0z" />
+    <path android:fillColor="#FFDDE0E4" android:pathData="M68,38a8,8 0 1,0 16,0a8,8 0 1,0 -16,0z" />
+    <path android:fillColor="#FFA7ADB5" android:pathData="M20,54a28,28 0 1,0 56,0a28,28 0 1,0 -56,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M41,59a7,10 0 1,0 14,0a7,10 0 1,0 -14,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M30.6,48a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+    <path android:fillColor="#FF2A2C31" android:pathData="M58.6,48a3.4,3.4 0 1,0 6.8,0a3.4,3.4 0 1,0 -6.8,0z" />
+</vector>
